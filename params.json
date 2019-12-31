@@ -1,0 +1,28 @@
+{
+    "supervision": "unsupervised",
+    "data_pair": "original",
+
+    "train_data_path": "data/train",
+    "val_data_path": "data/val",
+    "eval_data_path": "data/test",
+
+    "seq": "sa",
+    "label_prefix": "seg",
+    "augment": false,
+    "batch_size": 1,
+    "num_epochs": 500,
+    "seq_length": 30,
+    "crop_size": 160,
+    "pixel_size": 1.8,
+
+    "save_checkpoint_epochs": 10,
+    "val_epochs": 10,
+    "save_summary_steps": 5,
+    "save_result_epochs": 10,
+    "save_quiver_epochs": 10,
+    "fps": 20,
+
+    "learning_rate": 0.0001,
+    "huber_spatial": 1e-4,
+    "huber_temporal": 0.0
+}
