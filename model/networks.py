@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.submodules import conv_block_1, conv_blocks_2, conv_blocks_3
+from model.submodules import conv_bn_leaky_relu, deconv_leaky_relu
 
 
 class BaseNet(nn.Module):
@@ -25,7 +26,7 @@ class BaseNet(nn.Module):
         self.conv_blocks12 = conv_blocks_2(n_ch, 64)
         self.conv_blocks22 = conv_blocks_2(64, 128, 2)
         self.conv_blocks32 = conv_blocks_3(128, 256, 2)
-        self.conv_blocks42 = conv_blocks_3(257, 512, 2)
+        self.conv_blocks42 = conv_blocks_3(256, 512, 2)
         self.conv_blocks52 = conv_blocks_3(512, 512, 2)
 
         self.conv6 = nn.Conv2d(64 * 5, 64, 1)
@@ -84,3 +85,22 @@ class BaseNet(nn.Module):
         net['op_flow'] = torch.tanh(self.conv8(net['comb_2']))
 
         return net['op_flow']
+
+
+# class VoxelMorph(nn.Module):
+#     super(VoxelMorph, self).__init__()
+#
+#     self.input_conv = conv_bn_leaky_relu(input_channels, 16, )
+#
+#
+#     def forward(self, target, source):
+#         x = torch.cat((target, source), dim=1)
+#
+#
+#
+#
+#
+#
+#
+# # class UNet(nn.Module):
+

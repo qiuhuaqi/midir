@@ -23,10 +23,10 @@ from utils.metrics import contour_distances_stack, computeJacobianDeterminant2D
 from utils import xutils, flow_utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default=None, help="Directory containing params.json")
+parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
 parser.add_argument('--restore_file', default='best',
                     help="Name of the file in --model_dir containing weights to reload (w/o postfix)")
-parser.add_argument('--data_path', default='data/inference',
+parser.add_argument('--data_path', default='data/ukbb/cine_ukbb2964/small_set/sa/inference',
                     help="Path to the dir containing inference data")
 
 parser.add_argument('--no_cuda', action='store_true')

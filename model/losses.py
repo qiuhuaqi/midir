@@ -1,9 +1,59 @@
-"""Loss functions"""
+"""
+Loss functions
+"""
 
 import torch
 import torch.nn as nn
+import numpy as np
 
 from model.submodules import resample_transform
+from model.unflow_losses import _second_order_deltas
+
+##############################################################################################
+# --- Temp test loss functions --- #
+##############################################################################################
+
+def smooth_mse_loss(flow, target, source, params):
+    """
+    MSE loss with smoothness regularisation.
+
+    Args:
+        flow: (Tensor, shape Nx2xHxW) predicted flow from target image to source image
+        target: (Tensor, shape NxchxHxW) target image
+        source: (Tensor, shape NxchxHxW) source image
+
+    Returns:
+        loss
+    """
+
+    # warp the source image towards target using grid resample
+    # i.e. flow is from target to source
+    warped_source = resample_transform(source, flow)
+
+    mse = nn.MSELoss()
+    mse_loss = mse(target, warped_source)
+    if params.loss_fn == 'smooth_2nd':
+        smooth_loss = params.smooth_weight * vanilla_second_order_loss(flow)
+
+    loss = mse_loss + smooth_loss
+    losses = {'mse': mse_loss, 'smooth': smooth_loss}
+
+    return loss, losses
+
+def vanilla_second_order_loss(flow):
+    """Compute sum of 2nd order derivatives of flow as smoothness loss"""
+    delta_h, delta_w, inner_masks = _second_order_deltas(flow)
+    inner_masks = inner_masks.cuda()  # mask out borders
+    loss_h = torch.sum((delta_h**2) * inner_masks) / np.prod(delta_h.size())
+    loss_w = torch.sum((delta_w**2) * inner_masks) / np.prod(delta_w.size())
+    return loss_h + loss_w
+
+
+def vanilla_mse_loss(flow, img1, img2):
+    img2_warped = resample_transform(img2, flow)
+    mse = nn.MSELoss()
+    loss = mse(img1, img2_warped)
+    return loss
 
 ##############################################################################################
 # --- Huber loss --- #
@@ -85,4 +135,46 @@ def huber_loss_fn(flow, target, source, params):
     losses = {'mse': mse_loss,  'smooth_loss': smooth_loss}
 
     return loss, losses
+
+
+##############################################################################################
+# --- mutual information loss --- #
+##############################################################################################
+from model.mutual_info.histogram import JointHistParzenTorch
+from model.mutual_info.mutual_info import NMI_pytorch
+
+def nmi_loss_fn(flow, target, source, params):
+        """
+        Unsupervised loss function based on normalised mutual information
+
+        Args:
+            flow: (Tensor, shape Nx2xHxW) predicted flow from target image to source image
+            target: (Tensor, shape NxChxHxW) target image
+            source: (Tensor, shape NxChxHxW) source image
+            params: parameters in params.json
+
+        Returns:
+            loss
+            losses: (dict) dictionary of individual loss term after weighting
+        """
+
+        # warp the source image towards target using grid resample
+        # i.e. flow is from target to source
+        warped_source = resample_transform(source, flow)
+
+        # compute normalised mutual information
+        joint_hist_fn = JointHistParzenTorch().cuda()
+        # todo: find a better way to put to cuda (needed because of the bin edge array need to put on GPU) or do I need to if I'm using nn.functional?
+        joint_hist = joint_hist_fn(target, warped_source)
+        nmi = NMI_pytorch(joint_hist)
+
+        # add regularisation (approximated Huber)
+        smooth_loss = params.huber_spatial * huber_loss_spatial(flow) + params.huber_temporal * huber_loss_temporal(flow)
+        # todo: bending energy
+
+        # negative NMI loss function to minimise
+        loss = - nmi + smooth_loss
+        losses = {'nmi': nmi, 'smooth_loss': smooth_loss}
+
+        return loss, losses
 

@@ -8,12 +8,13 @@ from tqdm import tqdm
 import pandas as pd
 
 from model.dataset_utils import CenterCrop
+from utils.data_utils import split_volume, split_sequence
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
 from utils import xutils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='data/test', help="Directory containing test data")
-parser.add_argument('--output_dir', default='experiments/demo', help="Directory to save output")
+parser.add_argument('--data_dir', default='data/ukbb/small_set_ukbb2964/test', help="Directory containing test data")
+parser.add_argument('--output_dir', default='experiments/ukbb/unRegistered', help="Directory to save output")
 parser.add_argument('--pixel_size', default=1.8,
                     help='Dimension of in-plane pixels in canonical space, assume square pixel in-plane, unit mm')
 parser.add_argument('--seq', default='sa', help='Imaging view, sa, la_2ch or la_4ch')

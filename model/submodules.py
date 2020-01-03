@@ -7,6 +7,34 @@ import numpy as np
 
 
 # ------------------------------------------- #
+# VoxelMorph and UNet submodules
+# ------------------------------------------- #
+
+def conv_bn_leaky_relu(in_planes, out_planes, kernel_size=3, stride=1, batchNorm=True):
+    if batchNorm:
+        return nn.Sequential(
+            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                      bias=False),
+            nn.BatchNorm2d(out_planes),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+    else:
+        return nn.Sequential(
+            nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=(kernel_size - 1) // 2,
+                      bias=True),
+            nn.LeakyReLU(0.2, inplace=True)
+        )
+
+
+def deconv_leaky_relu(in_planes, out_planes):
+    return nn.Sequential(
+        nn.ConvTranspose2d(in_planes, out_planes, kernel_size=4, stride=2, padding=1, bias=True),
+        nn.LeakyReLU(0.2, inplace=True)
+    )
+
+
+
+# ------------------------------------------- #
 # BaseNet submodules
 # ------------------------------------------- #
 def relu():
@@ -130,3 +158,18 @@ def resample_transform_cpu(source, offset, interp='bilinear'):
 
     return deformed_image
 
+
+
+# def save_grad(grads, name):
+#     def hook(grad):
+#         grads[name] = grad
+#     return hook
+# import torch
+# from channelnorm_package.modules.channelnorm import ChannelNorm
+# model = ChannelNorm().cuda()
+# grads = {}
+# a = 100*torch.autograd.Variable(torch.randn((1,3,5,5)).cuda(), requires_grad=True)
+# a.register_hook(save_grad(grads, 'a'))
+# b = model(a)
+# y = torch.mean(b)
+# y.backward()

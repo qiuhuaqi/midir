@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 from model.networks import BaseNet
 
-from model.losses import huber_loss_fn
+from model.losses import huber_loss_fn, nmi_loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
 from model.submodules import resample_transform
@@ -21,7 +21,7 @@ from eval import evaluate
 from utils import xutils, flow_utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default=None, help="Directory containing params.json")
+parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
 parser.add_argument('--restore_file', default=None,
                     help="Optional, name of the file in --model_dir containing weights to reload before training w/o postfix")
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on all instead of 3 slices.")
@@ -285,7 +285,12 @@ if __name__ == '__main__':
     model = model.to(device=args.device)
 
     # set up the loss function and optimiser
-    loss_fn = huber_loss_fn
+    if params.loss_fn == "unsupervised":
+        loss_fn = huber_loss_fn
+    elif params.loss_fn == "unsupervised_nmi":
+        loss_fn = nmi_loss_fn
+
+    # set up optimiser
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
 
 

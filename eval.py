@@ -20,10 +20,10 @@ from utils.metrics import categorical_dice_stack, contour_distances_stack, detJa
 from utils import xutils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default=None, help="Directory containing params.json")
+parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
 parser.add_argument('--restore_file', default='best',
                     help="Optional, name of the file in --model_dir containing weights to reload before \
-                    training")  # 'best' or 'last'
+                    training")  # 'best' or 'train'
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on all instead of 3 slices.")
 parser.add_argument('--label_prefix', default='label', help='Prefix of file names of segmentation masks')
 
