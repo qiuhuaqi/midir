@@ -20,35 +20,40 @@ from utils.metrics import categorical_dice_stack, contour_distances_stack, detJa
 from utils import xutils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
+parser.add_argument('--model_dir', default=None, help="Directory containing params.json")
 parser.add_argument('--restore_file', default='best',
-                    help="Optional, name of the file in --model_dir containing weights to reload before training")
+                    help="Optional, name of the file in --model_dir containing weights to reload before \
+                    training")  # 'best' or 'last'
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on all instead of 3 slices.")
+parser.add_argument('--label_prefix', default='label', help='Prefix of file names of segmentation masks')
 
 parser.add_argument('--no_cuda', action='store_true')
-parser.add_argument('--gpu', default=0, help='Choose the GPU to run on, pass -1 to use CPU')
 parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
+parser.add_argument('--gpu', default=0, help='Choose the GPU to run on, pass -1 to use CPU')
 
 
-def evaluate(model, dataloader, params, args, val):
+def evaluate(model, loss_fn, dataloader, params, args, val):
     """
     Evaluate the model on the test dataset
     Returns metrics as a dict and evaluation loss
 
     Args:
         model:
+        loss_fn:
         dataloader:
         params:
         args:
         val: (boolean) indicates validation (True) or testing (False)
 
     Returns:
-        metrics: (dict) all evaluated metrics
 
     """
 
     # set model to evaluation mode
     model.eval()
+
+    # empty buffer lists
+    val_loss_buffer = []
 
     dice_lv_buffer = []
     dice_myo_buffer = []
@@ -64,8 +69,9 @@ def evaluate(model, dataloader, params, args, val):
     mean_mag_grad_detJ_buffer = []
     negative_detJ_buffer = []
 
-    # evaluation loop: iterate over validation subjects
+
     with tqdm(total=len(dataloader)) as t:
+        # iterate over validation subjects
         for idx, (image_ed_batch, image_es_batch, label_ed_batch, label_es_batch) in enumerate(dataloader):
             # (data all in shape of (c, N, H, W))
 
@@ -75,6 +81,7 @@ def evaluate(model, dataloader, params, args, val):
             label_es_batch = label_es_batch.permute(1, 0, 2, 3).to(device=args.device)
 
             with torch.no_grad():
+
                 # compute optical flow and warped ED images towards ES
                 op_flow = model(image_ed_batch, image_es_batch)
 
@@ -133,8 +140,8 @@ def evaluate(model, dataloader, params, args, val):
 
             t.update()
 
-    # for testing only: save all metrics evaluated for all test subjects in pandas dataframe
     if not val:
+    # for testing only: save all metrics evaluated for all test subjects in pandas dataframe
         # save accuracy metrics
         subj_id_buffer = dataloader.dataset.dir_list
         df_buffer = []
@@ -225,18 +232,12 @@ if __name__ == '__main__':
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
     params = xutils.Params(json_path)
 
-    # set supervised flags
-    params.supervised = False
-    if params.supervision == "supervised" or params.supervision == "mixed":
-        params.supervised = True
-
-
     # set dataset and DataLoader
     logging.info("Eval data path: {}".format(params.eval_data_path))
     eval_dataset = CardiacMR_2D_Eval_UKBB(params.eval_data_path,
                                           seq=params.seq,
                                           augment=params.augment,
-                                          label_prefix=params.label_prefix,
+                                          label_prefix=args.label_prefix,
                                           transform=transforms.Compose([
                                               CenterCrop(params.crop_size),
                                               Normalise(),
@@ -252,9 +253,11 @@ if __name__ == '__main__':
 
     # set up model and loss function
     model = BaseNet()
-
-    # move model to device
     model = model.to(device=args.device)
+
+    # set up the loss function
+    loss_fn = huber_loss_fn
+
 
     # reload network parameters from saved model file
     logging.info("Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
@@ -262,7 +265,7 @@ if __name__ == '__main__':
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
-    eval_metrics = evaluate(model, eval_dataloader, params, args, val=False)
+    eval_metrics = evaluate(model, loss_fn, eval_dataloader, params, args, val=False)
 
     # save the results in a JSON file
     save_path = os.path.join(args.model_dir, "test_results_{}_3slices_{}.json".format(args.restore_file, args.three_slices))

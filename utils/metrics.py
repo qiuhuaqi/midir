@@ -96,6 +96,7 @@ def contour_distances_stack(stack1, stack2, label_class, dx=1):
 
 def categorical_dice_stack(mask1, mask2, label_class=0):
     """
+    todo: this evaluation function should ignore slices that has empty masks at either ED or ES frame
     Dice scores of a specified class between two masks or two 2D "stacks" of masks
     If the inputs are stacks of multiple 2D slices, dice scores are averaged
     (classes are encoded but by label class number not one-hot )
@@ -112,7 +113,6 @@ def categorical_dice_stack(mask1, mask2, label_class=0):
     mask1_pos = (mask1 == label_class).astype(np.float32)
     mask2_pos = (mask2 == label_class).astype(np.float32)
 
-    # todo: ignore any slice with empty masks
     pos1and2 = np.sum(mask1_pos * mask2_pos, axis=(0, 1))
     pos1or2 = np.sum(mask1_pos + mask2_pos, axis=(0, 1))
 

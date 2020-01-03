@@ -7,9 +7,75 @@ import nibabel as nib
 import torch
 import torch.utils.data as data
 
+
+class CardiacMR_2D(data.Dataset):
+    """
+    Training dataset. Uses the first frame in a sequence as target.
+    """
+    def __init__(self, data_path, seq='sa',  seq_length=20, augment=False, transform=None):
+        # super(TrainDataset, self).__init__()
+        super().__init__()  # this syntax is allowed in Python3
+
+        self.data_path = data_path
+        self.dir_list = [dir_ for dir_ in sorted(os.listdir(self.data_path))]
+        self.seq = seq
+        self.seq_length = seq_length
+        self.augment = augment
+        self.transform = transform
+
+    def __getitem__(self, index):
+        """
+        Load and pre-process the input image.
+
+        Args:
+            index: index into the dir list
+
+        Returns:
+            target: target image, Tensor of size (1, H, W)
+            source: source image sequence, Tensor of size (seq_length, H, W)
+
+        """
+
+        # update the seed to avoid workers sample the same augmentation parameters
+        if self.augment:
+            np.random.seed(datetime.datetime.now().second + datetime.datetime.now().microsecond)
+
+        # load nifti into array
+        file_path = os.path.join(self.data_path, self.dir_list[index], self.seq + '.nii.gz')
+        nim = nib.load(file_path)
+        image_raw = nim.get_data()
+
+        # random select a z-axis slice and transpose into (T, H, W)
+        slice_num = random.randint(0, image_raw.shape[-2] - 1)
+        image = image_raw[:, :, slice_num, :].transpose(2, 0, 1).astype(np.float32)
+
+        # define source and target images:
+        #   target images are copies of the ED frame (extended later on GPU to save memory)
+        target = image[np.newaxis, 0, :, :]  # (1, H, W)
+
+        #   source images are a sequence of params.seq_length frames
+        if image.shape[0] > self.seq_length:
+            start_frame_idx = random.randint(0, image.shape[0] - self.seq_length)
+            end_frame_idx = start_frame_idx + self.seq_length
+            source = image[start_frame_idx:end_frame_idx, :, :]  # (seq_length, H, W)
+        else:  # if the sequence is shorter than seq_length, use the whole sequence
+            print("Warning: data sequence is shorter than set sequence length")
+            source = image[1:, :, :]  # (T-1, H, W)
+
+        # transformation functions expect input shaped (N, H, W)
+        if self.transform:
+            target = self.transform(target)
+            source = self.transform(source)
+
+        return target, source
+
+    def __len__(self):
+        return len(self.dir_list)
+
+
 class CardiacMR_2D_UKBB(data.Dataset):
     """
-    Training dataset class for UK Biobank dataset
+    Training class for UKBB. Loads the specific ED file as target.
     """
     def __init__(self, data_path, seq='sa', seq_length=30, augment=False, transform=None):
         # super(TrainDataset, self).__init__()
@@ -58,15 +124,17 @@ class CardiacMR_2D_UKBB(data.Dataset):
         image = image_raw[:, :, slice_num, :].transpose(2, 0, 1).astype(np.float32)
         image_ed = image_ed[:, :, slice_num]
 
-        # define source and target images: source is a sequence of images
+        ## define source and target images:
+        #   target images are copies of the ED frame (extended later in training code to make use of Pytorch view)
         target = image_ed[np.newaxis, :, :]  # extend dim to (1, H, W)
+
+        #   source images are a sequence of params.seq_length frames
         if image.shape[0] > self.seq_length:
-            # if the required sequence is longer than seq_length, take a sequence out
             start_frame_idx = random.randint(0, image.shape[0] - self.seq_length)
             end_frame_idx = start_frame_idx + self.seq_length
             source = image[start_frame_idx:end_frame_idx, :, :]  # (seq_length, H, W)
         else:
-            # if the required sequence is shorter than seq_length, use the whole sequence
+            # if the sequence is shorter than seq_length, use the whole sequence
             source = image[1:, :, :]  # (T-1, H, W)
 
         # transformation functions expect input shape (N, H, W)
@@ -79,134 +147,6 @@ class CardiacMR_2D_UKBB(data.Dataset):
     def __len__(self):
         return len(self.dir_list)
 
-class SupervisedWarpedCardiacMR2DUKBB(CardiacMR_2D_UKBB):
-    def __init__(self, data_path, seq='sa', crop_size=160, seq_length=30, augment=False, transform=None):
-        super(SupervisedWarpedCardiacMR2DUKBB, self).__init__(data_path, seq=seq, seq_length=seq_length,
-                                                              augment=augment,
-                                                              transform=transform)
-        self.crop_size = crop_size
-
-    def __getitem__(self, index):
-        """
-        Outputs the warped source images and original source images as inputs to the network
-
-        Args:
-            index:
-
-        Returns:
-            target: (Tensor of size (seq_length, H, W)) warped source image sequence using DVF
-            source: (Tensor of size (seq_length, H, W)) source image sequence
-            dvf: (Tensor of size (seq_length, 2, H, W)) DVF sequence, from target to source
-        """
-        subj_dir = os.path.join(self.data_path, self.dir_list[index])
-
-        # load in the image and dvf sequences
-        image_raw_path = os.path.join(subj_dir, self.seq + '.nii.gz')
-        image_stack_seq = nib.load(image_raw_path).get_data()  # (H, W, N, T)
-        target_raw_path = os.path.join(subj_dir, "dvf_warped_{seq}.nii.gz".format(seq=self.seq))
-        target_stack_seq = nib.load(target_raw_path).get_data()  # (H, W, N, T-1)
-        dvf_raw_path = os.path.join(subj_dir, 'dvf.nii.gz')
-        dvf_stack_seq = nib.load(dvf_raw_path).get_data()  # (H, W, N, T-1, 2)
-
-        # random select a z-axis slice
-        if self.seq == 'sa':
-            slice_num = random.randint(0, image_stack_seq.shape[-2] - 1)
-        else:
-            slice_num = 0
-
-        # select the slice and transpose
-        image_seq = image_stack_seq[:, :, slice_num, :].transpose(2, 0, 1).astype(np.float32)  # (T, H, W)
-        target_seq = target_stack_seq[:, :, slice_num, :].transpose(2, 0, 1).astype(np.float32)  # (T-1, H, W)
-        dvf_seq = dvf_stack_seq[:, :, slice_num, :, :].transpose(2, 3, 0, 1)  # (T-1, 2, H, W)
-
-        # define source and target images:
-        if image_seq.shape[0] > self.seq_length:
-            start_frame_idx = random.randint(1, image_seq.shape[0] - self.seq_length + 1)
-            end_frame_idx = start_frame_idx + self.seq_length
-            source = image_seq[start_frame_idx:end_frame_idx, :, :]  # (seq_length, H, W)
-            target = target_seq[(start_frame_idx-1):(end_frame_idx-1), :, :]  # (seq_length, H, W)
-            dvf = dvf_seq[(start_frame_idx-1):(end_frame_idx-1), :, :, :]  # (seq_length, 2, H, W)
-        else:
-            # if the sequence is shorter than seq_length, use the whole sequence
-            source = image_seq[1:, :, :]  # (T-1, H, W)
-            target = target_seq  # (T-1, H, W)
-            dvf = dvf_seq  # (T-1, 2, H, W)
-
-        # normalise dvf coordinates to [-1, 1] and cast to Pytorch tensor
-        dvf = 2 * dvf / self.crop_size
-        dvf = torch.from_numpy(dvf)
-
-        # apply transformation to images
-        if self.transform:
-            target = self.transform(target)
-            source = self.transform(source)
-
-        return target, source, dvf
-
-class SupervisedOriginalCardiacMR2DUKBB(CardiacMR_2D_UKBB):
-    def __init__(self, data_path, seq='sa', crop_size=160, seq_length=30, augment=False, transform=None):
-        super(SupervisedOriginalCardiacMR2DUKBB, self).__init__(data_path, seq=seq, seq_length=seq_length,
-                                                                augment=augment,
-                                                                transform=transform)
-        self.crop_size = crop_size
-
-    def __getitem__(self, index):
-        """
-        Outputs the original target and source as inputs to the network
-
-        Args:
-            index:
-
-        Returns:
-            target: (Tensor of size (1, H, W)) target image
-            source: (Tensor of size (seq_length, H, W)) source image sequence
-            dvf: (Tensor of size (seq_length, 2, H, W)) DVF sequence, from target to source
-        """
-        subj_dir = os.path.join(self.data_path, self.dir_list[index])
-
-        # load in the image and dvf sequences
-        image_raw_path = os.path.join(subj_dir, self.seq + '.nii.gz')
-        image_stack_seq = nib.load(image_raw_path).get_data()  # (H, W, N, T)
-        image_ed_path = os.path.join(subj_dir, self.seq + '_ED.nii.gz')
-        image_ed = nib.load(image_ed_path).get_data()  # (H, W, N)
-        dvf_raw_path = os.path.join(subj_dir, 'dvf.nii.gz')
-        dvf_stack_seq = nib.load(dvf_raw_path).get_data()  # (H, W, N, T-1, 2)
-
-        # random select a z-axis slice
-        if self.seq == 'sa':
-            slice_num = random.randint(0, image_stack_seq.shape[-2] - 1)
-        else:
-            slice_num = 0
-
-        # select the slice and transpose
-        image_seq = image_stack_seq[:, :, slice_num, :].transpose(2, 0, 1).astype(np.float32)  # (T, H, W)
-        image_ed = image_ed[:, :, slice_num]  # (H, W)
-        dvf_seq = dvf_stack_seq[:, :, slice_num, :, :].transpose(2, 3, 0, 1)  # (T-1, 2, H, W)
-
-        # define source and target images: source is a sequence of images
-        target = image_ed[np.newaxis, :, :]  # extend dim to (1, H, W)
-
-        if image_seq.shape[0] > self.seq_length:
-            # if the required sequence is longer than seq_length, take a sequence out
-            start_frame_idx = random.randint(1, image_seq.shape[0] - self.seq_length + 1)
-            end_frame_idx = start_frame_idx + self.seq_length
-            source = image_seq[start_frame_idx:end_frame_idx, :, :]  # (seq_length, H, W)
-            dvf = dvf_seq[(start_frame_idx-1):(end_frame_idx-1), :, :, :]  # (seq_length, 2, H, W)
-        else:
-            # if the required sequence is shorter than seq_length, use the whole sequence
-            source = image_seq[1:, :, :]  # (T-1, H, W)
-            dvf = dvf_seq  # (T-1, 2, H, W)
-
-        # normalise dvf coordinates to [-1, 1] and cast to Pytorch tensor
-        dvf = 2 * dvf / self.crop_size
-        dvf = torch.from_numpy(dvf)
-
-        # apply transformation to images
-        if self.transform:
-            source = self.transform(source)
-            target = self.transform(target)
-
-        return target, source, dvf
 
 class CardiacMR_2D_Eval_UKBB(data.Dataset):
     """Validation and evaluation for UKBB
@@ -282,9 +222,10 @@ class CardiacMR_2D_Eval_UKBB(data.Dataset):
 
 
 class CardiacMR_2D_Inference_UKBB(data.Dataset):
-    """Inference dataset which loops over frames of one subject"""
+    """Inference dataset, works with UKBB data or data with segmentation,
+    loop over frames of one subject"""
     def __init__(self, data_path, seq='sa', transform=None):
-        """data_path is the path to the directory containing the NIFTI files"""
+        """data_path is the path to the direcotry containing the nifti files"""
         super().__init__()  # this syntax is allowed in Python3
 
         self.data_path = data_path
@@ -315,3 +256,8 @@ class CardiacMR_2D_Inference_UKBB(data.Dataset):
 
     def __len__(self):
         return self.seq_length
+
+
+class CardiacEcho_3D(data.Dataset):
+    pass
+

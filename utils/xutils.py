@@ -1,4 +1,3 @@
-"""Logistic utility functions"""
 import os
 import json
 import logging
@@ -88,7 +87,7 @@ def set_summary_writer(model_dir, run_name):
     """
     summary_dir = os.path.join(model_dir, 'tb_summary', run_name)
     if not os.path.exists(summary_dir):
-        print("TensorboardX summary directory does not exist...\n Creating directory {}".format(summary_dir))
+        print("TensorboardX summary directory does not exist...\n Making directory {}".format(summary_dir))
         os.makedirs(summary_dir)
     else:
         print("TensorboardX summary directory already exist at {}...\nOverwritting!".format(summary_dir))
@@ -108,7 +107,7 @@ def save_checkpoint(state, is_best, checkpoint):
     """
     filepath = os.path.join(checkpoint, 'last.pth.tar')
     if not os.path.exists(checkpoint):
-        print("Checkpoint Directory does not exist! Creating directory {}".format(checkpoint))
+        print("Checkpoint Directory does not exist! Making directory {}".format(checkpoint))
         os.mkdir(checkpoint)
     else:
         if state['epoch'] == 1:

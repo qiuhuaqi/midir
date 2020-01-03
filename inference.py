@@ -1,4 +1,4 @@
-"""Run inference on full sequences"""
+""" Run inference on full sequence of subjects """
 
 import os
 import argparse
@@ -23,19 +23,22 @@ from utils.metrics import contour_distances_stack, computeJacobianDeterminant2D
 from utils import xutils, flow_utils
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
+parser.add_argument('--model_dir', default=None, help="Directory containing params.json")
 parser.add_argument('--restore_file', default='best',
                     help="Name of the file in --model_dir containing weights to reload (w/o postfix)")
-parser.add_argument('--data_path', default='data/ukbb/cine_ukbb2964/small_set/sa/inference',
+parser.add_argument('--data_path', default='data/inference',
                     help="Path to the dir containing inference data")
 
 parser.add_argument('--no_cuda', action='store_true')
 parser.add_argument('--gpu', default=0, help='Choose GPU to run on')
-parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
 
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on 3 slices.")
 parser.add_argument('--metrics', action='store_true', help="Evaluating metrics")
 parser.add_argument('--nifti', action='store_true', help="Save results in NIFTI files")
+
+# parser.add_argument('--hsv_flow', action='store_true', help='Save hsv encoded flow (PNGs and GIF)')
+# parser.add_argument('--quiver', action='store_true', help='Save quiver plot')
+
 
 
 def plot_results(target, source, warped_source, op_flow, save_path=None, title_font_size=20, show_fig=False):
@@ -159,7 +162,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
     model = model.to(device=args.device)  # (note: this may not send all parameters)
 
     # --- run inference on the whole sequence --- #
-    # create a dataloader to load data of one subject and iterate through the sequence
+    # create a dataloader to load data of one subject
     inference_dataset = CardiacMR_2D_Inference_UKBB(subject_data_dir,
                                                     seq=params.seq,
                                                     transform=transforms.Compose([
@@ -169,7 +172,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
                                                     )
 
     # loop over time frames
-    logging.info("Running network inference computation...")
+    logging.info("Running inference calculation...")
     op_flow_list = []
     target_list = []
     source_list = []
@@ -242,6 +245,11 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
             png_buffer += [imageio.imread(fig_save_path)]
         imageio.mimwrite(os.path.join(output_dir_slice, 'results.gif'), png_buffer, fps=params.fps)
 
+        # flow_utils.save_warp_n_error(warped_source_slice_seq, target_slice_seq, source_slice_seq, output_dir_slice, fps=params.fps)
+        # if args.hsv_flow:
+        #     flow_utils.save_flow_hsv(op_flow_slice_seq, target_slice_seq, output_dir_slice, fps=params.fps)
+        # if args.quiver:
+        #     flow_utils.save_flow_quiver(op_flow_slice_seq * (params.crop_size / 2), source_slice_seq, output_dir_slice, fps=params.fps)
 
     if args.metrics:
         # --- evaluate motion estimation accuracy metrics ---  #

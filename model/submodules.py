@@ -1,9 +1,10 @@
-"""Submodules related to the network"""
+"""Submodules to build the network"""
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
 import numpy as np
+
 
 # ------------------------------------------- #
 # BaseNet submodules
@@ -68,7 +69,6 @@ def resample_transform(source, offset, interp='bilinear'):
     grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
 
     # stop autograd from calculating gradients on standard grid line
-    # todo: use device agnostic syntax (this is now GPU only)
     grid_h = grid_h.requires_grad_(requires_grad=False).cuda()
     grid_w = grid_w.requires_grad_(requires_grad=False).cuda()
 
@@ -81,8 +81,8 @@ def resample_transform(source, offset, interp='bilinear'):
     grid_h = grid_h + offset_h
     grid_w = grid_w + offset_w
 
-    # COORDINATE ORDER WARNING:
-    # each pair of coordinates on deformed grid is using x-y order, i.e. (column_num, row_num)
+    # each pair of coordinates on deformed grid is using x-y order,
+    # i.e. (column_num, row_num)
     # as required by the the grid_sample() function
     deformed_grid= torch.stack((grid_w, grid_h), 3)  # shape (N, H, W, 2)
     deformed_image = F.grid_sample(source, deformed_grid, mode=interp)
@@ -129,3 +129,4 @@ def resample_transform_cpu(source, offset, interp='bilinear'):
     deformed_image = F.grid_sample(source, deformed_grid, mode=interp)
 
     return deformed_image
+
