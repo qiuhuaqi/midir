@@ -1,4 +1,4 @@
-Note: This is the active dev branch, for STACOM19 code please go to branch `stacom19`.
+***Note: This is the active dev branch, for STACOM19 code please go to branch `stacom19`.***
 
 # Deep Learning Registration + Cardiac Motion Estimation
 Image based cardiac motion analysis using deep learning registration.
