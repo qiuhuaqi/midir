@@ -30,6 +30,7 @@ parser.add_argument('--data_path', default='data/inference',
                     help="Path to the dir containing inference data")
 
 parser.add_argument('--no_cuda', action='store_true')
+parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
 parser.add_argument('--gpu', default=0, help='Choose GPU to run on')
 
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on 3 slices.")
