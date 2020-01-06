@@ -154,22 +154,22 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
 
             # determine whether this is the best model based on mean dice score
             if params.seq == 'sa':
-                mean_val_dice = np.mean([val_metrics['dice_lv_mean'], val_metrics['dice_myo_mean'], val_metrics['dice_rv_mean']])
-                mean_val_mcd = np.mean([val_metrics['mcd_lv_mean'], val_metrics['mcd_myo_mean'], val_metrics['mcd_rv_mean']])
-                mean_val_hd = np.mean([val_metrics['hd_lv_mean'], val_metrics['hd_myo_mean'], val_metrics['hd_rv_mean']])
+                val_dice_mean = np.mean([val_metrics['dice_lv_mean'], val_metrics['dice_myo_mean'], val_metrics['dice_rv_mean']])
+                val_mcd_mean = np.mean([val_metrics['mcd_lv_mean'], val_metrics['mcd_myo_mean'], val_metrics['mcd_rv_mean']])
+                val_hd_mean = np.mean([val_metrics['hd_lv_mean'], val_metrics['hd_myo_mean'], val_metrics['hd_rv_mean']])
             else:
-                mean_val_dice = val_metrics['dice_mean']
-                mean_val_mcd = val_metrics['mcd_mean']
-                mean_val_hd = val_metrics['hd_mean']
+                val_dice_mean = val_metrics['dice_mean']
+                val_mcd_mean = val_metrics['mcd_mean']
+                val_hd_mean = val_metrics['hd_mean']
 
             # add mean metrics to the write metrics dict
-            val_metrics['mean_val_dice'] = mean_val_dice
-            val_metrics['mean_val_mcd'] = mean_val_mcd
-            val_metrics['mean_val_hd'] = mean_val_hd
+            val_metrics['val_dice_mean'] = val_dice_mean
+            val_metrics['val_mcd_mean'] = val_mcd_mean
+            val_metrics['val_hd_mean'] = val_hd_mean
 
-            logging.info("Mean val dice: {:05.3f}".format(mean_val_dice))
-            logging.info("Mean val mcd: {:05.3f}".format(mean_val_mcd))
-            logging.info("Mean val hd: {:05.3f}".format(mean_val_hd))
+            logging.info("Mean val dice: {:05.3f}".format(val_dice_mean))
+            logging.info("Mean val mcd: {:05.3f}".format(val_mcd_mean))
+            logging.info("Mean val hd: {:05.3f}".format(val_hd_mean))
             logging.info("Mean val negative detJ: {:05.3f}".format(val_metrics['negative_detJ_mean']))
             logging.info("Mean val mag grad detJ: {:05.3f}".format(val_metrics['mean_mag_grad_detJ_mean']))
             assert val_metrics['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"  # sanity check
@@ -177,8 +177,8 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
             # determine if the best model
             is_best = False
             best_one_metric = 0.0
-            current_one_metric = mean_val_dice  # use val dice to choose best model
-            # current_one_metric = np.mean([mean_val_mcd , mean_val_hd])  # use contour distance to choose the best model
+            current_one_metric = val_dice_mean  # use val dice to choose best model
+            # current_one_metric = np.mean([val_mcd_mean , val_hd_mean])  # use contour distance to choose the best model
             if epoch + 1 == params.val_epochs:  # first validation
                 best_one_metric = current_one_metric
             if current_one_metric >= best_one_metric:
