@@ -10,9 +10,9 @@ from tabulate import tabulate
 parser = argparse.ArgumentParser()
 parser.add_argument('--parent_dir', default='experiments',
                     help='Directory containing results of experiments')
-parser.add_argument('--result_file_name', default='test_results_best',
-                    help='Name of the files to search and collect result, including ".json"')
-parser.add_argument('--save_file_name', default='test_results',
+parser.add_argument('--result_file', default='test_results_best.json',
+                    help='Name of the files to search and collect result')
+parser.add_argument('--save_file', default='test_results.csv',
                     help='Name of the file to save the results summary to.')
 
 
@@ -27,7 +27,7 @@ def aggregate_metrics(parent_dir, metrics):
         metrics: (dict) subdir -> {'accuracy': ..., ...}
     """
     # Get the metrics for the folder if it has results from an experiment
-    metrics_file = os.path.join(parent_dir, '{}'.format(args.result_file_name))
+    metrics_file = os.path.join(parent_dir, '{}'.format(args.result_file))
     if os.path.isfile(metrics_file):
         with open(metrics_file, 'r') as f:
             metrics[parent_dir] = json.load(f)
@@ -86,6 +86,6 @@ if __name__ == "__main__":
     print(table)
 
     # Save results in parent_dir/results.md
-    save_file = os.path.join(args.parent_dir, "{}.csv".format(args.save_file_name))
+    save_file = os.path.join(args.parent_dir, "{}".format(args.save_file))
     with open(save_file, 'w') as f:
         f.write(table)
