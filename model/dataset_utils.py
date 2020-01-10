@@ -14,7 +14,7 @@ class CenterCrop(object):
         if isinstance(output_size, int):
             self.output_size = (output_size, output_size)
         else:
-            assert len(output_size) == 2, "output_size is not an input of 1 or 2 elements"
+            assert len(output_size) == 2, "'output_size' can only be a single integer or a pair of integers"
             self.output_size = output_size
 
     def __call__(self, image):
@@ -47,20 +47,21 @@ class CenterCrop(object):
 
 class Normalise(object):
     """
-    Normalise image of any shape.
+    Normalise image of any shape to range
     (image - mean) / std
-    If mode = 'max, use mean = 0, std = max(image) to normalise to [0~1]
+    If mode = 'max, normalise range to [0, 1]
+    by setting mean = min(image), std = max(image) - min(image)
     """
     def __init__(self, mode='max'):
         self.mode = mode
 
     def __call__(self, image):
         if self.mode == 'max':
-            mean = 0.0
-            std = np.max(np.abs(image))
+            mean = np.min(image)
+            std = np.max(image) - np.min(image)
         else:
-            mean = np.mean(np.abs(image))
-            std = np.std(np.abs(image))
+            mean = np.mean(image)
+            std = np.std(image)
         return (image - mean) / std
 
 
