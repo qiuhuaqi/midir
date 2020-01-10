@@ -101,7 +101,8 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
         seg_ES_crop = cropper(seg_ES.transpose(2, 0, 1)).transpose(1, 2, 0)
 
 
-        # ## --- orig i2w  --- # (WARNING: this will cause the MIRTK DOF to DDF conversion to be incorrect for 2D cases)
+        # ## --- orig i2w  --- #
+        # (WARNING: this will cause the MIRTK DOF to DDF conversion to be incorrect for 2D cases)
         # # save back to NIFTI files
         # nim_ED_crop = nib.Nifti1Image(img_ED_crop, nim_ED.affine)
         # nib.save(nim_ED_crop, '{0}/sa_ED_crop.nii.gz'.format(subj_output_dir))
