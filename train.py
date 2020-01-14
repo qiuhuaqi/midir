@@ -7,12 +7,12 @@ import logging
 import numpy as np
 
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from model.networks import BaseNet
-
-from model.losses import huber_loss_fn
+from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
 from model.submodules import resample_transform
@@ -58,8 +58,8 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
 
 
             # compute outputs and loss
-            flow = model(target, source)  # (N, 2, H, W)
-            loss, losses = loss_fn(flow, target, source, params)
+            dvf = model(target, source)  # (N, 2, H, W)
+            loss, losses = loss_fn(dvf, target, source, params)
 
 
             # clear previous gradients, calculate gradient and update
@@ -84,11 +84,11 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
             if (epoch + 1) % params.save_result_epochs == 0 or (epoch + 1) == params.num_epochs:
                 if it == len(dataloader) - 1:
 
-                    # warp source image with full resolution flow
-                    warped_source = resample_transform(source, flow)
+                    # warp source image with full resolution dvf
+                    warped_source = resample_transform(source, dvf)
 
-                    # [flow and warped source] -> cpu -> numpy array
-                    op_flow = flow.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+                    # [dvf and warped source] -> cpu -> numpy array
+                    dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
                     warped_source = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
 
                     # [input images] -> cpu -> numpy array -> [0, 255]
@@ -101,10 +101,10 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
                         os.makedirs(save_result_dir)
 
                     # NOTE: the following code saves all N frames in a batch
-                    # save flow (hsv + quiver), target, source, warped source and error
+                    # save dvf (hsv + quiver), target, source, warped source and error
                     # flow_utils.save_flow_hsv(op_flow, target, save_result_dir, fps=params.fps)
                     flow_utils.save_warp_n_error(warped_source, target, source, save_result_dir, fps=params.fps)
-                    flow_utils.save_flow_quiver(op_flow * (target.shape[-1] / 2), source, save_result_dir,
+                    flow_utils.save_flow_quiver(dvf_np * (target.shape[-1] / 2), source, save_result_dir,
                                                 fps=params.fps)
 
 
@@ -284,10 +284,8 @@ if __name__ == '__main__':
     model = BaseNet()
     model = model.to(device=args.device)
 
-    # set up the loss function and optimiser
-    loss_fn = huber_loss_fn
+    # set up optimiser
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
-
 
     ## train and validate
     logging.info("Starting training and validation for {} epochs.".format(params.num_epochs))

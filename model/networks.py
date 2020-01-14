@@ -25,7 +25,7 @@ class BaseNet(nn.Module):
         self.conv_blocks12 = conv_blocks_2(n_ch, 64)
         self.conv_blocks22 = conv_blocks_2(64, 128, 2)
         self.conv_blocks32 = conv_blocks_3(128, 256, 2)
-        self.conv_blocks42 = conv_blocks_3(257, 512, 2)
+        self.conv_blocks42 = conv_blocks_3(256, 512, 2)
         self.conv_blocks52 = conv_blocks_3(512, 512, 2)
 
         self.conv6 = nn.Conv2d(64 * 5, 64, 1)
@@ -41,8 +41,7 @@ class BaseNet(nn.Module):
             source: source image input to the network, Tensor shape (T-1, 1, H, W)
 
         Returns:
-            net['flow']: (tensor, shape NxHxWx2) calculated optical flow
-            net['wapred_source']: source images warped towards the target images
+            net['dvf']: (Tensor, shape (N, 2, H, W)) calculated optical flow
         """
 
         # slice source and target images
@@ -81,6 +80,6 @@ class BaseNet(nn.Module):
         net['comb_1'] = self.conv6(net['concat'])
         net['comb_2'] = self.conv7(net['comb_1'])
 
-        net['op_flow'] = torch.tanh(self.conv8(net['comb_2']))
+        net['dvf'] = torch.tanh(self.conv8(net['comb_2']))
 
-        return net['op_flow']
+        return net['dvf']
