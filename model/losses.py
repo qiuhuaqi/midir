@@ -163,14 +163,13 @@ def nmi_loss_fn(flow, target, source, params):
         warped_source = resample_transform(source, flow)
 
         # compute normalised mutual information
+        # todo: assign to device according to input tensors (target/source)
         joint_hist_fn = JointHistParzenTorch().cuda()
-        # todo: find a better way to put to cuda (needed because of the bin edge array need to put on GPU) or do I need to if I'm using nn.functional?
         joint_hist = joint_hist_fn(target, warped_source)
-        nmi = NMI_pytorch(joint_hist)
+        nmi = params.nmi * NMI_pytorch(joint_hist)
 
         # add regularisation (approximated Huber)
         smooth_loss = params.huber_spatial * huber_loss_spatial(flow) + params.huber_temporal * huber_loss_temporal(flow)
-        # todo: bending energy
 
         # negative NMI loss function to minimise
         loss = - nmi + smooth_loss

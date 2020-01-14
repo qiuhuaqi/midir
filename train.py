@@ -56,6 +56,9 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
             target = target.to(device=args.device).expand(source.size()[1], -1, -1, -1)
             source = source.to(device=args.device).permute(1, 0, 2, 3)
 
+            # linear transformation test for NMI: use (1-source) as source image
+            if params.inverse:
+                source = 1.0 - source
 
             # compute outputs and loss
             flow = model(target, source)  # (N, 2, H, W)

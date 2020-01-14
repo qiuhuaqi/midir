@@ -120,8 +120,8 @@ class JointHistParzenTorch(nn.Module):
 
         # window width parameter (eps)
         # to satisfy the partition of unity constraint, eps can be no larger than bin_width
-        # and can only be reduced by integer factor to increase support,
-        # cubic B-spline function has support of 4*eps, hence maximum number of bins affected is 4/c
+        # and can only be reduced by integer factor to increase kernel support,
+        # cubic B-spline function has support of 4*eps, hence maximum number of bins a sample can affect is 4/c
         eps_ref = self.c_ref * self.bin_width_ref
         eps_tar = self.c_tar * self.bin_width_tar
 

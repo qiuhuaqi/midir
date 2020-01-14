@@ -82,6 +82,10 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
 
             with torch.no_grad():
 
+                # linear transformation test for NMI: use (1-source) as source image
+                if params.inverse:
+                    image_es_batch = 1.0 - image_es_batch
+
                 # compute optical flow and warped ED images towards ES
                 op_flow = model(image_ed_batch, image_es_batch)
 
