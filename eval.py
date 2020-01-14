@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from model.networks import BaseNet
 from model.submodules import resample_transform, resample_transform_cpu
-from model.losses import huber_loss_fn
+from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_Eval_UKBB
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
@@ -258,10 +258,6 @@ if __name__ == '__main__':
     # set up model and loss function
     model = BaseNet()
     model = model.to(device=args.device)
-
-    # set up the loss function
-    loss_fn = huber_loss_fn
-
 
     # reload network parameters from saved model file
     logging.info("Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))

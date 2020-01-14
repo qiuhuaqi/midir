@@ -55,86 +55,68 @@ def vanilla_mse_loss(flow, img1, img2):
     loss = mse(img1, img2_warped)
     return loss
 
+
 ##############################################################################################
-# --- Huber loss --- #
+# --- Regularisation loss --- #
 ##############################################################################################
 
-def huber_loss_spatial(flow):
+def diffusion_loss(dvf):
+    """
+    Calculate diffusion loss as a regularisation on the displacement vector field (DVF)
+
+    Args:
+        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
+
+    Returns:
+        diffusion_loss_2d: (Scalar) diffusion regularisation loss
+        """
+
+    # finite difference as derivative
+    # (note the 1st column of dx and the first row of dy are not regularised)
+    dvf_dx = dvf[:, :, 1:, 1:] - dvf[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
+    dvf_dy = dvf[:, :, 1:, 1:] - dvf[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
+    return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
+
+
+def huber_loss_spatial(dvf):
     """
     Calculate approximated spatial Huber loss
     Args:
-        flow: optical flow estimated, Tensor of shape (N, 2, H, W)
+        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
 
     Returns:
-        spatial_huber_loss: the loss value
+        loss: (Scalar) Huber loss spatial
 
     """
-    eps = 0.01  # numerical stability
+    eps = 0.0001 # numerical stability
 
-    # magnitude of the flow
-    flow_norm = torch.norm(flow, dim=1)  # (N, H, W)
-
-    # spatial finite derivative, 1st order
-    flow_norm_dx = flow_norm[:, 1:, :] - flow_norm[:, :-1, :]  # (N, H-1, W)
-    flow_norm_dy = flow_norm[:, :, 1:] - flow_norm[:, :, :-1]  # (N, H, W-1)
-
-    # calculate the huber loss step by step
-    # drop 1 on one dimension to match shapes to (N, H-1, W-1)
-    spatial_huber_loss = flow_norm_dx[:, :, :-1] ** 2 + flow_norm_dy[:, :-1, :] ** 2  # ^2 + ^2: (N, H-1, W-1)
-    spatial_huber_loss = torch.sqrt( eps + torch.sum( torch.sum(spatial_huber_loss, dim=1), dim=1) )  # sqrt(sum over space)
-    spatial_huber_loss = torch.mean(spatial_huber_loss)  # mean over time (batch)
-
-    return spatial_huber_loss
+    # finite difference as derivative
+    # (note the 1st column of dx and the first row of dy are not regularised)
+    dvf_dx = dvf[:, :, 1:, 1:] - dvf[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
+    dvf_dy = dvf[:, :, 1:, 1:] - dvf[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
+    return ((dvf_dx.pow(2) + dvf_dy.pow(2)).sum(dim=1) + eps).sqrt().mean()
 
 
-def huber_loss_temporal(flow):
+def huber_loss_temporal(dvf):
     """
     Calculate approximated temporal Huber loss
 
     Args:
-        flow: optical flow estimated, Tensor of shape (N, 2, H, W)
+        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
 
     Returns:
-        temporal_huber_loss: the loss value
+        loss: (Scalar) huber loss temporal
 
     """
-    eps = 0.01  # numerical stability
+    eps = 0.0001  # numerical stability
 
     # magnitude of the flow
-    flow_norm = torch.norm(flow, dim=1)  # (N, H, W)
+    dvf_norm = torch.norm(dvf, dim=1)  # (N, H, W)
 
     # temporal finite derivatives, 1st order
-    flow_norm_dt = flow_norm[1:, :, :] - flow_norm[:-1, :, :]
-    temporal_huber_loss = torch.sqrt(eps + torch.sum(flow_norm_dt ** 2))
-    return temporal_huber_loss
-
-
-def huber_loss_fn(flow, target, source, params):
-    """
-    Unsupervised loss function with optional pseudo-Huber loss as regularisation
-
-    Args:
-        flow: (Tensor, shape Nx2xHxW) predicted flow from target image to source image
-        target: (Tensor, shape NxchxHxW) target image
-        source: (Tensor, shape NxchxHxW) source image
-
-    Returns:
-        loss
-        losses: (dict) dictionary of individual loss term after weighting
-    """
-
-    # warp the source image towards target using grid resample
-    # i.e. flow is from target to source
-    warped_source = resample_transform(source, flow)
-
-    mse = nn.MSELoss()
-    mse_loss = mse(target, warped_source)
-    smooth_loss = params.huber_spatial * huber_loss_spatial(flow) + params.huber_temporal * huber_loss_temporal(flow)
-
-    loss = mse_loss + smooth_loss
-    losses = {'mse': mse_loss,  'smooth_loss': smooth_loss}
-
-    return loss, losses
+    dvf_norm_dt = dvf_norm[1:, :, :] - dvf_norm[:-1, :, :]
+    loss = (dvf_norm_dt.pow(2) + eps).sum().sqrt()
+    return loss
 
 
 ##############################################################################################
@@ -176,4 +158,42 @@ def nmi_loss_fn(flow, target, source, params):
         losses = {'nmi': nmi, 'smooth_loss': smooth_loss}
 
         return loss, losses
+
+
+##############################################################################################
+# --- construct the loss function --- #
+##############################################################################################
+sim_losses = {"MSE": nn.MSELoss()}
+reg_losses = {"huber_spt": huber_loss_spatial,
+              "huber_temp": huber_loss_temporal,
+              "diffusion": diffusion_loss}
+
+
+def loss_fn(dvf, target, source, params):
+    """
+    Unsupervised loss function
+
+    Args:
+        dvf: (Tensor, shape Nx2xHxW) predicted displacement vector field
+        target: (Tensor, shape NxchxHxW) target image
+        source: (Tensor, shape NxchxHxW) source image
+        params: (object) model parameters
+
+    Returns:
+        loss: (scalar) loss value
+        losses: (dict) dictionary of individual losses (weighted)
+    """
+
+    # warp the source image towards target using grid resample (spatial transformer)
+    # i.e. dvf is from target to source
+    warped_source = resample_transform(source, dvf)
+
+    sim_loss = sim_losses[params.sim_loss](target, warped_source)
+    reg_loss = reg_losses[params.reg_loss](dvf) * params.reg_weight
+
+    loss = sim_loss + reg_loss
+    losses = {params.sim_loss: sim_loss,  params.reg_loss: reg_loss}
+
+    return loss, losses
+
 

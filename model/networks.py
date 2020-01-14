@@ -42,8 +42,7 @@ class BaseNet(nn.Module):
             source: source image input to the network, Tensor shape (T-1, 1, H, W)
 
         Returns:
-            net['flow']: (tensor, shape NxHxWx2) calculated optical flow
-            net['wapred_source']: source images warped towards the target images
+            net['dvf']: (Tensor, shape (N, 2, H, W)) calculated optical flow
         """
 
         # slice source and target images
@@ -82,25 +81,5 @@ class BaseNet(nn.Module):
         net['comb_1'] = self.conv6(net['concat'])
         net['comb_2'] = self.conv7(net['comb_1'])
 
-        net['op_flow'] = torch.tanh(self.conv8(net['comb_2']))
-
-        return net['op_flow']
-
-
-# class VoxelMorph(nn.Module):
-#     super(VoxelMorph, self).__init__()
-#
-#     self.input_conv = conv_bn_leaky_relu(input_channels, 16, )
-#
-#
-#     def forward(self, target, source):
-#         x = torch.cat((target, source), dim=1)
-#
-#
-#
-#
-#
-#
-#
-# # class UNet(nn.Module):
-
+        net['dvf'] = torch.tanh(self.conv8(net['comb_2']))
+        return net['dvf']
