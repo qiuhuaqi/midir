@@ -28,9 +28,6 @@ def joint_hist_vanilla_numpy(img_ref, img_tar, num_bins_ref=64, num_bins_tar=64)
     return H, bins_ref, bins_tar
 
 
-
-
-
 def joint_hist_parzen_numpy(img_ref, img_tar, window="cubic_bspline", num_bins_ref=64, num_bins_tar=64,
                             c_ref=1.0, c_tar=1.0):
     """Joint histogram written in numpy, noramlise image intensity range to [0,1]"""

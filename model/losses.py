@@ -123,47 +123,21 @@ def huber_loss_temporal(dvf):
 # --- mutual information loss --- #
 ##############################################################################################
 from model.mutual_info.histogram import JointHistParzenTorch
-from model.mutual_info.mutual_info import NMI_pytorch
+from model.mutual_info.mutual_info import nmi_from_joint_entropy_pytorch
 
-def nmi_loss_fn(flow, target, source, params):
-        """
-        Unsupervised loss function based on normalised mutual information
+# todo: unify NMI API in OOP way with native nn.MSELoss()
 
-        Args:
-            flow: (Tensor, shape Nx2xHxW) predicted flow from target image to source image
-            target: (Tensor, shape NxChxHxW) target image
-            source: (Tensor, shape NxChxHxW) source image
-            params: parameters in params.json
-
-        Returns:
-            loss
-            losses: (dict) dictionary of individual loss term after weighting
-        """
-
-        # warp the source image towards target using grid resample
-        # i.e. flow is from target to source
-        warped_source = resample_transform(source, flow)
-
-        # compute normalised mutual information
-        # todo: assign to device according to input tensors (target/source)
-        joint_hist_fn = JointHistParzenTorch().cuda()
-        joint_hist = joint_hist_fn(target, warped_source)
-        nmi = params.nmi * NMI_pytorch(joint_hist)
-
-        # add regularisation (approximated Huber)
-        smooth_loss = params.huber_spatial * huber_loss_spatial(flow) + params.huber_temporal * huber_loss_temporal(flow)
-
-        # negative NMI loss function to minimise
-        loss = - nmi + smooth_loss
-        losses = {'nmi': nmi, 'smooth_loss': smooth_loss}
-
-        return loss, losses
-
+def nmi_loss(x, y):
+    joint_hist_fn = JointHistParzenTorch().to(device=x.device)
+    joint_hist = joint_hist_fn(x, y)
+    nmi_loss = - nmi_from_joint_entropy_pytorch(joint_hist)
+    return nmi_loss
 
 ##############################################################################################
 # --- construct the loss function --- #
 ##############################################################################################
-sim_losses = {"MSE": nn.MSELoss()}
+sim_losses = {"MSE": nn.MSELoss(),
+              "NMI": nmi_loss}
 reg_losses = {"huber_spt": huber_loss_spatial,
               "huber_temp": huber_loss_temporal,
               "diffusion": diffusion_loss}

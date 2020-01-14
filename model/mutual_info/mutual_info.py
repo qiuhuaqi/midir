@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 
-def NMI_np(joint_hist, eps=1e-12):
+def nmi_from_joint_entropy_numpy(joint_hist, eps=1e-12):
     """Compute Normalised Mutual Information (NMI) using joint histogram"""
     # normalise joint histogram to acquire joint pdf
     joint_pdf = joint_hist / np.sum(joint_hist)
@@ -26,7 +26,7 @@ def NMI_np(joint_hist, eps=1e-12):
     return NMI, entropy_joint, entropy_ref, entropy_tar
 
 
-def NMI_pytorch(joint_hist, eps=1e-12):
+def nmi_from_joint_entropy_pytorch(joint_hist, eps=1e-12):
     """Compute Normalised Mutual Information (NMI) using joint histogram in Pytorch"""
 
     # normalise joint histogram to acquire joint pdf
@@ -47,5 +47,5 @@ def NMI_pytorch(joint_hist, eps=1e-12):
     # joint entropy (N, 1)
     entropy_joint = - torch.sum(joint_pdf * torch.log(joint_pdf), dim=(1,2))
 
-    NMI = torch.mean((entropy_ref + entropy_tar) / entropy_joint)
-    return NMI
+    nmi = torch.mean((entropy_ref + entropy_tar) / entropy_joint)
+    return nmi
