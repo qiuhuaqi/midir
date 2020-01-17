@@ -10,9 +10,9 @@ from tabulate import tabulate
 parser = argparse.ArgumentParser()
 parser.add_argument('--parent_dir', default='experiments',
                     help='Directory containing results of experiments')
-parser.add_argument('--result_file', default='test_results_best.json',
+parser.add_argument('--result_file', default='val_results_best_3slices_True.json',
                     help='Name of the files to search and collect result')
-parser.add_argument('--save_file', default='test_results.csv',
+parser.add_argument('--save_file', default='val.csv',
                     help='Name of the file to save the results summary to.')
 
 
