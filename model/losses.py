@@ -9,52 +9,6 @@ import numpy as np
 from model.submodules import resample_transform
 from model.unflow_losses import _second_order_deltas
 
-##############################################################################################
-# --- Temp test loss functions --- #
-##############################################################################################
-
-def smooth_mse_loss(flow, target, source, params):
-    """
-    MSE loss with smoothness regularisation.
-
-    Args:
-        flow: (Tensor, shape Nx2xHxW) predicted flow from target image to source image
-        target: (Tensor, shape NxchxHxW) target image
-        source: (Tensor, shape NxchxHxW) source image
-
-    Returns:
-        loss
-    """
-
-    # warp the source image towards target using grid resample
-    # i.e. flow is from target to source
-    warped_source = resample_transform(source, flow)
-
-    mse = nn.MSELoss()
-    mse_loss = mse(target, warped_source)
-    if params.loss_fn == 'smooth_2nd':
-        smooth_loss = params.smooth_weight * vanilla_second_order_loss(flow)
-
-    loss = mse_loss + smooth_loss
-    losses = {'mse': mse_loss, 'smooth': smooth_loss}
-
-    return loss, losses
-
-def vanilla_second_order_loss(flow):
-    """Compute sum of 2nd order derivatives of flow as smoothness loss"""
-    delta_h, delta_w, inner_masks = _second_order_deltas(flow)
-    inner_masks = inner_masks.cuda()  # mask out borders
-    loss_h = torch.sum((delta_h**2) * inner_masks) / np.prod(delta_h.size())
-    loss_w = torch.sum((delta_w**2) * inner_masks) / np.prod(delta_w.size())
-    return loss_h + loss_w
-
-
-def vanilla_mse_loss(flow, img1, img2):
-    img2_warped = resample_transform(img2, flow)
-    mse = nn.MSELoss()
-    loss = mse(img1, img2_warped)
-    return loss
-
 
 ##############################################################################################
 # --- Regularisation loss --- #
@@ -62,19 +16,16 @@ def vanilla_mse_loss(flow, img1, img2):
 
 def diffusion_loss(dvf):
     """
-    Calculate diffusion loss as a regularisation on the displacement vector field (DVF)
+    Compute diffusion regularisation on DVF
 
     Args:
-        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
+        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field
 
     Returns:
         diffusion_loss_2d: (Scalar) diffusion regularisation loss
-        """
-
-    # finite difference as derivative
-    # (note the 1st column of dx and the first row of dy are not regularised)
-    dvf_dx = dvf[:, :, 1:, 1:] - dvf[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
-    dvf_dy = dvf[:, :, 1:, 1:] - dvf[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
+    """
+    dvf_dx = dvf[:, :, 1:, :] - dvf[:, :, :-1, :]  # (N, 2, H-1, W-1)
+    dvf_dy = dvf[:, :, :, 1:] - dvf[:, :, :, :-1]  # (N, 2, H-1, W-1)
     return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
 
 
@@ -108,14 +59,13 @@ def huber_loss_temporal(dvf):
         loss: (Scalar) huber loss temporal
 
     """
-    eps = 0.0001  # numerical stability
-
+    # todo: temporally regularise dx and dy not only the L2norm
     # magnitude of the flow
     dvf_norm = torch.norm(dvf, dim=1)  # (N, H, W)
 
     # temporal finite derivatives, 1st order
     dvf_norm_dt = dvf_norm[1:, :, :] - dvf_norm[:-1, :, :]
-    loss = (dvf_norm_dt.pow(2) + eps).sum().sqrt()
+    loss = (dvf_norm_dt.pow(2) + 1e-4).sum().sqrt()
     return loss
 
 
