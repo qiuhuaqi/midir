@@ -4,11 +4,9 @@ Loss functions
 
 import torch
 import torch.nn as nn
-import numpy as np
+import torch.nn.functional as F
 
-from model.submodules import resample_transform
-from model.unflow_losses import _second_order_deltas
-
+from model.submodules import spatial_transform
 
 ##############################################################################################
 # --- Regularisation loss --- #
@@ -24,8 +22,12 @@ def diffusion_loss(dvf):
     Returns:
         diffusion_loss_2d: (Scalar) diffusion regularisation loss
     """
-    dvf_dx = dvf[:, :, 1:, :] - dvf[:, :, :-1, :]  # (N, 2, H-1, W-1)
-    dvf_dy = dvf[:, :, :, 1:] - dvf[:, :, :, :-1]  # (N, 2, H-1, W-1)
+
+    # [dev Jan 31, 2020]: pad dvf with zeros before computing loss
+    dvf_pad = F.pad(dvf, (1, 0, 1, 0))
+
+    dvf_dx = dvf_pad[:, :, 1:, 1:] - dvf_pad[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
+    dvf_dy = dvf_pad[:, :, 1:, 1:] - dvf_pad[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
     return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
 
 
@@ -108,7 +110,7 @@ def loss_fn(dvf, target, source, params):
 
     # warp the source image towards target using grid resample (spatial transformer)
     # i.e. dvf is from target to source
-    warped_source = resample_transform(source, dvf)
+    warped_source = spatial_transform(source, dvf)
 
     sim_loss = sim_losses[params.sim_loss](target, warped_source)
     reg_loss = reg_losses[params.reg_loss](dvf) * params.reg_weight

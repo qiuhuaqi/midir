@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.submodules import resample_transform
+from model.submodules import spatial_transform
 
 from utils import image_utils
 # Values for occlusion decision threshold
@@ -70,11 +70,11 @@ def compute_unflow_losses(img1, img2, flow_fw, flow_bw, box_distance=1, occ=True
     """Compute the variety of losses of UnFlow for one layer"""
 
     # -- occlusion masks
-    flow_bw_resampled = resample_transform(flow_bw, flow_fw)
+    flow_bw_resampled = spatial_transform(flow_bw, flow_fw)
     flow_diff_fw = flow_fw + flow_bw_resampled
     flow_diff_sq_fw = l2_norm_sq(flow_diff_fw)
 
-    flow_fw_resampled = resample_transform(flow_fw, flow_bw)
+    flow_fw_resampled = spatial_transform(flow_fw, flow_bw)
     flow_diff_bw = flow_bw + flow_fw_resampled
     flow_diff_sq_bw = l2_norm_sq(flow_diff_bw)
 
@@ -103,8 +103,8 @@ def compute_unflow_losses(img1, img2, flow_fw, flow_bw, box_distance=1, occ=True
 
 
     # -- warping images
-    img2_warped = resample_transform(img2, flow_fw)
-    img1_warped = resample_transform(img1, flow_bw)
+    img2_warped = spatial_transform(img2, flow_fw)
+    img1_warped = spatial_transform(img1, flow_bw)
 
     im_diff_fw = img1 - img2_warped
     im_diff_bw = img2 - img1_warped

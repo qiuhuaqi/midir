@@ -12,7 +12,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 from model.networks import BaseNet
-from model.submodules import resample_transform, resample_transform_cpu
+from model.submodules import spatial_transform
 from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_Eval_UKBB
@@ -90,7 +90,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
                 dvf = model(image_ed_batch, image_es_batch)
 
                 # transform label mask of ES frame
-                warped_label_es_batch = resample_transform(label_es_batch.float(), dvf, interp='nearest')
+                warped_label_es_batch = spatial_transform(label_es_batch.float(), dvf, interp='nearest')
 
             if args.cuda:
                 # move data to cpu to calculate metrics

@@ -7,7 +7,6 @@ import logging
 import numpy as np
 
 import torch
-import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
@@ -15,7 +14,7 @@ from model.networks import BaseNet
 from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
-from model.submodules import resample_transform
+from model.submodules import spatial_transform
 
 from eval import evaluate
 from utils import xutils, dvf_utils
@@ -88,7 +87,7 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
                 if it == len(dataloader) - 1:
 
                     # warp source image with full resolution dvf
-                    warped_source = resample_transform(source, dvf)
+                    warped_source = spatial_transform(source, dvf)
 
                     # [dvf and warped source] -> cpu -> numpy array
                     dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)

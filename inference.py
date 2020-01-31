@@ -18,7 +18,7 @@ from model.networks import BaseNet
 
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_Eval_UKBB, CardiacMR_2D_Inference_UKBB
-from model.submodules import resample_transform
+from model.submodules import spatial_transform
 from utils.metrics import contour_distances_stack, computeJacobianDeterminant2D
 from utils import xutils, dvf_utils
 
@@ -185,7 +185,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
 
         # run inference
         op_flow = model(target, source)
-        warped_source = resample_transform(source, op_flow)
+        warped_source = spatial_transform(source, op_flow)
 
         # move to cpu and stack
         op_flow_list += [op_flow.data.cpu().numpy().transpose(0, 2, 3, 1)]  # (N, H, W, 2)
@@ -264,7 +264,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
 
         # warp ED segmentation mask to ES using nearest neighbourhood interpolation
         with torch.no_grad():
-            warped_label_es_batch = resample_transform(label_es_batch.float(), op_flow, interp='nearest')
+            warped_label_es_batch = spatial_transform(label_es_batch.float(), op_flow, interp='nearest')
 
         # move data to cpu to calculate metrics (also transpose into H, W, N)
         warped_label_es_batch = warped_label_es_batch.squeeze(1).cpu().numpy().transpose(1, 2, 0)

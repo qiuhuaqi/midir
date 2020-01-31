@@ -8,7 +8,7 @@ import os
 import nibabel as nib
 import imageio
 from utils.imageio_utils import save_gif, save_png, save_nifti
-from model.submodules import resample_transform_cpu
+from model.submodules import spatial_transform
 
 
 def flow_line_integral(op_flow):
@@ -290,7 +290,7 @@ def warp_numpy_cpu(source_img, dvf):
     dvf_norm = 2 * dvf / source_img.shape[0]  # normalise to Pytorch coordinate system
     dvf_tensor = torch.from_numpy(dvf_norm[:, :, :, 0, :].transpose(2, 3, 0, 1)).float()  # tensor (N, 2, H, W)
     source_img_tensor = torch.from_numpy(source_img.transpose(2, 0, 1)).unsqueeze(1)  # tensor (N, 1, H, W)
-    warped_source_img_tensor = resample_transform_cpu(source_img_tensor, dvf_tensor)
+    warped_source_img_tensor = spatial_transform(source_img_tensor, dvf_tensor)
     warped_source_img = warped_source_img_tensor.numpy().transpose(2, 3, 0, 1)[..., 0]  # (H, W, N)
 
     return warped_source_img

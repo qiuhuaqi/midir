@@ -77,9 +77,9 @@ def conv_blocks_3(in_channels, out_channels, strides=1):
 # ------------------------------------------- #
 # Spatial Transformer Modules
 # ------------------------------------------- #
-def resample_transform(source, dvf, interp='bilinear'):
-    """
-    Transform an image by sampling at coordinates on a deformed mesh grid.
+def spatial_transform(source, dvf, interp='bilinear'):
+    """todo: build on nn.Module
+    Spatially transform/deform an image by sampling at coordinates of the deformed mesh grid.
 
     Args:
         source: source image, Tensor of shape (N, Ch, H, W)
@@ -97,8 +97,8 @@ def resample_transform(source, dvf, interp='bilinear'):
     grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, H), torch.linspace(-1, 1, W)])
 
     # stop autograd from calculating gradients on standard grid line
-    grid_h = grid_h.requires_grad_(requires_grad=False).cuda()
-    grid_w = grid_w.requires_grad_(requires_grad=False).cuda()
+    grid_h = grid_h.requires_grad_(requires_grad=False).to(device=source.device)
+    grid_w = grid_w.requires_grad_(requires_grad=False).to(device=source.device)
 
     # deformed grid coordinates in pixel
     # (H,W) + (N, H, W) add by broadcasting

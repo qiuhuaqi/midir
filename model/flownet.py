@@ -6,7 +6,7 @@ from torch.nn import init
 
 from model.correlation_package.correlation import Correlation
 # todo: add these back!
-from model.submodules import conv, deconv, predict_flow, resample_transform
+from model.submodules import conv, deconv, predict_flow, spatial_transform
 
 
 # --- FlowNetC --- #
