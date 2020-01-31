@@ -125,8 +125,6 @@ def huber_loss_temporal(dvf):
 from model.mutual_info.histogram import JointHistParzenTorch
 from model.mutual_info.mutual_info import nmi_from_joint_entropy_pytorch
 
-# todo: unify NMI API in OOP way with native nn.MSELoss()
-
 def nmi_loss(x, y):
     joint_hist_fn = JointHistParzenTorch().to(device=x.device)
     joint_hist = joint_hist_fn(x, y)
@@ -169,5 +167,4 @@ def loss_fn(dvf, target, source, params):
     losses = {params.sim_loss: sim_loss,  params.reg_loss: reg_loss}
 
     return loss, losses
-
 

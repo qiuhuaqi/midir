@@ -81,5 +81,5 @@ class BaseNet(nn.Module):
         net['comb_1'] = self.conv6(net['concat'])
         net['comb_2'] = self.conv7(net['comb_1'])
 
-        net['dvf'] = torch.tanh(self.conv8(net['comb_2']))
+        net['dvf'] = self.conv8(net['comb_2'])
         return net['dvf']

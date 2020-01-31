@@ -87,22 +87,22 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
                     image_es_batch = 1.0 - image_es_batch
 
                 # compute optical flow and warped ED images towards ES
-                op_flow = model(image_ed_batch, image_es_batch)
+                dvf = model(image_ed_batch, image_es_batch)
 
                 # transform label mask of ES frame
-                warped_label_es_batch = resample_transform(label_es_batch.float(), op_flow, interp='nearest')
+                warped_label_es_batch = resample_transform(label_es_batch.float(), dvf, interp='nearest')
 
             if args.cuda:
                 # move data to cpu to calculate metrics
                 # (the axis permutation is to comply with metric calculation code which takes input shape H, W, N)
                 warped_label_es_batch = warped_label_es_batch.squeeze(1).cpu().numpy().transpose(1, 2, 0)
                 label_ed_batch = label_ed_batch.squeeze(0).numpy().transpose(1, 2, 0)
-                op_flow = op_flow.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+                dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
             else:
                 # CPU version of the code
                 warped_label_es_batch = warped_label_es_batch.squeeze(1).numpy().transpose(1, 2, 0)
                 label_ed_batch = label_ed_batch.squeeze(0).numpy().transpose(1, 2, 0)
-                op_flow = op_flow.data.numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+                dvf = dvf.data.numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
 
             # calculate the metrics
             if args.three_slices:
@@ -114,7 +114,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
 
                 warped_label_es_batch = warped_label_es_batch[:, :, slices_idx]
                 label_ed_batch = label_ed_batch[:, :, slices_idx]
-                op_flow = op_flow[slices_idx, :, :, :]  # needed for detJac
+                dvf = dvf[slices_idx, :, :, :]  # needed for detJac
 
             # dice
             dice_lv = categorical_dice_stack(warped_label_es_batch, label_ed_batch, label_class=1)
@@ -138,7 +138,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
             hd_rv_buffer += [hd_rv]
 
             # determinant of Jacobian
-            mean_grad_detJ, mean_negative_detJ = detJac_stack(op_flow)
+            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf)
             mean_mag_grad_detJ_buffer += [mean_grad_detJ]
             negative_detJ_buffer += [mean_negative_detJ]
 

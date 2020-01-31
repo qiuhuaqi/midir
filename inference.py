@@ -20,7 +20,7 @@ from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_Eval_UKBB, CardiacMR_2D_Inference_UKBB
 from model.submodules import resample_transform
 from utils.metrics import contour_distances_stack, computeJacobianDeterminant2D
-from utils import xutils, flow_utils
+from utils import xutils, dvf_utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
@@ -47,7 +47,7 @@ def plot_results(target, source, warped_source, op_flow, save_path=None, title_f
     here we assume flow is normalised to [-1, 1] coordinate"""
 
     # convert flow into HSV flow with white background
-    hsv_flow = flow_utils.flow_to_hsv(op_flow, max_mag=0.15, white_bg=True)
+    hsv_flow = dvf_utils.flow_to_hsv(op_flow, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))

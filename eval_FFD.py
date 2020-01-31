@@ -11,7 +11,7 @@ from model.dataset_utils import CenterCrop
 from utils.data_utils import split_volume_idmat, split_volume
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
 from utils import xutils
-from utils.flow_utils import dof_to_dvf
+from utils.dvf_utils import dof_to_dvf
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default='data/ukbb/small_set_ukbb2964/test', help="Directory containing test data")

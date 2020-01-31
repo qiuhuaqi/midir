@@ -18,7 +18,7 @@ from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
 from model.submodules import resample_transform
 
 from eval import evaluate
-from utils import xutils, flow_utils
+from utils import xutils, dvf_utils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
@@ -106,9 +106,9 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
                     # NOTE: the following code saves all N frames in a batch
                     # save dvf (hsv + quiver), target, source, warped source and error
                     # flow_utils.save_flow_hsv(op_flow, target, save_result_dir, fps=params.fps)
-                    flow_utils.save_warp_n_error(warped_source, target, source, save_result_dir, fps=params.fps)
-                    flow_utils.save_flow_quiver(dvf_np * (target.shape[-1] / 2), source, save_result_dir,
-                                                fps=params.fps)
+                    dvf_utils.save_warp_n_error(warped_source, target, source, save_result_dir, fps=params.fps)
+                    dvf_utils.save_flow_quiver(dvf_np * (target.shape[-1] - 1 / 2), source, save_result_dir,
+                                               fps=params.fps)
 
 
 def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
