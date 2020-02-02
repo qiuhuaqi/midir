@@ -41,7 +41,7 @@ def relu():
     return nn.ReLU(inplace=True)
 
 
-def conv_block_1(in_channels, out_channels, kernel_size=3, stride=1, padding = 1, nonlinearity=relu):
+def conv_block_1(in_channels, out_channels, kernel_size=3, stride=1, padding=1, nonlinearity=relu):
     """Conv2d + Non-linearity + BN2d, Xavier initialisation"""
     conv_layer = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
                            padding=padding, bias=False)
@@ -77,7 +77,7 @@ def conv_blocks_3(in_channels, out_channels, strides=1):
 # ------------------------------------------- #
 # Spatial Transformer Modules
 # ------------------------------------------- #
-def spatial_transform(source, dvf, interp='bilinear'):
+def spatial_transform(source, dvf, interp="bilinear"):
     """todo: build on nn.Module
     Spatially transform/deform an image by sampling at coordinates of the deformed mesh grid.
 
@@ -96,19 +96,15 @@ def spatial_transform(source, dvf, interp='bilinear'):
     H, W = source.size()[-2:]
     grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, H), torch.linspace(-1, 1, W)])
 
-    # stop autograd from calculating gradients on standard grid line
     grid_h = grid_h.requires_grad_(requires_grad=False).to(device=source.device)
     grid_w = grid_w.requires_grad_(requires_grad=False).to(device=source.device)
 
-    # deformed grid coordinates in pixel
     # (H,W) + (N, H, W) add by broadcasting
     new_grid_h = grid_h + dvf[:, 0, ...]
     new_grid_w = grid_w + dvf[:, 1, ...]
 
-    # each pair of coordinates on deformed grid is using x-y order,
-    # i.e. (column_num, row_num)
-    # as required by the the grid_sample() function
+    # using x-y (column_num, row_num) order
     deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
-    deformed_image = F.grid_sample(source, deformed_grid, mode=interp)
+    deformed_image = F.grid_sample(source, deformed_grid, mode=interp, padding_mode="border")
 
     return deformed_image

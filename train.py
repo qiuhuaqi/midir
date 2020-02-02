@@ -10,7 +10,7 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from model.networks import BaseNet
+from model.networks import BaseNet, SiameseFCN
 from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
 from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
@@ -214,14 +214,12 @@ if __name__ == '__main__':
     # parse arguments and read parameters from JSON file
     args = parser.parse_args()
 
-    # set the GPU to use and device
+    # set up device
+    args.device = torch.device('cpu')
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
         args.device = torch.device('cuda')
-    else:
-        args.device = torch.device('cpu')
-
 
     # set up model dir
     if not os.path.exists(args.model_dir):
@@ -285,8 +283,14 @@ if __name__ == '__main__':
 
 
     # instantiate model and move to device
-    model = BaseNet()
+    if params.network == "BaseNet":
+        model = BaseNet()
+    elif params.network == "SiameseFCN":
+        model = SiameseFCN()
+    else:
+        raise ValueError("Unknown network!")
     model = model.to(device=args.device)
+
 
     # set up optimiser
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
