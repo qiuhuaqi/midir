@@ -84,7 +84,7 @@ class BaseNet(nn.Module):
         # final convolution and output
         net['comb_1'] = self.conv6(net['concat'])
         net['comb_2'] = self.conv7(net['comb_1'])
-        net['out'] = torch.tanh(self.conv8(net['comb_2']))
+        net['out'] = self.conv8(net['comb_2'])
         return net['out']
 
 
@@ -160,8 +160,3 @@ class SiameseFCN(nn.Module):
         out = self.conv8(comb2)
         return out
 
-#
-# class UNet(nn.Module):
-#     def __init__(self):
-#         super(UNet, self).__init__()
-#

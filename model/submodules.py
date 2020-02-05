@@ -45,7 +45,7 @@ def conv_block_1(in_channels, out_channels, kernel_size=3, stride=1, padding=1, 
     """Conv2d + Non-linearity + BN2d, Xavier initialisation"""
     conv_layer = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
                            padding=padding, bias=False)
-    nn.init.xavier_uniform(conv_layer.weight, gain=np.sqrt(2.0))
+    nn.init.xavier_uniform_(conv_layer.weight, gain=np.sqrt(2.0))
 
     nll_layer = nonlinearity()
     bn_layer = nn.BatchNorm2d(out_channels)
@@ -78,7 +78,7 @@ def conv_blocks_3(in_channels, out_channels, strides=1):
 # Spatial Transformer Modules
 # ------------------------------------------- #
 def spatial_transform(source, dvf, interp="bilinear"):
-    """todo: build on nn.Module
+    """
     Spatially transform/deform an image by sampling at coordinates of the deformed mesh grid.
 
     Args:
@@ -105,6 +105,6 @@ def spatial_transform(source, dvf, interp="bilinear"):
 
     # using x-y (column_num, row_num) order
     deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
-    deformed_image = F.grid_sample(source, deformed_grid, mode=interp, padding_mode="border")
+    deformed_image = F.grid_sample(source, deformed_grid, mode=interp, padding_mode="border", align_corners=True)
 
     return deformed_image

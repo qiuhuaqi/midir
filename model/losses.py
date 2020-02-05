@@ -23,14 +23,15 @@ def diffusion_loss(dvf):
         diffusion_loss_2d: (Scalar) diffusion regularisation loss
     """
 
-    # [dev Jan 31, 2020]: pad dvf with zeros before computing loss
-    dvf_pad = F.pad(dvf, (1, 0, 1, 0))
+    # boundary handling with padding to ensure all points are regularised
+    dvf_padx = F.pad(dvf, (0, 0, 1, 0))  # pad H by 1 before, (N, 2, H+1, W)
+    dvf_pady = F.pad(dvf, (1, 0, 0, 0))  # pad W by 1 before, (N, 2, H, W+1)
 
-    dvf_dx = dvf_pad[:, :, 1:, 1:] - dvf_pad[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
-    dvf_dy = dvf_pad[:, :, 1:, 1:] - dvf_pad[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
+    dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
+    dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
     return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
 
-
+## outdated huber losses
 def huber_loss_spatial(dvf):
     """
     Calculate approximated spatial Huber loss
@@ -112,7 +113,7 @@ def loss_fn(dvf, target, source, params):
     # i.e. dvf is from target to source
     warped_source = spatial_transform(source, dvf)
 
-    sim_loss = sim_losses[params.sim_loss](target, warped_source)
+    sim_loss = sim_losses[params.sim_loss](target, warped_source) * params.sim_weight
     reg_loss = reg_losses[params.reg_loss](dvf) * params.reg_weight
 
     loss = sim_loss + reg_loss

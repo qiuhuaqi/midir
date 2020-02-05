@@ -72,7 +72,6 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
             # save summary of loss every some steps
             if it % params.save_summary_steps == 0:
                 summary_writer.add_scalar('loss', loss.data, global_step=epoch * len(dataloader) + it)
-
                 for loss_name, loss_value in losses.items():
                     summary_writer.add_scalar('losses/{}'.format(loss_name), loss_value.data, global_step=epoch * len(dataloader) + it)
 
