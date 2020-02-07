@@ -42,12 +42,12 @@ parser.add_argument('--nifti', action='store_true', help="Save results in NIFTI 
 
 
 
-def plot_results(target, source, warped_source, op_flow, save_path=None, title_font_size=20, show_fig=False):
+def plot_results(target, source, warped_source, dvf, save_path=None, title_font_size=20, show_fig=False, dpi=100):
     """Plot all motion related results in a single figure,
-    here we assume flow is normalised to [-1, 1] coordinate"""
+    here we assume dvf is normalised to [-1, 1] coordinate"""
 
     # convert flow into HSV flow with white background
-    hsv_flow = dvf_utils.flow_to_hsv(op_flow, max_mag=0.15, white_bg=True)
+    hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))
@@ -97,11 +97,11 @@ def plot_results(target, source, warped_source, op_flow, save_path=None, title_f
     ax = plt.subplot(2, 4, 6)
     interval = 3  # interval between points on the grid
     background = source
-    quiver_flow = np.zeros_like(op_flow)
-    quiver_flow[:, :, 0] = op_flow[:, :, 0] * op_flow.shape[0] / 2
-    quiver_flow[:, :, 1] = op_flow[:, :, 1] * op_flow.shape[1] / 2
-    mesh_x, mesh_y = np.meshgrid(range(0, op_flow.shape[1] - 1, interval),
-                                 range(0, op_flow.shape[0] - 1, interval))
+    quiver_flow = np.zeros_like(dvf)
+    quiver_flow[:, :, 0] = dvf[:, :, 0] * dvf.shape[0] / 2
+    quiver_flow[:, :, 1] = dvf[:, :, 1] * dvf.shape[1] / 2
+    mesh_x, mesh_y = np.meshgrid(range(0, dvf.shape[1] - 1, interval),
+                                 range(0, dvf.shape[0] - 1, interval))
     plt.imshow(background[:, :], cmap='gray')
     plt.quiver(mesh_x, mesh_y,
                quiver_flow[mesh_y, mesh_x, 1], quiver_flow[mesh_y, mesh_x, 0],
@@ -111,7 +111,7 @@ def plot_results(target, source, warped_source, op_flow, save_path=None, title_f
 
     # det Jac
     ax = plt.subplot(2, 4, 8)
-    jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(op_flow)
+    jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
     spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
             (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
             (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
@@ -133,7 +133,7 @@ def plot_results(target, source, warped_source, op_flow, save_path=None, title_f
 
     # saving
     if save_path is not None:
-        fig.savefig(save_path, bbox_inches='tight', dpi=100)
+        fig.savefig(save_path, bbox_inches='tight', dpi=dpi)
 
     if show_fig:
         plt.show()
@@ -246,12 +246,6 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
             png_buffer += [imageio.imread(fig_save_path)]
         imageio.mimwrite(os.path.join(output_dir_slice, 'results.gif'), png_buffer, fps=params.fps)
 
-        # flow_utils.save_warp_n_error(warped_source_slice_seq, target_slice_seq, source_slice_seq, output_dir_slice, fps=params.fps)
-        # if args.hsv_flow:
-        #     flow_utils.save_flow_hsv(op_flow_slice_seq, target_slice_seq, output_dir_slice, fps=params.fps)
-        # if args.quiver:
-        #     flow_utils.save_flow_quiver(op_flow_slice_seq * (params.crop_size / 2), source_slice_seq, output_dir_slice, fps=params.fps)
-
     if args.metrics:
         # --- evaluate motion estimation accuracy metrics ---  #
         # unpack the ED ES data Tensor inputs, transpose from (1, N, H, W) to (N, 1, H, W)
@@ -260,7 +254,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
         label_es_batch = eval_data['label_es_batch'].permute(1, 0, 2, 3).to(device=args.device)
 
         # compute optical flow and warped ed images using the trained model(source, target)
-        op_flow = model(image_ed_batch, image_es_batch)
+        op_flow, warped_image_es_batch = model(image_ed_batch, image_es_batch)
 
         # warp ED segmentation mask to ES using nearest neighbourhood interpolation
         with torch.no_grad():

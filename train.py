@@ -5,6 +5,7 @@ import os
 import argparse
 import logging
 import numpy as np
+import imageio
 
 import torch
 import torchvision.transforms as transforms
@@ -28,6 +29,38 @@ parser.add_argument('--no_three_slices', action='store_true', help="Evaluate met
 parser.add_argument('--no_cuda', action='store_true')
 parser.add_argument('--gpu', default=0, help='Choose GPU to run on')
 parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
+
+
+def save_train_result(target, source, warped_source, dvf, save_result_dir, epoch, fps=20):
+    """
+    Args:
+        target: (N, H, W)
+        source: (N, H, W)
+        warped_source: (N, H, W)
+        dvf: (N, H, W, 2)
+        save_result_dir:
+        epoch:
+        fps:
+
+    Returns:
+
+    """
+    from inference import plot_results
+    # loop over time frame
+    png_buffer = []
+    for fr in range(dvf.shape[0]):
+        dvf_fr = dvf[fr, :, :, :]  # (H, W, 2)
+        target_fr = target[fr, :, :]  # (H, W)
+        source_fr = source[fr, :, :]  # (H, W)
+        warped_source_fr = warped_source[fr, :, :]  # (H, W)
+
+        fig_save_path = os.path.join(save_result_dir, f'frame_{fr}.png')
+        plot_results(target_fr, source_fr, warped_source_fr, dvf_fr, save_path=fig_save_path, dpi=40)
+
+        # read back the PNG to save a GIF animation
+        png_buffer += [imageio.imread(fig_save_path)]
+        os.remove(fig_save_path)
+    imageio.mimwrite(os.path.join(save_result_dir, f'epoch_{epoch}.gif'), png_buffer, fps=fps)
 
 
 def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
@@ -60,8 +93,8 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
                 source = 1.0 - source
 
             # compute outputs and loss
-            dvf = model(target, source)  # (N, 2, H, W)
-            loss, losses = loss_fn(dvf, target, source, params)
+            dvf, warped_source = model(target, source)  # (N, 2, H, W)
+            loss, losses = loss_fn(dvf, target, warped_source, params)
 
 
             # clear previous gradients, calculate gradient and update
@@ -69,44 +102,30 @@ def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
             loss.backward()
             optimizer.step()
 
-            # save summary of loss every some steps
+            # save Tensorboard summary
             if it % params.save_summary_steps == 0:
                 summary_writer.add_scalar('loss', loss.data, global_step=epoch * len(dataloader) + it)
                 for loss_name, loss_value in losses.items():
                     summary_writer.add_scalar('losses/{}'.format(loss_name), loss_value.data, global_step=epoch * len(dataloader) + it)
 
-            # update tqdm, show the loss value after the progress bar
+            # update tqdm & show the loss value after the progress bar
             t.set_postfix(loss='{:05.3f}'.format(loss.data))
             t.update()
 
-
-
-            # save visualisation of training results
-            if (epoch + 1) % params.save_result_epochs == 0 or (epoch + 1) == params.num_epochs:
+            # save training results
+            save_result_dir = os.path.join(args.model_dir, "train_results")
+            if not os.path.exists(save_result_dir):
+                os.makedirs(save_result_dir)
+            if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
                 if it == len(dataloader) - 1:
-
-                    # warp source image with full resolution dvf
-                    warped_source = spatial_transform(source, dvf)
-
-                    # [dvf and warped source] -> cpu -> numpy array
-                    dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+                    logging.info("Saving training results...")
+                    dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
                     warped_source = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
-
-                    # [input images] -> cpu -> numpy array -> [0, 255]
                     target = target.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
                     source = source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W), here N = frames -1
 
-                    # set up the result dir for this epoch
-                    save_result_dir = os.path.join(args.model_dir, "train_results", "epoch_{}".format(epoch + 1))
-                    if not os.path.exists(save_result_dir):
-                        os.makedirs(save_result_dir)
-
-                    # NOTE: the following code saves all N frames in a batch
-                    # save dvf (hsv + quiver), target, source, warped source and error
-                    # flow_utils.save_flow_hsv(op_flow, target, save_result_dir, fps=params.fps)
-                    dvf_utils.save_warp_n_error(warped_source, target, source, save_result_dir, fps=params.fps)
-                    dvf_utils.save_flow_quiver(dvf_np * (target.shape[-1] - 1 / 2), source, save_result_dir,
-                                               fps=params.fps)
+                    save_train_result(target, source, warped_source, dvf, save_result_dir, epoch=epoch+1, fps=params.fps)
+                    logging.info("Done.")
 
 
 def train_and_validate(model, optimizer, loss_fn, dataloaders, params):

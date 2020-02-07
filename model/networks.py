@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.submodules import conv_block_1, conv_blocks_2, conv_blocks_3
-from model.submodules import conv_bn_leaky_relu, deconv_leaky_relu
+from model.submodules import spatial_transform
 
 
 class BaseNet(nn.Module):
@@ -85,7 +85,10 @@ class BaseNet(nn.Module):
         net['comb_1'] = self.conv6(net['concat'])
         net['comb_2'] = self.conv7(net['comb_1'])
         net['out'] = self.conv8(net['comb_2'])
-        return net['out']
+
+        # warp the source image towards target
+        warped_source = spatial_transform(source, net['out'])
+        return net['out'], warped_source
 
 
 class SiameseFCN(nn.Module):

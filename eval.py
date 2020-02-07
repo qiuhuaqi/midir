@@ -87,7 +87,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
                     image_es_batch = 1.0 - image_es_batch
 
                 # compute optical flow and warped ED images towards ES
-                dvf = model(image_ed_batch, image_es_batch)
+                dvf, warped_image_es_batch = model(image_ed_batch, image_es_batch)
 
                 # transform label mask of ES frame
                 warped_label_es_batch = spatial_transform(label_es_batch.float(), dvf, interp='nearest')

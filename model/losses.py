@@ -94,24 +94,19 @@ reg_losses = {"huber_spt": huber_loss_spatial,
               "diffusion": diffusion_loss}
 
 
-def loss_fn(dvf, target, source, params):
+def loss_fn(dvf, target, warped_source, params):
     """
     Unsupervised loss function
 
     Args:
-        dvf: (Tensor, shape Nx2xHxW) predicted displacement vector field
         target: (Tensor, shape NxchxHxW) target image
-        source: (Tensor, shape NxchxHxW) source image
+        warped_source: (Tensor, shape NxchxHxW) registered source image
         params: (object) model parameters
 
     Returns:
         loss: (scalar) loss value
         losses: (dict) dictionary of individual losses (weighted)
     """
-
-    # warp the source image towards target using grid resample (spatial transformer)
-    # i.e. dvf is from target to source
-    warped_source = spatial_transform(source, dvf)
 
     sim_loss = sim_losses[params.sim_loss](target, warped_source) * params.sim_weight
     reg_loss = reg_losses[params.reg_loss](dvf) * params.reg_weight
