@@ -14,36 +14,36 @@ from utils import xutils
 from utils.dvf_utils import dof_to_dvf
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_dir', default='data/ukbb/small_set_ukbb2964/test', help="Directory containing test data")
-parser.add_argument('--output_dir', default='experiments/ukbb/FFD/output', help="Directory to save output")
-parser.add_argument('--ffd_par_dir', default='experiments/medic02_experiments/FFD/par/mine', help="Directory containing FFD parameter file")
-parser.add_argument('--ffd_par_file', default='ffd_motion_2D.cfg')
+parser.add_argument('-CPS', default=8, help="B-spline FFD control point distance.")
+parser.add_argument('-BE', default=1e-4, help="Bending Energy weighting.")
+parser.add_argument('-sim', default='NMI', help="(Dis-)similarity measure of registration.")
+parser.add_argument('-intensity', default=None, help="Intensity transformation applied to source images. "
+                                                     "'inv' means inverse of source image")
 
+parser.add_argument('--model_dir', default=None)
+parser.add_argument('--data_dir', default='data/ukbb/cine_ukbb2964/small_set/sa/val_autoseg')
 parser.add_argument('--label_prefix', default='seg', help='Prefix of file names of segmentation masks')
 parser.add_argument('--pixel_size', default=1.8, help='Dimension of in-plane pixels in canonical space, assume ^2')
 parser.add_argument('--seq', default='sa', help='Imaging view, sa, la_2ch or la_4ch')
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on 3 slices.")
 parser.add_argument('--crop_size', default=160)
+parser.add_argument('--clean', action='store_true', help="Remove intermediate files.")
 
 
-# parse arguments
+# parse arguments (this is probably lazy programming...)
 args = parser.parse_args()
 data_dir = args.data_dir
-output_dir = args.output_dir
 label_prefix = args.label_prefix
 args.three_slices = not args.no_three_slices
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
 
-# copy the FFD par file into the output dir
-os.system('cp {0}/{1} {2}'.format(args.ffd_par_dir, args.ffd_par_file, output_dir))
+model_dir = args.model_dir
+assert os.path.exists(model_dir), "Model directory does not exist!"
 
-# set up the path to the FFD parameter file
-par = '{0}/{1}'.format(args.ffd_par_dir, args.ffd_par_file)
-assert os.path.exists(par), "FFD parameter file does not exist"
+# save parameters passed to MIRTK via command arguments to a par.conf file
+parout = os.path.join(model_dir, "par.conf")
 
 # set up a logger
-xutils.set_logger(os.path.join(output_dir, 'ffd_eval.log'))
+xutils.set_logger(os.path.join(model_dir, 'ffd_eval.log'))
 logging.info('Starting FFD evaluation...')
 
 # metric buffers
@@ -73,7 +73,7 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
     # loop over subjects
     for subj_id in sorted(os.listdir(data_dir)):
         subj_dir = os.path.join(data_dir, subj_id)
-        subj_output_dir = os.path.join(output_dir, subj_id)
+        subj_output_dir = os.path.join(model_dir, "tmp", subj_id)
         if not os.path.exists(subj_output_dir):
             os.makedirs(subj_output_dir)
 
@@ -100,34 +100,11 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
         seg_ED_crop = cropper(seg_ED.transpose(2, 0, 1)).transpose(1, 2, 0)
         seg_ES_crop = cropper(seg_ES.transpose(2, 0, 1)).transpose(1, 2, 0)
 
+        # optional intensity transformation
+        if args.intensity == "inv":
+            img_ES_crop = img_ES_crop.max() - img_ES_crop
 
-        # ## --- orig i2w  --- #
-        # (WARNING: this will cause the MIRTK DOF to DDF conversion to be incorrect for 2D cases)
-        # # save back to NIFTI files
-        # nim_ED_crop = nib.Nifti1Image(img_ED_crop, nim_ED.affine)
-        # nib.save(nim_ED_crop, '{0}/sa_ED_crop.nii.gz'.format(subj_output_dir))
-        # nim_ES_crop = nib.Nifti1Image(img_ES_crop, nim_ES.affine)
-        # nib.save(nim_ES_crop, '{0}/sa_ES_crop.nii.gz'.format(subj_output_dir))
-        #
-        # nseg_ED_crop = nib.Nifti1Image(seg_ED_crop, nseg_ED.affine)
-        # nib.save(nseg_ED_crop, '{0}/{1}_sa_ED_crop.nii.gz'.format(subj_output_dir, label_prefix))
-        # nseg_ES_crop = nib.Nifti1Image(seg_ES_crop, nseg_ES.affine)
-        # nib.save(nseg_ES_crop, '{0}/{1}_sa_ES_crop.nii.gz'.format(subj_output_dir, label_prefix))
-        #
-        #
-        # ## split volume into slices
-        # # images
-        # split_volume('{0}/sa_ED_crop.nii.gz'.format(subj_output_dir), '{0}/sa_ED_crop_z'.format(subj_output_dir))
-        # split_volume('{0}/sa_ES_crop.nii.gz'.format(subj_output_dir), '{0}/sa_ES_crop_z'.format(subj_output_dir))
-        #
-        # # segmentation
-        # split_volume('{0}/{1}_sa_ED_crop.nii.gz'.format(subj_output_dir, label_prefix),
-        #                    '{0}/{1}_sa_ED_crop_z'.format(subj_output_dir, label_prefix))
-        # split_volume('{0}/{1}_sa_ES_crop.nii.gz'.format(subj_output_dir, label_prefix),
-        #                    '{0}/{1}_sa_ES_crop_z'.format(subj_output_dir, label_prefix))
-
-
-        #--- idmat i2w --- #
+        #--- using identity matrix as image2world matrix to ensure correct DOF to DVF conversion--- #
         # save the image and segmentation to NIFTI files with identity image-to-world transformation matrix
         nim_ED_crop = nib.Nifti1Image(img_ED_crop, np.eye(4))
         nib.save(nim_ED_crop, '{0}/sa_ED_crop.nii.gz'.format(subj_output_dir))
@@ -178,7 +155,10 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
             target_img_path = '{0}/sa_ED_crop_z{1:02d}.nii.gz'.format(subj_output_dir, z)
             source_img_path = '{0}/sa_ES_crop_z{1:02d}.nii.gz'.format(subj_output_dir, z)
             dof = '{0}/ffd_z{1:02d}_ED_to_ES.dof.gz'.format(subj_output_dir, z)
-            os.system('mirtk register {0} {1} -parin {2} -dofout {3}'.format(target_img_path, source_img_path, par, dof))
+            os.system(f'mirtk register {target_img_path} {source_img_path}  '
+                      f'-sim {args.sim} -ds {args.CPS} -be {args.BE} '
+                      f'-model FFD -levels 3 -padding -1 '
+                      f'-parout {parout} -dofout {dof} -verbose 0')
 
             # use MIRTK to warp ES frame segmentation mask to ED frame
             target_seg_path = '{0}/{2}_sa_ED_crop_z{1:02d}.nii.gz'.format(subj_output_dir, z, label_prefix)
@@ -193,7 +173,6 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
             # convert the DOF file to dense DDF
             dvf_name ='dvf_ffd_ED_to_ES_z{0:02d}'.format(z)
             dvf += [dof_to_dvf(target_seg_path, dof, dvf_name, subj_output_dir)]
-
 
 
         ## evaluate metrics
@@ -223,8 +202,7 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
         mcd_rv_buffer += [mcd_rv]
         hd_rv_buffer += [hd_rv]
 
-
-        # the Jacobian related metrics
+        # Jacobian related metrics
         dvf = np.array(dvf)  # (N, H, W, 2)
         mean_mag_grad_detJ_mean, negative_detJ_mean = detJac_stack(dvf, rescaleFlow=False)
         mean_mag_grad_detJ_buffer += [mean_mag_grad_detJ_mean]
@@ -233,8 +211,8 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
         t.update()
 
 
-# save all metrics evaluated for al test subjects
-# save accuracy metrics
+# save all metrics evaluated for all test subjects, used for boxplot visualisation of the results
+# Dice & contour distances
 df_buffer = []
 column_method = ['FFD'] * len(subj_id_buffer)
 for struct in ['LV', 'MYO', 'RV']:
@@ -250,6 +228,8 @@ for struct in ['LV', 'MYO', 'RV']:
         ls_dice = dice_rv_buffer
         ls_mcd = mcd_rv_buffer
         ls_hd = hd_rv_buffer
+    else:
+        raise ValueError("Structure not recognised.")
 
     ls_struct = [struct] * len(subj_id_buffer)
     data = {'Method': column_method,
@@ -262,15 +242,15 @@ for struct in ['LV', 'MYO', 'RV']:
 
 # concatenate df and save
 metrics_df = pd.concat(df_buffer, axis=0)
-metrics_df.to_pickle("{0}/FFD_all_subjects_accuracy_3slices_{1}.pkl".format(output_dir, args.three_slices))
+metrics_df.to_pickle("{0}/FFD_all_subjects_accuracy_3slices_{1}.pkl".format(model_dir, args.three_slices))
 
-# save detJac metrics
+# Jacobian-related metrics
 jac_data = {'Method': column_method,
             'ID': subj_id_buffer,
             'GradDetJac': mean_mag_grad_detJ_buffer,
             'NegDetJac': negative_detJ_buffer}
 jac_df = pd.DataFrame(data=jac_data)
-jac_df.to_pickle("{0}/FFD_all_subjects_jac_3slices_{1}.pkl".format(output_dir, args.three_slices))
+jac_df.to_pickle("{0}/FFD_all_subjects_jac_3slices_{1}.pkl".format(model_dir, args.three_slices))
 
 
 # construct metrics dict
@@ -291,7 +271,13 @@ metrics = {'dice_lv_mean': np.mean(dice_lv_buffer), 'dice_lv_std': np.std(dice_l
 
 
 # save the results in a JSON file
-save_path = '{0}/ffd_results_3slices_{1}.json'.format(output_dir, args.three_slices)
+save_path = '{0}/ffd_results_3slices_{1}.json'.format(model_dir, args.three_slices)
 xutils.save_dict_to_json(metrics, save_path)
 
-logging.info("Evaluation complete. Metric results saved at: \n\t{}".format(output_dir))
+
+# clean up intermediate data
+if args.clean:
+    tmp_path = os.path.join(model_dir, "tmp")
+    os.system(f"rm -rf {tmp_path}")
+
+logging.info("Evaluation complete. Metric results saved at: \n\t{}".format(model_dir))

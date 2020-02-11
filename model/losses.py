@@ -81,8 +81,7 @@ from model.mutual_info.mutual_info import nmi_from_joint_entropy_pytorch
 def nmi_loss(x, y):
     joint_hist_fn = JointHistParzenTorch().to(device=x.device)
     joint_hist = joint_hist_fn(x, y)
-    nmi_loss = - nmi_from_joint_entropy_pytorch(joint_hist)
-    return nmi_loss
+    return -nmi_from_joint_entropy_pytorch(joint_hist)
 
 ##############################################################################################
 # --- construct the loss function --- #
