@@ -11,8 +11,8 @@ parser.add_argument('-intensity', default=None, help="Intensity transformation a
 args = parser.parse_args()
 
 params_tuning = {
-    "CPS": [5, 6, 7, 8],
-    "BE": [1e-2, 1e-3, 1e-4, 1e-5]
+    "CPS": [2, 3, 4, 5, 6, 7, 8],
+    "BE": [1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7]
 }
 
 

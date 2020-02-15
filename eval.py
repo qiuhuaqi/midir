@@ -11,7 +11,7 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-from model.networks import BaseNet
+from model.networks import BaseNet, SiameseFCN
 from model.submodules import spatial_transform
 from model.losses import loss_fn
 from model.dataset_utils import CenterCrop, Normalise, ToTensor
@@ -25,7 +25,6 @@ parser.add_argument('--restore_file', default='best',
                     help="Optional, name of the file in --model_dir containing weights to reload before \
                     training")  # 'best' or 'train'
 parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on all instead of 3 slices.")
-parser.add_argument('--label_prefix', default='label', help='Prefix of file names of segmentation masks')
 
 parser.add_argument('--no_cuda', action='store_true')
 parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
@@ -241,7 +240,7 @@ if __name__ == '__main__':
     eval_dataset = CardiacMR_2D_Eval_UKBB(params.eval_data_path,
                                           seq=params.seq,
                                           augment=params.augment,
-                                          label_prefix=args.label_prefix,
+                                          label_prefix=params.label_prefix,
                                           transform=transforms.Compose([
                                               CenterCrop(params.crop_size),
                                               Normalise(),
@@ -255,8 +254,13 @@ if __name__ == '__main__':
                                  batch_size=params.batch_size, shuffle=False,
                                  num_workers=args.num_workers, pin_memory=args.cuda)
 
-    # set up model and loss function
-    model = BaseNet()
+    # instantiate model and move to device
+    if params.network == "BaseNet":
+        model = BaseNet()
+    elif params.network == "SiameseFCN":
+        model = SiameseFCN()
+    else:
+        raise ValueError("Unknown network!")
     model = model.to(device=args.device)
 
     # reload network parameters from saved model file

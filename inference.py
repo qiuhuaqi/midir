@@ -183,9 +183,13 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
         target = target.unsqueeze(1).to(device=args.device)
         source = source.unsqueeze(1).to(device=args.device)
 
+        # linear transformation test for NMI: use (1-source) as source image
+        if params.inverse:
+            source = 1.0 - source
+
         # run inference
-        op_flow = model(target, source)
-        warped_source = spatial_transform(source, op_flow)
+        op_flow, warped_source = model(target, source)
+        # warped_source = spatial_transform(source, op_flow)
 
         # move to cpu and stack
         op_flow_list += [op_flow.data.cpu().numpy().transpose(0, 2, 3, 1)]  # (N, H, W, 2)
