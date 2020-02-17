@@ -89,7 +89,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
                 dvf, warped_image_es_batch = model(image_ed_batch, image_es_batch)
 
                 # transform label mask of ES frame
-                warped_label_es_batch = spatial_transform(label_es_batch.float(), dvf, interp='nearest')
+                warped_label_es_batch = spatial_transform(label_es_batch.float(), dvf)
 
             if args.cuda:
                 # move data to cpu to calculate metrics
