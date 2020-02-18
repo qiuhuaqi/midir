@@ -73,7 +73,7 @@ def huber_loss_temporal(dvf):
 
 
 ##############################################################################################
-# --- mutual information loss --- #
+# --- Similarity loss --- #
 ##############################################################################################
 from model.mutual_info.histogram import JointHistParzenTorch
 from model.mutual_info.mutual_info import nmi_from_joint_entropy_pytorch
@@ -83,8 +83,9 @@ def nmi_loss(x, y):
     joint_hist = joint_hist_fn(x, y)
     return -nmi_from_joint_entropy_pytorch(joint_hist)
 
+
 ##############################################################################################
-# --- construct the loss function --- #
+# --- construct the loss function (similarity + regularisation) --- #
 ##############################################################################################
 sim_losses = {"MSE": nn.MSELoss(),
               "NMI": nmi_loss}

@@ -163,13 +163,13 @@ class SiameseFCN(nn.Module):
         out = self.conv8(comb2)
         return out
 
-class UNet(nn.Module):
-    def __init__(self):
-        super(UNet, self).__init__()
-
-    def forward(self, target, source):
-        # warp the source image towards target
-        warped_source = spatial_transform(source, net['out'])
-        return dvf, warped_source
+# class UNet(nn.Module):
+#     def __init__(self):
+#         super(UNet, self).__init__()
+#
+#     def forward(self, target, source):
+#         # warp the source image towards target
+#         warped_source = spatial_transform(source, net['out'])
+#         return dvf, warped_source
 
 

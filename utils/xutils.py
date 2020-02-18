@@ -6,6 +6,13 @@ import shutil
 import torch
 from tensorboardX import SummaryWriter
 
+import matplotlib.pyplot as plt
+import matplotlib
+import imageio
+import numpy as np
+
+from utils import dvf_utils
+from utils.metrics import computeJacobianDeterminant2D
 
 class Params():
     """Class that loads hyperparameters from a json file.
@@ -147,4 +154,134 @@ def save_dict_to_json(d, json_path):
         # We need to convert the values to float for json (it doesn't accept np.array, np.float, )
         d = {k: float(v) for k, v in d.items()}
         json.dump(d, f, indent=4)
+
+
+def plot_results(target, source, warped_source, dvf, save_path=None, title_font_size=20, show_fig=False, dpi=100):
+    """Plot all motion related results in a single figure,
+    here we assume dvf is normalised to [-1, 1] coordinate"""
+
+    # convert flow into HSV flow with white background
+    hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+
+    ## set up the figure
+    fig = plt.figure(figsize=(30, 18))
+    title_pad = 10
+
+    # source
+    ax = plt.subplot(2, 4, 1)
+    plt.imshow(source, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Source', fontsize=title_font_size, pad=title_pad)
+
+    # warped source
+    ax = plt.subplot(2, 4, 2)
+    plt.imshow(warped_source, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Warped Source', fontsize=title_font_size, pad=title_pad)
+
+    # calculate the error before and after reg
+    error_before = target - source
+    error_after = target - warped_source
+
+    # error before
+    ax = plt.subplot(2, 4, 3)
+    plt.imshow(error_before, vmin=-255, vmax=255, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Error before', fontsize=title_font_size, pad=title_pad)
+
+    # error after
+    ax = plt.subplot(2, 4, 4)
+    plt.imshow(error_after, vmin=-255, vmax=255, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Error after', fontsize=title_font_size, pad=title_pad)
+
+    # target image
+    ax = plt.subplot(2, 4, 5)
+    plt.imshow(target, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Target', fontsize=title_font_size, pad=title_pad)
+
+    # hsv flow
+    ax = plt.subplot(2, 4, 7)
+    plt.imshow(hsv_flow)
+    plt.axis('off')
+    ax.set_title('HSV', fontsize=title_font_size, pad=title_pad)
+
+    # quiver, or "Displacement Vector Field" (DVF)
+    ax = plt.subplot(2, 4, 6)
+    interval = 3  # interval between points on the grid
+    background = source
+    quiver_flow = np.zeros_like(dvf)
+    quiver_flow[:, :, 0] = dvf[:, :, 0] * dvf.shape[0] / 2
+    quiver_flow[:, :, 1] = dvf[:, :, 1] * dvf.shape[1] / 2
+    mesh_x, mesh_y = np.meshgrid(range(0, dvf.shape[1] - 1, interval),
+                                 range(0, dvf.shape[0] - 1, interval))
+    plt.imshow(background[:, :], cmap='gray')
+    plt.quiver(mesh_x, mesh_y,
+               quiver_flow[mesh_y, mesh_x, 1], quiver_flow[mesh_y, mesh_x, 0],
+               angles='xy', scale_units='xy', scale=1, color='g')
+    plt.axis('off')
+    ax.set_title('DVF', fontsize=title_font_size, pad=title_pad)
+
+    # det Jac
+    ax = plt.subplot(2, 4, 8)
+    jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
+    spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
+            (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
+            (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
+            (1, (0.94509803921568625, 0.41176470588235292, 0.07450980392156863))]
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list('detjac', spec)
+    plt.imshow(jac_det, vmin=-1, vmax=7, cmap=cmap)
+    plt.axis('off')
+    ax.set_title('Jacobian (Grad: {0:.2f}, Neg: {1:.2f}%)'.format(mean_grad_detJ, negative_detJ * 100),
+                 fontsize=int(title_font_size*0.9), pad=title_pad)
+    # split and extend this axe for the colorbar
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    divider = make_axes_locatable(ax)
+    cax1 = divider.append_axes("right", size="5%", pad=0.05)
+    cb = plt.colorbar(cax=cax1)
+    cb.ax.tick_params(labelsize=20)
+
+    # adjust subplot placements and spacing
+    plt.subplots_adjust(left=0.0001, right=0.99, top=0.9, bottom=0.1, wspace=0.001, hspace=0.1)
+
+    # saving
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches='tight', dpi=dpi)
+
+    if show_fig:
+        plt.show()
+    plt.close()
+
+
+def save_train_result(target, source, warped_source, dvf, save_result_dir, epoch, fps=20, dpi=40):
+    """
+    Args:
+        target: (N, H, W)
+        source: (N, H, W)
+        warped_source: (N, H, W)
+        dvf: (N, H, W, 2)
+        save_result_dir:
+        epoch:
+        fps:
+
+    Returns:
+
+    """
+    # loop over time frames
+    png_buffer = []
+    for fr in range(dvf.shape[0]):
+        dvf_fr = dvf[fr, :, :, :]  # (H, W, 2)
+        target_fr = target[fr, :, :]  # (H, W)
+        source_fr = source[fr, :, :]  # (H, W)
+        warped_source_fr = warped_source[fr, :, :]  # (H, W)
+
+        fig_save_path = os.path.join(save_result_dir, f'frame_{fr}.png')
+        plot_results(target_fr, source_fr, warped_source_fr, dvf_fr, save_path=fig_save_path, dpi=dpi)
+
+        # read back the PNG to save a GIF animation
+        png_buffer += [imageio.imread(fig_save_path)]
+        os.remove(fig_save_path)
+    imageio.mimwrite(os.path.join(save_result_dir, f'epoch_{epoch}.gif'), png_buffer, fps=fps)
+
 

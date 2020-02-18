@@ -58,7 +58,7 @@ def conv_block_1(in_channels, out_channels, kernel_size=3, stride=1, padding=1, 
 
 def conv_blocks_2(in_channels, out_channels, strides=1):
     """Block of 2x Conv layers"""
-    conv1 = conv_block_1(in_channels, out_channels, stride = strides)
+    conv1 = conv_block_1(in_channels, out_channels, stride=strides)
     conv2 = conv_block_1(out_channels, out_channels, stride=1)
     layers = [conv1, conv2]
     return nn.Sequential(*layers)
