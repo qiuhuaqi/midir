@@ -31,10 +31,9 @@ parser.add_argument('--num_workers', default=8, help='Number of processes used b
 parser.add_argument('--gpu', default=0, help='Choose the GPU to run on, pass -1 to use CPU')
 
 
-def evaluate(model, loss_fn, dataloader, params, args, val):
+def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False):
     """
-    Evaluate the model on the test dataset
-    Returns metrics as a dict and evaluation loss
+    Evaluate the model and returns metrics as a dict and evaluation loss
 
     Args:
         model:
@@ -47,11 +46,9 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
     Returns:
 
     """
-
-    # set model to evaluation mode
     model.eval()
 
-    # empty buffer lists
+    # empty lists buffer
     val_loss_buffer = []
 
     dice_lv_buffer = []
@@ -72,15 +69,12 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
     with tqdm(total=len(dataloader)) as t:
         # iterate over validation subjects
         for idx, (image_ed_batch, image_es_batch, label_ed_batch, label_es_batch) in enumerate(dataloader):
-            # (data all in shape of (c, N, H, W))
-
-            # extend to (N, c, H, W)
+            # (c, N, H, W) to (N, c, H, W)
             image_ed_batch = image_ed_batch.permute(1, 0, 2, 3).to(device=args.device)
             image_es_batch = image_es_batch.permute(1, 0, 2, 3).to(device=args.device)
             label_es_batch = label_es_batch.permute(1, 0, 2, 3).to(device=args.device)
 
             with torch.no_grad():
-
                 # linear transformation test for NMI: use (1-source) as source image
                 if params.inverse:
                     image_es_batch = 1.0 - image_es_batch
@@ -125,9 +119,12 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
             dice_rv_buffer += [dice_rv]
 
             # contour distances
-            mcd_lv, hd_lv = contour_distances_stack(warped_label_es_batch, label_ed_batch, label_class=1, dx=params.pixel_size)
-            mcd_myo, hd_myo = contour_distances_stack(warped_label_es_batch, label_ed_batch, label_class=2, dx=params.pixel_size)
-            mcd_rv, hd_rv = contour_distances_stack(warped_label_es_batch, label_ed_batch, label_class=3, dx=params.pixel_size)
+            mcd_lv, hd_lv = contour_distances_stack(warped_label_es_batch, label_ed_batch,
+                                                    label_class=1, dx=params.pixel_size)
+            mcd_myo, hd_myo = contour_distances_stack(warped_label_es_batch, label_ed_batch,
+                                                      label_class=2, dx=params.pixel_size)
+            mcd_rv, hd_rv = contour_distances_stack(warped_label_es_batch, label_ed_batch,
+                                                    label_class=3, dx=params.pixel_size)
 
             mcd_lv_buffer += [mcd_lv]
             hd_lv_buffer += [hd_lv]
@@ -143,9 +140,66 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
 
             t.update()
 
+    # construct metrics dict
+    results = {}
+    # accuracy
+    structures = ['lv', 'myo', 'rv']
+    acc_criteria = ['dice', 'mcd', 'hd']
+    for st in structures:
+        for cr in acc_criteria:
+            result_name = f'{cr}_{st}'
+            the_buffer = locals()[f'{result_name}_buffer']
+            results[f'{result_name}_mean'] = np.mean(the_buffer)
+            results[f'{result_name}_std'] = np.std(the_buffer)
+    # regularity
+    reg_criteria = ['mean_mag_grad_detJ', 'negative_detJ']
+    for cr in reg_criteria:
+        result_name = cr
+        the_buffer = locals()[f'{result_name}_buffer']
+        results[f'{result_name}_mean'] = np.mean(the_buffer)
+        results[f'{result_name}_std'] = np.std(the_buffer)
+
+    # sanity check: proportion of negative Jacobian points should be lower than 1
+    assert results['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
+
+    """
+    Validation:
+    """
+    if val:
+        # use one metric to set is_best flag
+        current_one_metric = np.mean([results['dice_lv_mean'],
+                                      results['dice_myo_mean'],
+                                      results['dice_rv_mean']])
+        if epoch + 1 == params.val_epochs:
+            # initialise for the first validation
+            params.is_best = False
+            params.best_one_metric = current_one_metric
+        elif current_one_metric >= params.best_one_metric:
+            params.is_best = True
+            params.best_one_metric = current_one_metric
+
+        # save the most recent results
+        save_path = os.path.join(args.model_dir,
+                                 f"val_results_last_3slices_{args.three_slices}.json")
+        xutils.save_dict_to_json(results, save_path)
+
+        # save the validation results for the best model separately
+        if params.is_best:
+            save_path = os.path.join(args.model_dir,
+                                     f"val_results_best_3slices_{epoch}_{args.three_slices}.json")
+            xutils.save_dict_to_json(results, save_path)
+
+    """
+    Testing: 
+    """
     if not val:
-    # for testing only: save all metrics evaluated for all test subjects in pandas dataframe
-        # save accuracy metrics
+        # save the overall test results
+        save_path = os.path.join(args.model_dir,
+                                 "test_results_{}_3slices_{}.json".format(args.restore_file, args.three_slices))
+        xutils.save_dict_to_json(results, save_path)
+
+        # save evaluated metrics for individual test subjects in pandas dataframe
+        # which can be used to create boxplots
         subj_id_buffer = dataloader.dataset.dir_list
         df_buffer = []
         column_method = ['DL'] * len(subj_id_buffer)
@@ -174,7 +228,7 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
 
         # concatenate df and save
         metrics_df = pd.concat(df_buffer, axis=0)
-        metrics_df.to_pickle("{0}/network_all_subjects_accuracy_3slices_{1}.pkl".format(args.model_dir, args.three_slices))
+        metrics_df.to_pickle("{0}/DL_all_subjects_accuracy_3slices_{1}.pkl".format(args.model_dir, args.three_slices))
 
         # save detJac metrics
         jac_data = {'Method': column_method,
@@ -182,31 +236,9 @@ def evaluate(model, loss_fn, dataloader, params, args, val):
                     'GradDetJac': mean_mag_grad_detJ_buffer,
                     'NegDetJac': negative_detJ_buffer}
         jac_df = pd.DataFrame(data=jac_data)
-        jac_df.to_pickle("{0}/network_all_subjects_jac_3slices_{1}.pkl".format(args.model_dir, args.three_slices))
+        jac_df.to_pickle("{0}/DL_all_subjects_jac_3slices_{1}.pkl".format(args.model_dir, args.three_slices))
 
-
-
-    # construct metrics dict
-    metrics = {'dice_lv_mean': np.mean(dice_lv_buffer), 'dice_lv_std': np.std(dice_lv_buffer),
-               'dice_myo_mean': np.mean(dice_myo_buffer), 'dice_myo_std': np.std(dice_myo_buffer),
-               'dice_rv_mean': np.mean(dice_rv_buffer), 'dice_rv_std': np.std(dice_rv_buffer),
-
-               'mcd_lv_mean': np.mean(mcd_lv_buffer), 'mcd_lv_std': np.std(mcd_lv_buffer),
-               'mcd_myo_mean': np.mean(mcd_myo_buffer), 'mcd_myo_std': np.std(mcd_myo_buffer),
-               'mcd_rv_mean': np.mean(mcd_rv_buffer), 'mcd_rv_std': np.std(mcd_rv_buffer),
-
-               'hd_lv_mean': np.mean(hd_lv_buffer), 'hd_lv_std': np.std(hd_lv_buffer),
-               'hd_myo_mean': np.mean(hd_myo_buffer), 'hd_myo_std': np.std(hd_myo_buffer),
-               'hd_rv_mean': np.mean(hd_rv_buffer), 'hd_rv_std': np.std(hd_rv_buffer),
-
-               'mean_mag_grad_detJ_mean': np.mean(mean_mag_grad_detJ_buffer),
-               'mean_mag_grad_detJ_std': np.std(mean_mag_grad_detJ_buffer),
-
-               'negative_detJ_mean': np.mean(negative_detJ_buffer),
-               'negative_detJ_std': np.std(negative_detJ_buffer)
-               }
-
-    return metrics
+    return results
 
 
 if __name__ == '__main__':
@@ -221,7 +253,7 @@ if __name__ == '__main__':
     else:
         args.device = torch.device('cpu')
 
-    # check whether the trained model exists
+    # check whether the model directory exists
     assert os.path.exists(args.model_dir), "No model dir found at {}".format(args.model_dir)
 
     # set the three slices
@@ -269,9 +301,5 @@ if __name__ == '__main__':
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
-    eval_metrics = evaluate(model, loss_fn, eval_dataloader, params, args, val=False)
-
-    # save the results in a JSON file
-    save_path = os.path.join(args.model_dir, "test_results_{}_3slices_{}.json".format(args.restore_file, args.three_slices))
-    xutils.save_dict_to_json(eval_metrics, save_path)
-    logging.info("Evaluation complete. Metric results saved at: \n\t{}".format(save_path))
+    evaluate(model, loss_fn, eval_dataloader, params, args, val=False)
+    logging.info("Evaluation complete. Model path {}".format(args.model_path))

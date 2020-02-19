@@ -29,5 +29,7 @@ for CPS in params_tuning["CPS"]:
               f"--data_dir {args.data_dir} " \
               f"--model_dir {model_dir} " \
               f"--clean"
+
+        """ -dofin id"""
         print(f"Running command: {cmd}")
         subprocess.run(cmd, check=True, shell=True)

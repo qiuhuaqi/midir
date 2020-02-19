@@ -19,70 +19,6 @@ from eval import evaluate
 from utils import xutils
 
 
-def train(model, optimizer, loss_fn, dataloader, params, epoch, summary_writer):
-    """
-    Train the model for one epoch
-
-    Args:
-        model: (torch.nn.Module) the neural network
-        optimizer: (torch.optim) optimizer for parameters of model
-        loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
-        dataloader: (DataLoader) a torch.utils.data.DataLoader object that fetches training data
-        params: (instance of Params) configuration parameters
-        epoch: (int) epoch number
-        summary_writer: (Class instance) TensorBoardX SummaryWriter()
-    """
-
-    # set model in training mode
-    model.train()
-
-    with tqdm(total=len(dataloader)) as t:
-        for it, (target, source) in enumerate(dataloader):
-            # target shape (1, 1, H, W), source shape (1, seq_length, H, W)
-            # send input data and the model to device
-            # expand target and source images to a view of (seq_length, 1, H, W)
-            target = target.to(device=args.device).expand(source.size()[1], -1, -1, -1)
-            source = source.to(device=args.device).permute(1, 0, 2, 3)
-
-            # linear transformation test for NMI: use (1-source) as source image
-            if params.inverse:
-                source = 1.0 - source
-
-            # network inference & loss
-            dvf, warped_source = model(target, source)  # (N, 2, H, W)
-            loss, losses = loss_fn(dvf, target, warped_source, params)
-
-            # train step
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            # save Tensorboard summary
-            if it % params.save_summary_steps == 0:
-                summary_writer.add_scalar('loss', loss.data, global_step=epoch * len(dataloader) + it)
-                for loss_name, loss_value in losses.items():
-                    summary_writer.add_scalar('losses/{}'.format(loss_name), loss_value.data, global_step=epoch * len(dataloader) + it)
-
-            # update tqdm & show the loss value after the progress bar
-            t.set_postfix(loss='{:05.3f}'.format(loss.data))
-            t.update()
-
-            # save training results
-            save_result_dir = os.path.join(args.model_dir, "train_results")
-            if not os.path.exists(save_result_dir):
-                os.makedirs(save_result_dir)
-            if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
-                if it == len(dataloader) - 1:
-                    logging.info("Saving training results...")
-                    dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
-                    warped_source = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
-                    target = target.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
-                    source = source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W), here N = frames -1
-
-                    xutils.save_train_result(target, source, warped_source, dvf, save_result_dir, epoch=epoch+1, fps=params.fps)
-                    logging.info("Done.")
-
-
 def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
     """Train the model and evaluate every epoch.
 
@@ -107,78 +43,81 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
     train_dataloader = dataloaders['train']
     val_dataloader = dataloaders['val']
 
-    # ------------------------------------------- #
-    # Training loop
-    # ------------------------------------------- #
+    """Training loop"""
     for epoch in range(params.num_epochs):
+        """Train for 1 epoch"""
         logging.info('Epoch number {}/{}'.format(epoch + 1, params.num_epochs))
 
-        # train the model for one epoch
-        logging.info("Training...")
-        train(model, optimizer, loss_fn, train_dataloader, params, epoch, train_summary_writer)
+        model.train()
 
-        # validation
+        with tqdm(total=len(train_dataloader)) as t:
+            for it, (target, source) in enumerate(train_dataloader):
+                # target shape (1, 1, H, W), source shape (1, seq_length, H, W)
+                # send input data and the model to device
+                # expand target and source images to a view of (seq_length, 1, H, W)
+                target = target.to(device=args.device).expand(source.size()[1], -1, -1, -1)
+                source = source.to(device=args.device).permute(1, 0, 2, 3)
+
+                # linear transformation test for NMI: use (1-source) as source image
+                if params.inverse:
+                    source = 1.0 - source
+
+                # network inference & loss
+                dvf, warped_source = model(target, source)  # dvf (N, 2, H, W), warped_source (N, 1, H, W)
+                loss, losses = loss_fn(dvf, target, warped_source, params)
+
+                # update parameters
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                # write losses to Tensorboard
+                if it % params.save_summary_steps == 0:
+                    train_summary_writer.add_scalar('loss',
+                                                    loss.data,
+                                                    global_step=epoch * len(train_dataloader) + it)
+                    for loss_name, loss_value in losses.items():
+                        train_summary_writer.add_scalar('losses/{}'.format(loss_name),
+                                                        loss_value.data,
+                                                        global_step=epoch * len(train_dataloader) + it)
+
+                # update tqdm & show the loss value after the progress bar
+                t.set_postfix(loss='{:05.3f}'.format(loss.data))
+                t.update()
+        """"""
+
+        """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics = evaluate(model, loss_fn, val_dataloader, params, args, val=True)
-
-            # sanity check: proportion of negative Jacobian points should be lower than 1
-            assert val_metrics['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
-
-            # save the most recent results in a JSON file
-            save_path = os.path.join(args.model_dir, "val_results_last_3slices_{}.json".format(args.three_slices))
-            xutils.save_dict_to_json(val_metrics, save_path)
-
-            # determine whether this is the best model based on mean dice score
-            if params.seq == 'sa':
-                val_metrics['val_dice_mean'] = np.mean([val_metrics['dice_lv_mean'], val_metrics['dice_myo_mean'], val_metrics['dice_rv_mean']])
-                val_metrics['val_mcd_mean'] = np.mean([val_metrics['mcd_lv_mean'], val_metrics['mcd_myo_mean'], val_metrics['mcd_rv_mean']])
-                val_metrics['val_hd_mean'] = np.mean([val_metrics['hd_lv_mean'], val_metrics['hd_myo_mean'], val_metrics['hd_rv_mean']])
-
-                val_metrics['val_dice_std'] = np.mean([val_metrics['dice_lv_std'], val_metrics['dice_myo_std'], val_metrics['dice_rv_std']])
-                val_metrics['val_mcd_std'] = np.mean([val_metrics['mcd_lv_std'], val_metrics['mcd_myo_std'], val_metrics['mcd_rv_std']])
-                val_metrics['val_hd_std'] = np.mean([val_metrics['hd_lv_std'], val_metrics['hd_myo_std'], val_metrics['hd_rv_std']])
-            else:
-                val_metrics['val_dice_mean'] = val_metrics['dice_mean']
-                val_metrics['val_mcd_mean'] = val_metrics['mcd_mean']
-                val_metrics['val_hd_mean'] = val_metrics['hd_mean']
-
-                val_metrics['val_dice_std'] = val_metrics['dice_std']
-                val_metrics['val_mcd_std'] = val_metrics['mcd_std']
-                val_metrics['val_hd_std'] = val_metrics['hd_std']
-
-            logging.info("Mean val dice: {:05.3f}".format(val_metrics['val_dice_mean']))
-            logging.info("Mean val mcd: {:05.3f}".format(val_metrics['val_mcd_mean']))
-            logging.info("Mean val hd: {:05.3f}".format(val_metrics['val_hd_mean']))
-            logging.info("Mean val negative detJ: {:05.3f}".format(val_metrics['negative_detJ_mean']))
-            logging.info("Mean val mag grad detJ: {:05.3f}".format(val_metrics['mean_mag_grad_detJ_mean']))
-
-            # determine if this is the best model
-            is_best = False
-            current_one_metric = val_metrics['val_dice_mean']
-            # current_one_metric = np.mean([val_mcd_mean , val_hd_mean])
-            if epoch + 1 == params.val_epochs:  # first validation
-                best_one_metric = current_one_metric
-            if current_one_metric >= best_one_metric:
-                is_best = True
-                best_one_metric = current_one_metric
-
+            val_metrics = evaluate(model, loss_fn, val_dataloader, params, args, epoch=epoch, val=True)
             # save model checkpoint
             xutils.save_checkpoint({'epoch': epoch + 1,
                                     'state_dict': model.state_dict(),
                                     'optim_dict': optimizer.state_dict()},
-                                   is_best=is_best,
+                                   is_best=params.is_best,
                                    checkpoint=args.model_dir)
-
+            # write validation metric results
             for key, value in val_metrics.items():
-                val_summary_writer.add_scalar('metrics/{}'.format(key), value, global_step=epoch * len(train_dataloader))
+                val_summary_writer.add_scalar('metrics/{}'.format(key),
+                                              value,
+                                              global_step=epoch * len(train_dataloader))
 
-            # save the validation results for the best model separately
-            if is_best:
-                save_path = os.path.join(args.model_dir, "val_results_best_3slices_{}.json".format(args.three_slices))
-                xutils.save_dict_to_json(val_metrics, save_path)
+            # save training results
+            logging.info("Saving training results...")
+            save_result_dir = os.path.join(args.model_dir, "train_results")
+            if not os.path.exists(save_result_dir):
+                os.makedirs(save_result_dir)
+            # GPU tensor to CPU numpy array & transpose
+            dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+            warped_source_np = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
+            target_np = target.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
+            source_np = source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W), here N = frames -1
+            xutils.save_train_result(target_np, source_np, warped_source_np, dvf_np,
+                                     save_result_dir, epoch=epoch + 1, fps=params.fps)
+            logging.info("Done.")
+        """"""
 
-    # close TensorBoard summary writers
+    # flush Tensorboard summaries
     train_summary_writer.close()
     val_summary_writer.close()
 
@@ -211,6 +150,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    # set up device
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)  # select GPU
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     args.device = torch.device('cpu')  # CPU by default
@@ -226,7 +166,7 @@ if __name__ == '__main__':
     logging.info("What a beautiful day to save lives!")
     logging.info("Model: {}".format(args.model_dir))
 
-    # load setting parameters from a JSON file
+    # load config parameters from the JSON file
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No JSON configuration file found at {}".format(json_path)
     params = xutils.Params(json_path)
@@ -234,7 +174,7 @@ if __name__ == '__main__':
     # set the three slices
     args.three_slices = not args.no_three_slices
 
-    # --- data --- #
+    """Data"""
     logging.info("Setting up data loaders...")
     dataloaders = {}
 
@@ -273,9 +213,9 @@ if __name__ == '__main__':
                                     batch_size=params.batch_size, shuffle=False,
                                     num_workers=args.num_workers, pin_memory=args.cuda)
     logging.info("- Done.")
+    """"""
 
-    # --- model & optimiser --- #
-    # set up networks
+    """Model & Optimiser"""
     if params.network == "BaseNet":
         model = BaseNet()
     elif params.network == "SiameseFCN":
@@ -284,8 +224,10 @@ if __name__ == '__main__':
         raise ValueError("Unknown network!")
     model = model.to(device=args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
+    """"""
 
-    ## train and validate
+    """Train and validate """
     logging.info("Starting training and validation for {} epochs.".format(params.num_epochs))
     train_and_validate(model, optimizer, loss_fn, dataloaders, params)
     logging.info("Training and validation complete.")
+    """"""

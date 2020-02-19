@@ -8,14 +8,21 @@ from utils import xutils
 PYTHON = sys.executable  # note: need to activate virtualenv before
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--run', default='train')
-parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
-parser.add_argument('--restore_file', default=None,
+parser.add_argument('--run',
+                    default='train')
+
+parser.add_argument('--model_dir',
+                    default='experiments/base_model',
+                    help="Directory containing params.json")
+
+parser.add_argument('--restore_file',
+                    default=None,
                     help="Optional, name of the file in --model_dir containing weights to reload before training w/o postfix")
+
 parser.add_argument('--gpu', default=0, help='Choose GPU to run on')
 parser.add_argument('--no_cuda', action='store_true')
 
-parser.add_argument('--local', action='store_true')
+parser.add_argument('--local', action='store_true', help="True if not running on cluster to skip taskset")
 
 
 

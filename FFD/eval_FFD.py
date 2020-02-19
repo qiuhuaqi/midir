@@ -157,7 +157,7 @@ with tqdm(total=len(os.listdir(data_dir))) as t:
             dof = '{0}/ffd_z{1:02d}_ED_to_ES.dof.gz'.format(subj_output_dir, z)
             os.system(f'mirtk register {target_img_path} {source_img_path}  '
                       f'-sim {args.sim} -ds {args.CPS} -be {args.BE} '
-                      f'-model FFD -levels 3 -padding -1 '
+                      f'-model FFD -levels 3 -padding -1 -bins 64 '
                       f'-parout {parout} -dofout {dof} -verbose 0')
 
             # use MIRTK to warp ES frame segmentation mask to ED frame
