@@ -1,9 +1,10 @@
+"""(to be deprecated)"""
 import torch
 import numpy as np
 import torch.nn as nn
 
-from model.mutual_info.window_func import cubic_bspline_numpy, rect_window_numpy
-from model.mutual_info.window_func import cubic_bspline_torch, rect_window_torch
+from model.window_func import cubic_bspline_numpy, rect_window_numpy
+from model.window_func import cubic_bspline_torch, rect_window_torch
 from utils.image_utils import normalise_numpy, normalise_torch
 
 def joint_hist_vanilla_numpy(img_ref, img_tar, num_bins_ref=64, num_bins_tar=64):

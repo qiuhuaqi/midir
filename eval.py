@@ -171,7 +171,7 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False):
         # save the validation results for the best model separately
         if params.is_best:
             save_path = os.path.join(args.model_dir,
-                                     f"val_results_best_3slices_{epoch}_{args.three_slices}.json")
+                                     f"val_results_best_3slices_{args.three_slices}.json")
             xutils.save_dict_to_json(results, save_path)
 
     """

@@ -1,3 +1,4 @@
+"""(to be deprecated)"""
 import torch
 import numpy as np
 
@@ -43,9 +44,15 @@ def nmi_from_joint_entropy_pytorch(joint_hist, eps=1e-12):
     # marginal entropy (N, 1)
     entropy_ref = - torch.sum(pdf_marginal_ref * torch.log(pdf_marginal_ref), dim=1)
     entropy_tar = - torch.sum(pdf_marginal_tar * torch.log(pdf_marginal_tar), dim=1)
-    
+
     # joint entropy (N, 1)
     entropy_joint = - torch.sum(joint_pdf * torch.log(joint_pdf), dim=(1,2))
 
     nmi = torch.mean((entropy_ref + entropy_tar) / entropy_joint)
     return nmi
+
+from model.mutual_info.histogram import JointHistParzenTorch
+def nmi_loss(x, y):
+    joint_hist_fn = JointHistParzenTorch().to(device=x.device)
+    joint_hist = joint_hist_fn(x, y)
+    return -nmi_from_joint_entropy_pytorch(joint_hist)

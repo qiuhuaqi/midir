@@ -43,7 +43,7 @@ class BaseNet(nn.Module):
             source: source image input to the network, Tensor shape (T-1, 1, H, W)
 
         Returns:
-            net['dvf']: (Tensor, shape (N, 2, H, W)) calculated optical flow
+            net['out']: (Tensor, shape (N, 2, H, W)) output of the network
         """
         net = {}
 

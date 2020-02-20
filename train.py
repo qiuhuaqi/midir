@@ -80,6 +80,10 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
             val_metrics = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
+
+            if params.is_best:
+                logging.info("Best model found at epoch {} ...".format(epoch+1))
+
             # save model checkpoint
             xutils.save_checkpoint({'epoch': epoch + 1,
                                     'state_dict': model.state_dict(),
