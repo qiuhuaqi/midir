@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from model.submodules import conv_block_1, conv_blocks_2, conv_blocks_3
-from model.submodules import spatial_transform
 
-
+"""Networks"""
 class BaseNet(nn.Module):
     """Deformable registration network with input from image space
     The Network in paper:
@@ -86,9 +85,7 @@ class BaseNet(nn.Module):
         net['comb_2'] = self.conv7(net['comb_1'])
         net['out'] = self.conv8(net['comb_2'])
 
-        # warp the source image towards target
-        warped_source = spatial_transform(source, net['out'])
-        return net['out'], warped_source
+        return net['out']
 
 
 class SiameseFCN(nn.Module):
@@ -168,8 +165,7 @@ class SiameseFCN(nn.Module):
 #         super(UNet, self).__init__()
 #
 #     def forward(self, target, source):
-#         # warp the source image towards target
-#         warped_source = spatial_transform(source, net['out'])
-#         return dvf, warped_source
-
+#         pass
+#         # return dvf
+#
 

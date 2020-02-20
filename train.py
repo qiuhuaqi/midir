@@ -7,7 +7,7 @@ import logging
 import torch
 
 from data.datasets import Data
-from model.networks import BaseNet, SiameseFCN
+from model.models import RegDVF
 from model.losses import loss_fn
 from eval import evaluate
 from utils import xutils
@@ -177,12 +177,7 @@ if __name__ == '__main__':
     """"""
 
     """Model & Optimiser"""
-    if params.network == "BaseNet":
-        model = BaseNet()
-    elif params.network == "SiameseFCN":
-        model = SiameseFCN()
-    else:
-        raise ValueError("Unknown network!")
+    model = RegDVF(params.network)
     model = model.to(device=args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
     """"""
