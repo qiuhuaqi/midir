@@ -4,27 +4,21 @@ from tqdm import tqdm
 import os
 import argparse
 import logging
-import numpy as np
-
 import torch
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
 
+from data.datasets import Data
 from model.networks import BaseNet, SiameseFCN
 from model.losses import loss_fn
-from model.dataset_utils import CenterCrop, Normalise, ToTensor
-from model.datasets import CardiacMR_2D_UKBB, CardiacMR_2D_Eval_UKBB
-
 from eval import evaluate
 from utils import xutils
 
 
-def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
+def train_and_validate(model, optimizer, loss_fn, data, params):
     """Train the model and evaluate every epoch.
 
     Args:
         model: (torch.nn.Module) the neural network
-        dataloaders: (dict) train and val dataloaders
+        data: (instance of class Data) data object
         optimizer: (torch.optim) optimizer for parameters of model
         loss_fn: a function that takes batch_output and batch_labels and computes the loss for the batch
         params: (instance of Params) configuration parameters
@@ -39,10 +33,6 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
     train_summary_writer = xutils.set_summary_writer(args.model_dir, 'train')
     val_summary_writer = xutils.set_summary_writer(args.model_dir, 'val')
 
-    # unpack dataloaders
-    train_dataloader = dataloaders['train']
-    val_dataloader = dataloaders['val']
-
     """Training loop"""
     for epoch in range(params.num_epochs):
         """Train for 1 epoch"""
@@ -50,8 +40,8 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
 
         model.train()
 
-        with tqdm(total=len(train_dataloader)) as t:
-            for it, (target, source) in enumerate(train_dataloader):
+        with tqdm(total=len(data.train_dataloader)) as t:
+            for it, (target, source) in enumerate(data.train_dataloader):
                 # target shape (1, 1, H, W), source shape (1, seq_length, H, W)
                 # send input data and the model to device
                 # expand target and source images to a view of (seq_length, 1, H, W)
@@ -75,11 +65,11 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
                 if it % params.save_summary_steps == 0:
                     train_summary_writer.add_scalar('loss',
                                                     loss.data,
-                                                    global_step=epoch * len(train_dataloader) + it)
+                                                    global_step=epoch * len(data.train_dataloader) + it)
                     for loss_name, loss_value in losses.items():
                         train_summary_writer.add_scalar('losses/{}'.format(loss_name),
                                                         loss_value.data,
-                                                        global_step=epoch * len(train_dataloader) + it)
+                                                        global_step=epoch * len(data.train_dataloader) + it)
 
                 # update tqdm & show the loss value after the progress bar
                 t.set_postfix(loss='{:05.3f}'.format(loss.data))
@@ -89,7 +79,7 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
         """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics = evaluate(model, loss_fn, val_dataloader, params, args, epoch=epoch, val=True)
+            val_metrics = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
             # save model checkpoint
             xutils.save_checkpoint({'epoch': epoch + 1,
                                     'state_dict': model.state_dict(),
@@ -100,7 +90,7 @@ def train_and_validate(model, optimizer, loss_fn, dataloaders, params):
             for key, value in val_metrics.items():
                 val_summary_writer.add_scalar('metrics/{}'.format(key),
                                               value,
-                                              global_step=epoch * len(train_dataloader))
+                                              global_step=epoch * len(data.train_dataloader))
 
             # save training results
             logging.info("Saving training results...")
@@ -131,7 +121,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--restore_file',
                         default=None,
-                        help="Name of the checkpoint file: 'best' for best model, or 'last' for the last saved checkpoint")
+                        help="Prefix of the checkpoint file:"
+                             " 'best' for best model, or 'last' for the last saved checkpoint")
 
     parser.add_argument('--no_three_slices',
                         action='store_true',
@@ -176,42 +167,8 @@ if __name__ == '__main__':
 
     """Data"""
     logging.info("Setting up data loaders...")
-    dataloaders = {}
-
-    # training dataset
-    train_dataset = CardiacMR_2D_UKBB(params.train_data_path,
-                                      seq=params.seq,
-                                      seq_length=params.seq_length,
-                                      augment=params.augment,
-                                      transform=transforms.Compose([
-                                          CenterCrop(params.crop_size),
-                                          Normalise(),
-                                          ToTensor()
-                                      ]))
-    # training dataloader
-    dataloaders['train'] = DataLoader(train_dataset,
-                                      batch_size=params.batch_size, shuffle=False,
-                                      num_workers=args.num_workers, pin_memory=args.cuda)
-
-
-    # validation dataset
-    val_dataset = CardiacMR_2D_Eval_UKBB(params.val_data_path,
-                                         seq=params.seq,
-                                         augment=params.augment,
-                                         label_prefix=params.label_prefix,
-
-                                         transform=transforms.Compose([
-                                             CenterCrop(params.crop_size),
-                                             Normalise(),
-                                             ToTensor()]),
-                                         label_transform=transforms.Compose([
-                                             CenterCrop(params.crop_size),
-                                             ToTensor()])
-                                         )
-
-    dataloaders['val'] = DataLoader(val_dataset,
-                                    batch_size=params.batch_size, shuffle=False,
-                                    num_workers=args.num_workers, pin_memory=args.cuda)
+    data = Data(args, params)
+    data.use_ukbb_cardiac()
     logging.info("- Done.")
     """"""
 
@@ -228,6 +185,6 @@ if __name__ == '__main__':
 
     """Train and validate """
     logging.info("Starting training and validation for {} epochs.".format(params.num_epochs))
-    train_and_validate(model, optimizer, loss_fn, dataloaders, params)
+    train_and_validate(model, optimizer, loss_fn, data, params)
     logging.info("Training and validation complete.")
     """"""

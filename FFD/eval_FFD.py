@@ -7,8 +7,8 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from model.dataset_utils import CenterCrop
-from utils.data_utils import split_volume_idmat, split_volume
+from data.dataset_utils import CenterCrop
+from utils.data_utils import split_volume_idmat
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
 from utils import xutils
 from utils.dvf_utils import dof_to_dvf

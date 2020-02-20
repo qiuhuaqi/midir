@@ -7,9 +7,8 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from model.dataset_utils import CenterCrop
-from utils.data_utils import split_volume, split_sequence
-from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
+from data.dataset_utils import CenterCrop
+from utils.metrics import categorical_dice_stack, contour_distances_stack
 from utils import xutils
 
 parser = argparse.ArgumentParser()

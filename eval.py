@@ -6,39 +6,24 @@ import argparse
 import logging
 import numpy as np
 import pandas as pd
-
 import torch
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
 
+from data.datasets import Data
 from model.networks import BaseNet, SiameseFCN
 from model.submodules import spatial_transform
 from model.losses import loss_fn
-from model.dataset_utils import CenterCrop, Normalise, ToTensor
-from model.datasets import CardiacMR_2D_Eval_UKBB
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack
 from utils import xutils
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--model_dir', default='experiments/base_model', help="Directory containing params.json")
-parser.add_argument('--restore_file', default='best',
-                    help="Optional, name of the file in --model_dir containing weights to reload before \
-                    training")  # 'best' or 'train'
-parser.add_argument('--no_three_slices', action='store_true', help="Evaluate metrics on all instead of 3 slices.")
 
-parser.add_argument('--no_cuda', action='store_true')
-parser.add_argument('--num_workers', default=8, help='Number of processes used by dataloader, 0 means use main process')
-parser.add_argument('--gpu', default=0, help='Choose the GPU to run on, pass -1 to use CPU')
-
-
-def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False):
+def evaluate(model, loss_fn, data, params, args, epoch=0, val=False):
     """
     Evaluate the model and returns metrics as a dict and evaluation loss
 
     Args:
         model:
         loss_fn:
-        dataloader:
+        data: (instance of Data object)
         params:
         args:
         val: (boolean) indicates validation (True) or testing (False)
@@ -66,9 +51,9 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False):
     negative_detJ_buffer = []
 
 
-    with tqdm(total=len(dataloader)) as t:
+    with tqdm(total=len(data.val_dataloader)) as t:
         # iterate over validation subjects
-        for idx, (image_ed_batch, image_es_batch, label_ed_batch, label_es_batch) in enumerate(dataloader):
+        for idx, (image_ed_batch, image_es_batch, label_ed_batch, label_es_batch) in enumerate(data.val_dataloader):
             # (c, N, H, W) to (N, c, H, W)
             image_ed_batch = image_ed_batch.permute(1, 0, 2, 3).to(device=args.device)
             image_es_batch = image_es_batch.permute(1, 0, 2, 3).to(device=args.device)
@@ -200,7 +185,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False):
 
         # save evaluated metrics for individual test subjects in pandas dataframe
         # which can be used to create boxplots
-        subj_id_buffer = dataloader.dataset.dir_list
+        subj_id_buffer = data.val_dataloader.dataset.dir_list
         df_buffer = []
         column_method = ['DL'] * len(subj_id_buffer)
         for struct in ['LV', 'MYO', 'RV']:
@@ -242,7 +227,29 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False):
 
 
 if __name__ == '__main__':
-    # parse runtime arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_dir',
+                        default='experiments/base_model',
+                        help="Directory containing params.json")
+    parser.add_argument('--restore_file',
+                        default='best',
+                        help="Prefix of the checkpoint file:"
+                             " 'best' for best model, or 'last' for the last saved checkpoint")
+
+    parser.add_argument('--no_three_slices',
+                        action='store_true',
+                        help="Evaluate metrics on all instead of 3 slices.")
+
+    parser.add_argument('--no_cuda',
+                        action='store_true')
+
+    parser.add_argument('--num_workers',
+                        default=8,
+                        help='Number of processes used by dataloader, 0 means use main process')
+
+    parser.add_argument('--gpu',
+                        default=0,
+                        help='Choose the GPU to run on, pass -1 to use CPU')
     args = parser.parse_args()
 
     # set the GPU to use and device
@@ -267,24 +274,10 @@ if __name__ == '__main__':
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
     params = xutils.Params(json_path)
 
-    # set dataset and DataLoader
+    # set up data
     logging.info("Eval data path: {}".format(params.eval_data_path))
-    eval_dataset = CardiacMR_2D_Eval_UKBB(params.eval_data_path,
-                                          seq=params.seq,
-                                          augment=params.augment,
-                                          label_prefix=params.label_prefix,
-                                          transform=transforms.Compose([
-                                              CenterCrop(params.crop_size),
-                                              Normalise(),
-                                              ToTensor()]),
-                                          label_transform=transforms.Compose([
-                                              CenterCrop(params.crop_size),
-                                              ToTensor()])
-                                          )
-
-    eval_dataloader = DataLoader(eval_dataset,
-                                 batch_size=params.batch_size, shuffle=False,
-                                 num_workers=args.num_workers, pin_memory=args.cuda)
+    data = Data(args, params)
+    data.use_ukbb_cardiac()
 
     # instantiate model and move to device
     if params.network == "BaseNet":
@@ -301,5 +294,5 @@ if __name__ == '__main__':
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
-    evaluate(model, loss_fn, eval_dataloader, params, args, val=False)
+    evaluate(model, loss_fn, data, params, args, val=False)
     logging.info("Evaluation complete. Model path {}".format(args.model_path))
