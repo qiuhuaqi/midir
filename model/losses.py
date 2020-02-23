@@ -79,9 +79,51 @@ from model import window_func
 
 
 class NMILoss(nn.Module):
-    def __init__(self, debug=False):
+    def __init__(self,
+                 target_min=0.0,
+                 target_max=1.0,
+                 source_min=0.0,
+                 source_max=1.0,
+                 num_bins_target=64,
+                 num_bins_source=64,
+                 c_target=1.0,
+                 c_source=1.0,
+                 nmi=True,
+                 window="cubic_bspline",
+                 debug=False):
+
         super().__init__()
         self.debug = debug
+        self.nmi = nmi
+        self.window = window
+
+        self.target_min = target_min
+        self.target_max = target_max
+        self.source_min = source_min
+        self.source_max = source_max
+
+        # set bin edges (assuming image intensity is normalised to the range)
+        self.bin_width_target = (target_max - target_min) / num_bins_target
+        self.bin_width_source = (source_max - source_min) / num_bins_source
+
+        bins_target = torch.arange(num_bins_target, requires_grad=False) * self.bin_width_target + target_min
+        bins_source = torch.arange(num_bins_source, requires_grad=False) * self.bin_width_source + source_min
+        self.bins_target = bins_target.float().unsqueeze(1)  # (N, 1, #bins, H*W)
+        self.bins_source = bins_source.float().unsqueeze(1)  # (N, 1, #bins, H*W)
+
+        # window width parameter (eps)
+        # to satisfy the partition of unity constraint, eps can be no larger than bin_width
+        # and can only be reduced by integer factor to increase kernel support,
+        # cubic B-spline function has support of 4*eps, hence maximum number of bins a sample can affect is 4c
+        # todo: what are c(s)? (Look at original Unser paper)
+        self.eps_target = c_target * self.bin_width_target
+        self.eps_source = c_source * self.bin_width_source
+
+        if self.debug:
+            self.histogram_joint = None
+            self.p_joint = None
+            self.p_target = None
+            self.p_source = None
 
     @staticmethod
     def _parzen_window_1d(x, window="cubic_bspline"):
@@ -94,49 +136,31 @@ class NMILoss(nn.Module):
 
     def forward(self,
                 target,
-                source,
-                nmi=True,
-                num_bins_target=64,
-                num_bins_source=64,
-                c_target=1.0,
-                c_source=1.0,
-                window="cubic_bspline"):
-        # todo: what are c(s)? (Look at original Unser paper)
+                source):
 
         """pre-processing"""
-        # todo: normalisation?
         # normalise intensity range of both images to [0, 1] and cast to float 32
-        target = normalise_torch(target.float(), 0.0, 1.0)
-        source = normalise_torch(source.float(), 0.0, 1.0)
+        target = normalise_torch(target.float(), self.target_min, self.target_max)
+        source = normalise_torch(source.float(), self.source_min, self.source_max)
 
         # flatten images to (N, 1, H*W)
         target = target.view(target.size()[0], target.size()[1], -1)
         source = source.view(source.size()[0], source.size()[1], -1)
 
         """histograms"""
-        # set bin edges (assuming image intensity is normalised to [0, 1])
-        bin_width_target = (target.max() - target.min()) / num_bins_target
-        bin_width_source = (source.max() - source.min()) / num_bins_source
-        bins_target = torch.arange(num_bins_target, device=target.device).float() * bin_width_target
-        bins_source = torch.arange(num_bins_source, device=source.device).float() * bin_width_source
-        bins_target = bins_target.unsqueeze(1)  # (N, #bins, H*W)
-        bins_source = bins_source.unsqueeze(1)  # (N, #bins, H*W)
-
-        # window width parameter (eps)
-        # to satisfy the partition of unity constraint, eps can be no larger than bin_width
-        # and can only be reduced by integer factor to increase kernel support,
-        # cubic B-spline function has support of 4*eps, hence maximum number of bins a sample can affect is 4/c
-        eps_target = c_target * bin_width_target
-        eps_source = c_source * bin_width_source
+        # bins to device
+        self.bins_target = self.bins_target.to(device=target.device)
+        self.bins_source = self.bins_source.to(device=source.device)
 
         # calculate Parzen window function response
-        D_target = (bins_target - target) / eps_target
-        D_source = (bins_source - source) / eps_source
-        W_target = self._parzen_window_1d(D_target, window=window)  # (N, #bins, H*W)
-        W_source = self._parzen_window_1d(D_source, window=window)  # (N, #bins, H*W)
+        D_target = (self.bins_target - target) / self.eps_target
+        D_source = (self.bins_source - source) / self.eps_source
+        W_target = self._parzen_window_1d(D_target, window=self.window)  # (N, #bins, H*W)
+        W_source = self._parzen_window_1d(D_source, window=self.window)  # (N, #bins, H*W)
 
         # calculate joint histogram (using batch matrix multiplication)
-        histogram_joint = W_target.bmm(W_source.transpose(1, 2)) / (eps_target * eps_source)  # (N, #bins, #bins)
+        histogram_joint = W_target.bmm(W_source.transpose(1, 2))  # (N, #bins, #bins)
+        histogram_joint /= self.eps_target * self.eps_source
 
         """distributions"""
         # normalise joint histogram to acquire joint distribution
@@ -155,19 +179,13 @@ class NMILoss(nn.Module):
 
         """debug mode: store bins, histograms & distributions"""
         if self.debug:
-            self.bin_width_target = bin_width_target
-            self.bin_width_source = bin_width_source
-            self.bins_target = bins_target
-            self.bins_source = bins_source
-            self.eps_target = eps_target
-            self.eps_source = eps_source
             self.histogram_joint = histogram_joint
             self.p_joint = p_joint
             self.p_target = p_target
             self.p_source = p_source
 
         # return (unnormalised) mutual information or normalised mutual information (NMI)
-        if nmi:
+        if self.nmi:
             return -torch.mean((entropy_target + entropy_source) / entropy_joint)
         else:
             return -torch.mean(entropy_target + entropy_source - entropy_joint)

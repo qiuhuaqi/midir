@@ -77,7 +77,7 @@ def conv_blocks_3(in_channels, out_channels, strides=1):
 # ------------------------------------------- #
 # Spatial Transformer Modules
 # ------------------------------------------- #
-def spatial_transform(source, dvf):
+def spatial_transform(source, dvf, mode="bilinear"):
     """
     Spatially transform/deform an image by sampling at coordinates of the deformed mesh grid.
 
@@ -105,6 +105,9 @@ def spatial_transform(source, dvf):
 
     # using x-y (column_num, row_num) order
     deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
-    deformed_image = F.grid_sample(source, deformed_grid, mode="bilinear", padding_mode="border", align_corners=True)
+    deformed_image = F.grid_sample(source, deformed_grid,
+                                   mode=mode,
+                                   padding_mode="border",
+                                   align_corners=True)
 
     return deformed_image

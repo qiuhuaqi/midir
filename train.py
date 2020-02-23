@@ -66,6 +66,7 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
                     train_summary_writer.add_scalar('loss',
                                                     loss.data,
                                                     global_step=epoch * len(data.train_dataloader) + it)
+
                     for loss_name, loss_value in losses.items():
                         train_summary_writer.add_scalar('losses/{}'.format(loss_name),
                                                         loss_value.data,
