@@ -5,9 +5,9 @@ import torch
 
 class CenterCrop(object):
     """
-    Central crop typical numpy array loaded from nifti files
-    Expected input shape: (N, H, W)
-    Expected output shape: (N, H', W')
+    Central crop numpy array
+    Input shape: (N, H, W)
+    Output shape: (N, H', W')
     """
     def __init__(self, output_size=192):
         assert isinstance(output_size, (int, tuple))
@@ -49,20 +49,39 @@ class Normalise(object):
     """
     Normalise image of any shape to range
     (image - mean) / std
-    If mode = 'max, normalise range to [0, 1]
-    by setting mean = min(image), std = max(image) - min(image)
+    mode:
+        'minmax': normalise the image using its min and max to range [0, 1]
+        'fixed': normalise the image by a fixed ration determined by the input arguments (preferred for image registration)
+        'meanstd': normalise to mean=0, std=1
     """
-    def __init__(self, mode='max'):
+
+    def __init__(self, mode='minmax',
+                 min_in=0.0, max_in=255.0,
+                 min_out=0.0, max_out=1.0):
         self.mode = mode
+        self.min_in = min_in,
+        self.max_in = max_in
+        self.min_out = min_out
+        self.max_out = max_out
+
+        if self.mode == 'fixed':
+            self.norm_ratio = (max_out - min_out) * (max_in - min_in)
 
     def __call__(self, image):
-        if self.mode == 'max':
-            mean = np.min(image)
-            std = np.max(image) - np.min(image)
+        if self.mode == 'minmax':
+            min_in = image.min()
+            max_in = image.max()
+            image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in)
+
+        elif self.mode == 'fixed':
+            image_norm = image * self.norm_ratio
+
+        elif self.mode == 'meanstd':
+            image_norm = (image - image.mean()) / image.std()
+
         else:
-            mean = np.mean(image)
-            std = np.std(image)
-        return (image - mean) / std
+            raise ValueError("Normalisation mode not recogonised.")
+        return image_norm
 
 
 class ToTensor(object):

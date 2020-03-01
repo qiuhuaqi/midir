@@ -266,8 +266,9 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     dvf = np.array([dvf_y, dvf_x]).transpose(1, 2, 0)  # (H, W, 2), notice the x-y swap
 
     # save flow to nifti
-    ndvf = nib.Nifti1Image(dvf, nim.affine)
-    nib.save(ndvf, '{0}/{1}.nii.gz'.format(output_dir, dvfout))
+    if dvfout is not None:
+        ndvf = nib.Nifti1Image(dvf, nim.affine)
+        nib.save(ndvf, '{0}/{1}.nii.gz'.format(output_dir, dvfout))
 
     # clean up: remove all the mesh files
     os.system('rm {0}/*mesh*'.format(output_dir))
