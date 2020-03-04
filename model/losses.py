@@ -139,6 +139,7 @@ class NMILoss(nn.Module):
                 source):
 
         """pre-processing"""
+        # todo: this normalisation is optional
         # normalise intensity range of both images to [0, 1] and cast to float 32
         target = normalise_torch(target.float(), self.target_min, self.target_max)
         source = normalise_torch(source.float(), self.source_min, self.source_max)
