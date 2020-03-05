@@ -120,6 +120,8 @@ if __name__ == '__main__':
                                     + glob(subject_output_dir + "/*.com*") \
                                     + glob(subject_output_dir + "/*firstseg.nii.gz") \
                                     + glob(subject_output_dir + "/*_std_sub*")
+                for x in first_output_list:
+                    os.system(f"mv {x} {subject_output_dir}")
 
             t.update()
 
