@@ -144,7 +144,7 @@ def categorical_dice_volume(mask1, mask2, label_class=0):
     return dice
 
 
-def rmse(output, truth):
+def rmseN(output, truth):
     """
     Root Mean Squre Error between two numpy arrays of shape (H, W, N)
     Averaged over N
@@ -219,3 +219,26 @@ def detJac_stack(flow_stack, rescaleFlow=True):
     negative_detJ_mean = np.mean(mean_negatvie_detJ_buffer)
 
     return mean_grad_detJ_mean, negative_detJ_mean
+
+
+def rmse(x, y):
+    """Standard RMSE formula, square root over mean
+    (https://wikimedia.org/api/rest_v1/media/math/render/svg/6d689379d70cd119e3a9ed3c8ae306cafa5d516d)
+    """
+    return np.sqrt(((x - y) ** 2).mean())
+
+
+def rmse_dvf(x, y):
+    """
+    RMSE of DVF using standard RMSE formula, square root over mean of square sum of dx
+    input shape: (..., 2)
+    """
+    return np.sqrt( ((x-y)**2).sum(axis=-1).mean() )
+
+
+def aee(x, y):
+    """
+    Average End point error (mean over point-wise L2 norm) input shape: (..., 2)
+    """
+    return np.sqrt( ((x - y)**2 ).sum(axis=-1) ).mean()
+

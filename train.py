@@ -9,8 +9,12 @@ import torch
 from data.datasets import Data
 from model.models import RegDVF
 from model.losses import loss_fn
-from eval import evaluate
+from eval import evaluate_brain
 from utils import xutils
+
+# set random seed so the random seeding of workers is reproducible
+import numpy as np
+np.random.seed(7)
 
 
 def train_and_validate(model, optimizer, loss_fn, data, params):
@@ -41,16 +45,29 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         model.train()
 
         with tqdm(total=len(data.train_dataloader)) as t:
-            for it, (target, source) in enumerate(data.train_dataloader):
-                # target shape (1, 1, H, W), source shape (1, seq_length, H, W)
-                # send input data and the model to device
-                # expand target and source images to a view of (seq_length, 1, H, W)
-                target = target.to(device=args.device).expand(source.size()[1], -1, -1, -1)
-                source = source.to(device=args.device).permute(1, 0, 2, 3)
+            for it, data_point in enumerate(data.train_dataloader):
 
-                # linear transformation test for NMI: use (1-source) as source image
-                if params.inverse:
-                    source = 1.0 - source
+                """cardiac motion"""
+                # # target shape (1, 1, H, W), source shape (1, seq_length, H, W)
+                # # send input data and the model to device
+                # # expand target and source images to a view of (seq_length, 1, H, W)
+                # target = target.to(device=args.device).expand(source.size()[1], -1, -1, -1)
+                # source = source.to(device=args.device).permute(1, 0, 2, 3)
+
+                # # linear transformation test for NMI: use (1-source) as source image
+                # if params.inverse:
+                #     source = 1.0 - source
+                """"""
+
+
+                """brain data"""
+                target, source, target_original, brain_mask, dvf_gt = data_point
+                # target = target.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW), slices in a brain as one batch
+                # source = source.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW)
+
+                target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
+                source = source.to(device=args.device)  # (Nx1xHxW)
+                """"""
 
                 # network inference & loss
                 dvf, warped_source = model(target, source)  # dvf (N, 2, H, W), warped_source (N, 1, H, W)
@@ -80,7 +97,7 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
+            val_metrics, val_loss = evaluate_brain(model, loss_fn, data, params, args, epoch=epoch, val=True)
 
             if params.is_best:
                 logging.info("Best model found at epoch {} ...".format(epoch+1))
@@ -91,24 +108,35 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
                                     'optim_dict': optimizer.state_dict()},
                                    is_best=params.is_best,
                                    checkpoint=args.model_dir)
-            # write validation metric results
+
+            # write validation metric results to Tensorboard
             for key, value in val_metrics.items():
                 val_summary_writer.add_scalar('metrics/{}'.format(key),
                                               value,
                                               global_step=epoch * len(data.train_dataloader))
+            # write validation loss to Tensorborad
+            val_summary_writer.add_scalar('val_loss', val_loss,
+                                          global_step=epoch * len(data.train_dataloader))
 
             # save training results
-            logging.info("Saving training results...")
-            save_result_dir = os.path.join(args.model_dir, "train_results")
-            if not os.path.exists(save_result_dir):
-                os.makedirs(save_result_dir)
-            # GPU tensor to CPU numpy array & transpose
-            dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
-            warped_source_np = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
-            target_np = target.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
-            source_np = source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W), here N = frames -1
-            xutils.save_train_result(target_np, source_np, warped_source_np, dvf_np,
-                                     save_result_dir, epoch=epoch + 1, fps=params.fps)
+            # logging.info("Saving training results...")
+            # save_result_dir = os.path.join(args.model_dir, "train_results")
+            # if not os.path.exists(save_result_dir):
+            #     os.makedirs(save_result_dir)
+
+            # # GPU tensor to CPU numpy array & transpose
+            # dvf_np = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+            # dvf_np = dvf_np * params.crop_size / 2  # reverse normalise to number of pixels
+            # warped_source_np = warped_source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
+            # target_np = target.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W)
+            # source_np = source.data.cpu().numpy()[:, 0, :, :] * 255  # (N, H, W), here N = frames -1
+            # xutils.save_train_result(target_np,
+            #                          source_np,
+            #                          warped_source_np,
+            #                          dvf_np,
+            #                          save_result_dir,
+            #                          epoch=epoch + 1,
+            #                          fps=params.fps)
             logging.info("Done.")
         """"""
 
@@ -129,6 +157,7 @@ if __name__ == '__main__':
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
 
+    # cardiac only
     parser.add_argument('--no_three_slices',
                         action='store_true',
                         help="Evaluate metrics on all instead of 3 slices.")
@@ -173,7 +202,7 @@ if __name__ == '__main__':
     """Data"""
     logging.info("Setting up data loaders...")
     data = Data(args, params)
-    data.use_ukbb_cardiac()
+    data.use_brain()
     logging.info("- Done.")
     """"""
 

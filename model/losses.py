@@ -80,6 +80,10 @@ from model import window_func
 
 class NMILoss(nn.Module):
     def __init__(self,
+                 # target_min=-1.0,   #(issue2-test_run43: normalise image to 0 mean 1 std)
+                 # target_max=5.0, #(Issue2-test_run43: normalise image to 0 mean 1 std)
+                 # source_min=-1.0,  #(Issue2-test_run43: normalise image to 0 mean 1 std)
+                 # source_max=5.0,  #(Issue2-test_run43: normalise image to 0 mean 1 std)
                  target_min=0.0,
                  target_max=1.0,
                  source_min=0.0,
@@ -139,7 +143,6 @@ class NMILoss(nn.Module):
                 source):
 
         """pre-processing"""
-        # todo: this normalisation is optional
         # normalise intensity range of both images to [0, 1] and cast to float 32
         target = normalise_torch(target.float(), self.target_min, self.target_max)
         source = normalise_torch(source.float(), self.source_min, self.source_max)

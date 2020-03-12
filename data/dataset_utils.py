@@ -1,6 +1,7 @@
 """Utility functions for Pytorch dataloaders"""
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 class CenterCrop(object):
@@ -68,12 +69,12 @@ class Normalise(object):
             self.norm_ratio = (max_out - min_out) * (max_in - min_in)
 
     def __call__(self, image):
-        if self.mode == 'minmax':
+        if self.mode == 'minmax':  # determine the input min-max from input
             min_in = image.min()
             max_in = image.max()
             image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in)
 
-        elif self.mode == 'fixed':
+        elif self.mode == 'fixed':  # use a fixed ratio
             image_norm = image * self.norm_ratio
 
         elif self.mode == 'meanstd':
@@ -89,6 +90,3 @@ class ToTensor(object):
     def __call__(self, image):
         return torch.from_numpy(image)
 
-
-class AffineTransform(object):
-    pass

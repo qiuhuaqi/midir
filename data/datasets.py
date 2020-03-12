@@ -4,7 +4,9 @@ import os
 import os.path as path
 import random
 import numpy as np
+from glob import glob
 import nibabel as nib
+import torch
 import torch.utils.data as ptdata
 
 from data.dataset_utils import CenterCrop, Normalise, ToTensor
@@ -16,8 +18,9 @@ Data object:
 - Standarlise data interface
 """
 
+
 class Data():
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args):
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -26,10 +29,14 @@ class Data():
         self.val_dataloader = None
         self.test_dataloader = None
 
-        self.data_name = None
-
         self.args = args[0]
         self.params = args[1]
+
+    @staticmethod
+    def _worker_init_fn(worker_id):
+        """Callback function passed to DataLoader to initialise the workers"""
+        # generate a random sequence of seeds for the workers
+        np.random.seed(random.randint(0, 2 ** 32 - 1))
 
     def use_ukbb_cardiac(self):
         """
@@ -66,6 +73,7 @@ class Data():
                                                       CenterCrop(self.params.crop_size),
                                                       ToTensor()])
                                                   )
+
         self.val_dataloader = ptdata.DataLoader(self.val_dataset,
                                                 batch_size=self.params.batch_size,
                                                 shuffle=False,
@@ -91,15 +99,253 @@ class Data():
                                                  num_workers=self.args.num_workers,
                                                  pin_memory=self.args.cuda)
 
+    def use_brain(self):
+        # parse tuple JSON params
+        self.params.slice_range = (self.params.slice_start, self.params.slice_end)
+        self.params.disp_range = (self.params.disp_min, self.params.disp_max)
+
+        # training
+        self.train_dataset = Brats2D(self.params.data_path,
+                                     run="train",
+                                     slice_range=self.params.slice_range,
+                                     sigma=self.params.sigma,
+                                     cps=self.params.elastic_cps,
+                                     disp_range=self.params.disp_range,
+                                     crop_size=self.params.crop_size
+                                     )
+
+        self.train_dataloader = ptdata.DataLoader(self.train_dataset,
+                                                  batch_size=self.params.batch_size,
+                                                  shuffle=True,
+                                                  num_workers=self.args.num_workers,
+                                                  pin_memory=self.args.cuda,
+                                                  worker_init_fn=self._worker_init_fn
+                                                  )
+
+        # validation
+        self.val_dataset = Brats2D(self.params.data_path,
+                                   run="val",
+                                   slice_range=self.params.slice_range,
+                                   sigma=self.params.sigma,
+                                   cps=self.params.elastic_cps,
+                                   disp_range=self.params.disp_range,
+                                   crop_size=self.params.crop_size
+                                   )
+
+        self.val_dataloader = ptdata.DataLoader(self.val_dataset,
+                                                batch_size=1,
+                                                shuffle=False,
+                                                num_workers=self.args.num_workers,
+                                                pin_memory=self.args.cuda
+                                                )
+
+        # testing
+        self.test_dataset = Brats2D(self.params.data_path,
+                                    run="test",
+                                    slice_range=self.params.slice_range,
+                                    sigma=self.params.sigma,
+                                    cps=self.params.elastic_cps,
+                                    disp_range=self.params.disp_range,
+                                    crop_size=self.params.crop_size
+                                    )
+
+        self.test_dataloader = ptdata.DataLoader(self.test_dataset,
+                                                 batch_size=1,
+                                                 shuffle=False,
+                                                 num_workers=self.args.num_workers,
+                                                 pin_memory=self.args.cuda
+                                                 )
+
+
+########################################################
+# Datasets
+########################################################
+"""
+Brain Datasets
+"""
+from utils.image_utils import synthesis_elastic_deformation
+
+
+class Brats2D(ptdata.Dataset):
+    def __init__(self,
+                 data_path,
+                 run=None,
+                 slice_range=(70, 90),
+                 sigma=8,
+                 cps=10,
+                 disp_range=(0, 3),
+                 crop_size=240
+                 ):
+        super().__init__()
+
+        # set up train/val/test data path
+        self.run = run
+        if self.run == "train":
+            self.data_path = data_path + "/train"
+        elif self.run == "val" or self.run == "test":
+            self.data_path = data_path + \
+                             f"/{run}_crop{crop_size}_sigma{sigma}_cps{cps}_dispRange{disp_range[0]}-{disp_range[1]}_sliceRange{slice_range[0]}-{slice_range[1]}"
+        elif self.run == "generate":
+            self.data_path = data_path
+        else:
+            raise ValueError("Dataset run is not specified.")
+        assert path.exists(self.data_path), f"Data path does not exist: \n{self.data_path}"
+
+        self.subject_list = sorted(os.listdir(self.data_path))
+
+        # elastic parameters
+        self.sigma = sigma
+        self.cps = cps
+        self.disp_range = disp_range
+
+        # transforms
+        self.slice_range = slice_range
+        self.cropper = CenterCrop(crop_size)
+
+        self.normaliser = Normalise(mode='minmax')
+
+        # [Issue2-fixe2-test_run43, run44] 2nd normaliser
+        print("Issue2-fixe2-test_run43 - Dataset - 2nd normaliser meanstd mode")
+        self.normaliser2 = Normalise(mode='meanstd')
+
+        # self.brain_size_threshold = brain_size_threshold
+
+    def __getitem__(self, index):
+        # load the original data
+        subject = self.subject_list[index]
+
+        t1_path = path.join(self.data_path, subject, f"{subject}_t1.nii.gz")
+        t2_path = path.join(self.data_path, subject, f"{subject}_t2.nii.gz")
+        brain_mask_path = path.join(self.data_path, subject, f"{subject}_brainmask.nii.gz")
+
+        # load in T1 T2 image and brain mask, tranpose to (NxHxW)
+        t1 = nib.load(t1_path).get_data().transpose(2, 0, 1).astype("float")
+        t2 = nib.load(t2_path).get_data().transpose(2, 0, 1).astype("float")
+        brain_mask = nib.load(brain_mask_path).get_data().transpose(2, 0, 1).astype("float")
+
+        # defining target_original and source:
+        # (note DVF points from deformed T1 to original T1/T2, i.e. it's the ground truth if the registration warps T2)
+        # registration deforms T2 to T1-deform so the synthesised DVF is the ground truth
+        target_original = t1
+        source = t2
+
+        # todo: sanity check for mask with ROI too small
+        # if (mask > 0).sum() < size_threshold ** (mask.ndim - 1):
+        #     return None
+
+        if self.run == "train" or self.run == "generate":
+
+            if self.run == "generate":
+                # take a range of middle slices
+                target_original = target_original[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+                source = source[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+                brain_mask = brain_mask[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+
+            elif self.run == "train":
+                # taking a random slice each time
+                z = random.randint(self.slice_range[0], self.slice_range[1])
+                target_original = target_original[np.newaxis, z, ...]  # (1xHxW)
+                source = source[np.newaxis, z, ...]  # (1xHxW)
+                brain_mask = brain_mask[np.newaxis, z, ...]  #
+                assert target_original.shape[0] == 1, "Dataset training: more than 1 slice taken from one subject"
+
+            # generate synthesised DVF and deformed T1 image
+            # dvf size: (Nx2xHxW), not normalised to Pytorch coordinate so in number of pixels
+            target, dvf, mask_bbox_mask = synthesis_elastic_deformation(target_original,
+                                                                        brain_mask,
+                                                                        sigma=self.sigma,
+                                                                        cps=self.cps,
+                                                                        disp_range=self.disp_range
+                                                                        )
+
+            """
+            Apply some transforms if it's loading training
+            Standard process done in here since DVF dimension is special and don't need normalisation
+            - cropping images and DVF
+            - intensity normalisation of images to [0, 1]
+            """
+            # cropping
+            target = self.cropper(target)
+            source = self.cropper(source)
+            target_original = self.cropper(target_original)
+            brain_mask = self.cropper(brain_mask)
+            dvf_crop = []
+            for dim in range(dvf.shape[1]):
+                dvf_crop += [self.cropper(dvf[:, dim, :, :])]  # (N, H, W)
+            dvf = np.array(dvf_crop).transpose(1, 0, 2, 3)
+
+        else:  # val/test, read pre-saved data
+            t1_deformed_path = path.join(self.data_path, subject, f"{subject}_t1_deformed.nii.gz")
+            t1_deformed = nib.load(t1_deformed_path).get_data().transpose(2, 0, 1)  # (N, H, W)
+            target = t1_deformed
+
+            # read T1 deformed and DVF for val/test
+            dvf_path = glob(path.join(self.data_path, subject, "*dvf*.nii.gz"))[0]
+            dvf = nib.load(dvf_path).get_data().transpose(2, 3, 0, 1)  # (N, 2, H, W)
+            assert dvf.shape[1] == 2, "Loaded DVF shape is wrong."
+
+        # intensity normalisation
+        target = self.normaliser(target)
+        source = self.normaliser(source)
+        target_original = self.normaliser(target_original)
+
+        # [Issue2-fixe2-test_run43, run44]
+        # normalise all image to 0 mean 1 std
+        target = self.normaliser2(target)
+        source = self.normaliser2(source)
+        target_original = self.normaliser2(target_original)
+        ##
+
+        # to tensor
+        # (all cast to Float32 since Numpy "float" is Float64 (Double))
+        # N=1 for traininig, N=number_slices for val/test
+        target = torch.from_numpy(target).float()  # (NxHxW)
+        source = torch.from_numpy(source).float()  # (NxHxW)
+        target_original = torch.from_numpy(target_original).float()  # (NxHxW)
+        brain_mask = torch.from_numpy(brain_mask).float()  # (NxHxW)
+        dvf = torch.from_numpy(dvf).float()  # (Nx2xHxW)
+
+        return target, source, target_original, brain_mask, dvf
+
+    def __len__(self):
+        return len(self.subject_list)
+
+
+class IXI2D(ptdata.Dataset):
+    """
+    Load IXI data for 2D registration
+    """
+
+    def __init__(self, data_path, num_slices=50, augment=False, transform=None):
+        super(IXI2D, self).__init__()
+
+        self.data_path = data_path
+        self.num_slices = num_slices
+        self.augment = augment
+        self.transform = transform
+
+        self.subject_list = None
+
+    def __getitem__(self, index):
+        target = None
+        source = None
+        return target, source
+
+    def __len__(self):
+        return len(self.subject_list)
+
 
 """
-Datasets
+Cardiac Datasets
 """
+
+
 class CardiacMR_2D(ptdata.Dataset):
     """
     Training dataset. Uses the first frame in a sequence as target.
     """
-    def __init__(self, data_path, seq='sa',  seq_length=20, augment=False, transform=None):
+
+    def __init__(self, data_path, seq='sa', seq_length=20, augment=False, transform=None):
         # super(TrainDataset, self).__init__()
         super().__init__()  # this syntax is allowed in Python3
 
@@ -164,6 +410,7 @@ class CardiacMR_2D_UKBB(ptdata.Dataset):
     """
     Training class for UKBB. Loads the specific ED file as target.
     """
+
     def __init__(self, data_path, seq='sa', seq_length=30, augment=False, transform=None):
         # super(TrainDataset, self).__init__()
         super().__init__()  # this syntax is allowed in Python3
@@ -176,7 +423,7 @@ class CardiacMR_2D_UKBB(ptdata.Dataset):
 
         self.dir_list = []
         for subj_dir in sorted(os.listdir(self.data_path)):
-            if path.exists(path.join(data_path, subj_dir, seq+'.nii.gz')) \
+            if path.exists(path.join(data_path, subj_dir, seq + '.nii.gz')) \
                     and path.exists(path.join(data_path, subj_dir, seq + '_ED.nii.gz')):
                 self.dir_list += [subj_dir]
 
@@ -238,6 +485,7 @@ class CardiacMR_2D_UKBB(ptdata.Dataset):
 class CardiacMR_2D_Eval_UKBB(ptdata.Dataset):
     """Validation and evaluation for UKBB
     Fetches ED and ES frame images and segmentation labels"""
+
     def __init__(self, data_path, seq='sa', label_prefix='label', augment=False, transform=None, label_transform=None):
         super().__init__()  # this syntax is allowed in Python3
 
@@ -278,8 +526,10 @@ class CardiacMR_2D_Eval_UKBB(ptdata.Dataset):
         # load nifti into array
         image_path_ed = os.path.join(self.data_path, self.dir_list[index], self.seq + '_ED.nii.gz')
         image_path_es = os.path.join(self.data_path, self.dir_list[index], self.seq + '_ES.nii.gz')
-        label_path_ed = os.path.join(self.data_path, self.dir_list[index], '{}_'.format(self.label_prefix) + self.seq + '_ED.nii.gz')
-        label_path_es = os.path.join(self.data_path, self.dir_list[index], '{}_'.format(self.label_prefix) + self.seq + '_ES.nii.gz')
+        label_path_ed = os.path.join(self.data_path, self.dir_list[index],
+                                     '{}_'.format(self.label_prefix) + self.seq + '_ED.nii.gz')
+        label_path_es = os.path.join(self.data_path, self.dir_list[index],
+                                     '{}_'.format(self.label_prefix) + self.seq + '_ES.nii.gz')
 
         # images and labels are in shape (H, W, N)
         image_ed = nib.load(image_path_ed).get_data()
@@ -311,6 +561,7 @@ class CardiacMR_2D_Eval_UKBB(ptdata.Dataset):
 class CardiacMR_2D_Inference_UKBB(ptdata.Dataset):
     """Inference dataset, works with UKBB data or data with segmentation,
     loop over frames of one subject"""
+
     def __init__(self, data_path, seq='sa', transform=None):
         """data_path is the path to the direcotry containing the nifti files"""
         super().__init__()  # this syntax is allowed in Python3
@@ -343,4 +594,3 @@ class CardiacMR_2D_Inference_UKBB(ptdata.Dataset):
 
     def __len__(self):
         return self.seq_length
-

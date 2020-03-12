@@ -296,3 +296,25 @@ def warp_numpy_cpu(source_img, dvf):
 
     return warped_source_img
 
+
+def show_warped_grid(ax, dvf, bg_img, interval=3, title="Grid", fontsize=20):
+    """dvf shape (H, W, 2)"""
+    background = bg_img
+    interval = interval
+    id_grid_X, id_grid_Y = np.meshgrid(range(0, bg_img.shape[0]-1, interval),
+                                       range(0, bg_img.shape[1]-1, interval))
+
+    new_grid_X = id_grid_X + dvf[id_grid_Y, id_grid_X, 1]
+    new_grid_Y = id_grid_Y + dvf[id_grid_Y, id_grid_X, 0]
+
+    kwargs = {"linewidth": 1.5, "color": 'c'}
+    for i in range(new_grid_X.shape[0]):
+        ax.plot(new_grid_X[i,:], new_grid_Y[i,:], **kwargs)  # each draw a line
+    for i in range(new_grid_X.shape[1]):
+        ax.plot(new_grid_X[:,i], new_grid_Y[:,i], **kwargs)
+
+    ax.set_title(title, fontsize=fontsize)
+    ax.imshow(background, cmap='gray')
+    ax.axis('off')
+
+
