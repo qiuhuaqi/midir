@@ -209,7 +209,7 @@ def detJac_stack(flow_stack, rescaleFlow=True):
     mean_grad_detJ_buffer = []
     mean_negatvie_detJ_buffer = []
 
-    for slice_idx in range(flow_stack.shape[-1]):
+    for slice_idx in range(flow_stack.shape[0]):
         flow = flow_stack[slice_idx, :, :, :]
         _, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(flow, rescaleFlow=rescaleFlow)
         mean_grad_detJ_buffer += [mean_grad_detJ]
