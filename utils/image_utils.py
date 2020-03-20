@@ -110,9 +110,9 @@ class GaussianFilter():
         self.kernel = self.kernel.view(1, 1, *self.kernel.size())
         self.kernel = self.kernel.repeat(num_channel, *[1] * (self.kernel.dim() - 1))  # (Ch, 1, *[1]*input.dim())
         self.kernel = self.kernel.type_as(x)
-
+        
         with torch.no_grad():
-            output = self.conv(x, weight=self.kernel, groups=num_channel, padding=self.kernel_size // 2)
+            output = self.conv(x, weight=self.kernel, groups=num_channel, padding=int(self.kernel_size // 2))
         return output.numpy()
 
 

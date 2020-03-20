@@ -14,8 +14,8 @@ def rect_window_numpy(x):
     Returns:
         x: window function response of the input array
     """
-    x1mask = np.logical_and((x > -0.5), (x < 0.5))
-    x0mask = np.logical_or((x <= -0.5), (x >= 0.5))
+    x1mask = np.logical_and((x >= -0.5), (x < 0.5))
+    x0mask = np.logical_or((x < -0.5), (x >= 0.5))
 
     x[x1mask] = 1
     x[x0mask] = 0
@@ -45,6 +45,7 @@ def cubic_bspline_numpy(x):
     """
     Cubic B-spline function in piece-wise polynomial
     which operates on input array element-wisely inplace.
+    Centred at 0.
 
     Args:
         x:

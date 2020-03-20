@@ -229,11 +229,12 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
 
     Returns:
         dvf: (ndarray of shape HxWx2) dense DVF, numpy array coordinate system
+            this DVF is in number of pixels (not normalised)
 
     """
 
     # read a target image to get the affine transformation
-    # this is to ensure the mirtk transform-image apply the DOF under the same transformation
+    # this is to ensure the mirtk transform-image apply the DOF in the correct target space
     nim = nib.load(target_img)
 
     # generate the meshgrids

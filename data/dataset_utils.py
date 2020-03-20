@@ -68,11 +68,19 @@ class Normalise(object):
         if self.mode == 'fixed':
             self.norm_ratio = (max_out - min_out) * (max_in - min_in)
 
-    def __call__(self, image):
+    def __call__(self, image, thres=(.05, 99.95)):
+
+        # intensity clipping
+        clip_min, clip_max = np.percentile(image, thres)
+        image_clipped = image.copy()
+        image_clipped[image < clip_min] = clip_min
+        image_clipped[image > clip_max] = clip_max
+        image = image_clipped  # re-assign reference
+
         if self.mode == 'minmax':  # determine the input min-max from input
             min_in = image.min()
             max_in = image.max()
-            image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in)
+            image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in + 1e-5)
 
         elif self.mode == 'fixed':  # use a fixed ratio
             image_norm = image * self.norm_ratio

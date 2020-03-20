@@ -174,7 +174,7 @@ class Brats2D(ptdata.Dataset):
                  sigma=8,
                  cps=10,
                  disp_range=(0, 3),
-                 crop_size=240
+                 crop_size=192
                  ):
         super().__init__()
 
@@ -182,13 +182,13 @@ class Brats2D(ptdata.Dataset):
         self.run = run
         if self.run == "train":
             self.data_path = data_path + "/train"
+        elif self.run == "generate":
+            self.data_path = data_path
         elif self.run == "val" or self.run == "test":
             self.data_path = data_path + \
                              f"/{run}_crop{crop_size}_sigma{sigma}_cps{cps}_dispRange{disp_range[0]}-{disp_range[1]}_sliceRange{slice_range[0]}-{slice_range[1]}"
-        elif self.run == "generate":
-            self.data_path = data_path
         else:
-            raise ValueError("Dataset run is not specified.")
+            raise ValueError("Dataset run state not specified.")
         assert path.exists(self.data_path), f"Data path does not exist: \n{self.data_path}"
 
         self.subject_list = sorted(os.listdir(self.data_path))
@@ -197,18 +197,14 @@ class Brats2D(ptdata.Dataset):
         self.sigma = sigma
         self.cps = cps
         self.disp_range = disp_range
-
-        # transforms
         self.slice_range = slice_range
+
+        # cropper
         self.cropper = CenterCrop(crop_size)
 
-        self.normaliser = Normalise(mode='minmax')
-
-        # [Issue2-fixe2-test_run43, run44] 2nd normaliser
-        print("Issue2-fixe2-test_run43 - Dataset - 2nd normaliser meanstd mode")
-        self.normaliser2 = Normalise(mode='meanstd')
-
-        # self.brain_size_threshold = brain_size_threshold
+        # intensity normalisation
+        self.normaliser_minmax = Normalise(mode='minmax')
+        self.normaliser_meanstd = Normalise(mode='meanstd')
 
     def __getitem__(self, index):
         # load the original data
@@ -218,97 +214,87 @@ class Brats2D(ptdata.Dataset):
         t2_path = path.join(self.data_path, subject, f"{subject}_t2.nii.gz")
         brain_mask_path = path.join(self.data_path, subject, f"{subject}_brainmask.nii.gz")
 
-        # load in T1 T2 image and brain mask, tranpose to (NxHxW)
-        t1 = nib.load(t1_path).get_data().transpose(2, 0, 1).astype("float")
-        t2 = nib.load(t2_path).get_data().transpose(2, 0, 1).astype("float")
+        # load in T1 &/ T2 image and brain mask, transpose to (NxHxW)
+        ## mono-modal or multi-modal
+        target_original = nib.load(t1_path).get_data().transpose(2, 0, 1).astype("float")
+        source = nib.load(t2_path).get_data().transpose(2, 0, 1).astype("float")
         brain_mask = nib.load(brain_mask_path).get_data().transpose(2, 0, 1).astype("float")
 
-        # defining target_original and source:
-        # (note DVF points from deformed T1 to original T1/T2, i.e. it's the ground truth if the registration warps T2)
-        # registration deforms T2 to T1-deform so the synthesised DVF is the ground truth
-        target_original = t1
-        source = t2
-
-        # todo: sanity check for mask with ROI too small
-        # if (mask > 0).sum() < size_threshold ** (mask.ndim - 1):
-        #     return None
-
-        if self.run == "train" or self.run == "generate":
-
-            if self.run == "generate":
-                # take a range of middle slices
-                target_original = target_original[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
-                source = source[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
-                brain_mask = brain_mask[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
-
-            elif self.run == "train":
-                # taking a random slice each time
-                z = random.randint(self.slice_range[0], self.slice_range[1])
-                target_original = target_original[np.newaxis, z, ...]  # (1xHxW)
-                source = source[np.newaxis, z, ...]  # (1xHxW)
-                brain_mask = brain_mask[np.newaxis, z, ...]  #
-                assert target_original.shape[0] == 1, "Dataset training: more than 1 slice taken from one subject"
+        """Different processing for train/generate/eval"""
+        if self.run == "train":
+            """Training data: random one slice in range, crop, normalise"""
+            # taking a random slice each time
+            z = random.randint(self.slice_range[0], self.slice_range[1])
+            target_original = target_original[np.newaxis, z, ...]  # (1xHxW)
+            source = source[np.newaxis, z, ...]  # (1xHxW)
+            brain_mask = brain_mask[np.newaxis, z, ...]  #(1xHxW)
+            assert target_original.shape[0] == 1, "Dataset training: more than 1 slice taken from one subject"
 
             # generate synthesised DVF and deformed T1 image
-            # dvf size: (Nx2xHxW), not normalised to Pytorch coordinate so in number of pixels
+            # dvf size: (Nx2xHxW), in number of pixels
             target, dvf, mask_bbox_mask = synthesis_elastic_deformation(target_original,
                                                                         brain_mask,
                                                                         sigma=self.sigma,
                                                                         cps=self.cps,
                                                                         disp_range=self.disp_range
                                                                         )
-
-            """
-            Apply some transforms if it's loading training
-            Standard process done in here since DVF dimension is special and don't need normalisation
-            - cropping images and DVF
-            - intensity normalisation of images to [0, 1]
-            """
             # cropping
-            target = self.cropper(target)
-            source = self.cropper(source)
-            target_original = self.cropper(target_original)
-            brain_mask = self.cropper(brain_mask)
+            target, source, target_original, brain_mask = map(self.cropper,
+                                                              [target, source, target_original, brain_mask])
             dvf_crop = []
             for dim in range(dvf.shape[1]):
                 dvf_crop += [self.cropper(dvf[:, dim, :, :])]  # (N, H, W)
-            dvf = np.array(dvf_crop).transpose(1, 0, 2, 3)
+            dvf = np.array(dvf_crop).transpose(1, 0, 2, 3)  # (N, 2, H, W)
 
-        else:  # val/test, read pre-saved data
+            # intensity normalisation
+            target, source, target_original = map(self.normaliser_minmax, [target, source, target_original])
+            target, source, target_original = map(self.normaliser_meanstd, [target, source, target_original])
+
+        elif self.run == "generate":
+            """Generate val/test data: all slices in range, crop, no normalisation"""
+            # take a range of slices
+            target_original = target_original[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+            source = source[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+            brain_mask = brain_mask[self.slice_range[0]: self.slice_range[1], ...]  # (num_slices xHxW)
+
+            # generate synthesised DVF and deformed T1 image
+            # dvf size: (Nx2xHxW), in number of pixels
+            target, dvf, mask_bbox_mask = synthesis_elastic_deformation(target_original,
+                                                                        brain_mask,
+                                                                        sigma=self.sigma,
+                                                                        cps=self.cps,
+                                                                        disp_range=self.disp_range
+                                                                        )
+            # cropping
+            target, source, target_original, brain_mask = map(self.cropper,
+                                                              [target, source, target_original, brain_mask])
+            dvf_crop = []
+            for dim in range(dvf.shape[1]):
+                dvf_crop += [self.cropper(dvf[:, dim, :, :])]  # (N, H, W)
+            dvf = np.array(dvf_crop).transpose(1, 0, 2, 3)  # (N, 2, H, W)
+
+        elif self.run == "val" or self.run == "test":
+            """Validation/testing: load in saved data and deformation"""
             t1_deformed_path = path.join(self.data_path, subject, f"{subject}_t1_deformed.nii.gz")
             t1_deformed = nib.load(t1_deformed_path).get_data().transpose(2, 0, 1)  # (N, H, W)
             target = t1_deformed
 
-            # read T1 deformed and DVF for val/test
             dvf_path = glob(path.join(self.data_path, subject, "*dvf*.nii.gz"))[0]
             dvf = nib.load(dvf_path).get_data().transpose(2, 3, 0, 1)  # (N, 2, H, W)
-            assert dvf.shape[1] == 2, "Loaded DVF shape is wrong."
+            assert dvf.shape[1] == 2, "Loaded DVF shape dim 1 is not 2."
+        else:
+            raise ValueError("Dataset run state not specified.")
 
-        # intensity normalisation
-        target = self.normaliser(target)
-        source = self.normaliser(source)
-        target_original = self.normaliser(target_original)
-
-        # [Issue2-fixe2-test_run43, run44]
-        # normalise all image to 0 mean 1 std
-        target = self.normaliser2(target)
-        source = self.normaliser2(source)
-        target_original = self.normaliser2(target_original)
-        ##
-
-        # to tensor
-        # (all cast to Float32 since Numpy "float" is Float64 (Double))
-        # N=1 for traininig, N=number_slices for val/test
-        target = torch.from_numpy(target).float()  # (NxHxW)
-        source = torch.from_numpy(source).float()  # (NxHxW)
-        target_original = torch.from_numpy(target_original).float()  # (NxHxW)
-        brain_mask = torch.from_numpy(brain_mask).float()  # (NxHxW)
-        dvf = torch.from_numpy(dvf).float()  # (Nx2xHxW)
+        # all cast to float32 Tensor
+        # Shape (N, x, H, W), N=1 for traininig, N=number_slices for val/test
+        target, source, target_original, brain_mask, dvf = map(lambda x: torch.from_numpy(x).float(),
+                                                               [target, source, target_original, brain_mask, dvf])
 
         return target, source, target_original, brain_mask, dvf
 
     def __len__(self):
         return len(self.subject_list)
+
 
 
 class IXI2D(ptdata.Dataset):

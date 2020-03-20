@@ -9,14 +9,16 @@ import pandas as pd
 import torch
 
 from data.datasets import Data
-from model.networks import BaseNet, SiameseFCN
+from model.models import RegDVF
 from model.submodules import spatial_transform
 from model.losses import loss_fn
-from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, rmse, aee
+from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, rmse, rmse_dvf, aee
 from utils import xutils
 
 from utils.image_utils import bbox_from_mask
 from utils.xutils import save_val_visual_results
+
+from data.dataset_utils import Normalise
 
 
 # def evaluate_cardiac(model, loss_fn, data, params, args, epoch=0, val=False):
@@ -251,29 +253,43 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
     val_loss_buffer = []
 
     AEE_buffer = []
+    RMSE_dvf_buffer = []
     RMSE_buffer = []
 
     mean_mag_grad_detJ_buffer = []
     negative_detJ_buffer = []
 
-
     with tqdm(total=len(data.val_dataloader)) as t:
         # iterate over validation subjects
         for idx, data_point in enumerate(data.val_dataloader):
 
-            target, source, target_original, brain_mask, dvf_gt = data_point
-            target = target.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW), slices in a brain as one batch
-            source = source.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW)
+            target, source, target_original, brain_mask, dvf_gt = data_point  # (1, N, (2,) H, W)
+            # input data now is completely not normalised
+
+            # [run49] fix: val data is not normalised, normalising only for network inference
+            # (this is very not efficient)
+            normaliser_minmax = Normalise(mode="minmax")
+            normaliser_meanstd = Normalise(mode="meanstd")  # these only work on Numpy array and will make a deep copy
+            target_input = normaliser_minmax(target[0, :, :, :].numpy())  # input shape to normaliser is (N, H, W)
+            source_input = normaliser_minmax(source[0, :, :, :].numpy())
+            target_input = torch.from_numpy(target_input).unsqueeze(1)  # recover the shape (N, 1, H, W)
+            source_input = torch.from_numpy(source_input).unsqueeze(1)
+            target_input = target_input.to(device=args.device)  # (Nx1xHxW)
+            source_input = source_input.to(device=args.device)  # (Nx1xHxW)
+            ##
 
             with torch.no_grad():
                 # compute DVF and warped source image towards target
-                dvf, warped_source = model(target, source)
-                val_loss, _ = loss_fn(dvf, target, warped_source, params)
+                dvf, warped_source = model(target_input, source_input)
+                val_loss, _ = loss_fn(dvf, target_input, warped_source, params)
                 val_loss_buffer += [val_loss]
 
                 # warp original target image using the same dvf
                 target_original = target_original.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW)
                 warped_target_original = spatial_transform(target_original, dvf)
+
+                # reverse-normalise DVF to number of pixels
+                dvf *= params.crop_size / 2
 
                 # todo: warping labels for dice
 
@@ -282,26 +298,33 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
             Calculating metrics
             (metrics calculation works with shape image: NxHxW, DVF: NxHxWx2)
             """
+            ## AEE
+            # to numpy tensor
+            dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+            dvf_gt = dvf_gt.numpy().squeeze().transpose(0, 2, 3, 1)  # (N, H, W, 2)
+
+            ## experimental: mask both prediction and ground truth with brain mask
+            brain_mask = brain_mask.cpu().numpy()[0,...]  # (N, H, W)
+            dvf_brainmasked = dvf * brain_mask[..., np.newaxis]  # (N, H, W, 2) * (N, H, W, 1)
+            dvf_gt_brain_masked = dvf_gt * brain_mask[..., np.newaxis]
+            ##
 
             # find brian mask bbox mask
             mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask)
 
-            ## AEE
-            # to numpy tensor
-            dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
-            dvf *= params.crop_size / 2
-            dvf_gt = dvf_gt.numpy().squeeze().transpose(0, 2, 3, 1)  # (N, H, W, 2)
             # mask DVF with mask bbox (actually slicing)
-            dvf_masked = dvf[:,
+            dvf_brainmasked_bbox_cropped = dvf_brainmasked[:,
                          mask_bbox[0][0]:mask_bbox[0][1],
                          mask_bbox[1][0]:mask_bbox[1][1],
                          :]  # (N, H', W', 2)
-            dvf_gt_masked = dvf_gt[:,
+            dvf_gt_brain_masked_bbox_cropped = dvf_gt_brain_masked[:,
                             mask_bbox[0][0]:mask_bbox[0][1],
                             mask_bbox[1][0]:mask_bbox[1][1],
                             :]  # (N, H', W', 2)
-            AEE = aee(dvf_masked, dvf_gt_masked)
+            AEE = aee(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
             AEE_buffer += [AEE]
+            RMSE_dvf = rmse_dvf(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
+            RMSE_dvf_buffer += [RMSE_dvf]
 
             ## RMSE(image)
             #   between the target (T1-moved by ground truth DVF) and the warped_target_original (T1-moved by predicted DVF)
@@ -309,6 +332,12 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
             target = target.cpu().numpy().squeeze()  # (N, H, W)
             warped_target_original = warped_target_original.cpu().numpy().squeeze()  # (N, H, W)
 
+            # [run49 fix] minmax normalise to [0,1] for metric evaluation (to be comparable Qin Chen's numbers)
+            target = normaliser_minmax(target)  # T1 warped by ground truth DVF
+            warped_target_original = normaliser_minmax(warped_target_original)  # T1 warped warped by predicted DVF
+            ##
+
+            # measure only the brain bounding box area to avoid background errors
             target_masked = target[:,
                             mask_bbox[0][0]:mask_bbox[0][1],
                             mask_bbox[1][0]:mask_bbox[1][1],
@@ -323,7 +352,7 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
             # todo: dice metrics
 
             # determinant of Jacobian
-            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_masked)
+            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_brainmasked_bbox_cropped, rescaleFlow=False)
             mean_mag_grad_detJ_buffer += [mean_grad_detJ]
             negative_detJ_buffer += [mean_negative_detJ]
             """"""
@@ -334,13 +363,12 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
     results = {}
 
     # RMSE (dvf) and RMSE (image)
-    rmse_criteria = ["AEE", "RMSE"]
+    rmse_criteria = ["AEE", "RMSE_dvf", "RMSE"]
     for cr in rmse_criteria:
         result_name = cr
         the_buffer = locals()[f'{result_name}_buffer']
         results[f'{result_name}_mean'] = np.mean(the_buffer)
         results[f'{result_name}_std'] = np.std(the_buffer)
-
 
     # regularity
     reg_criteria = ['mean_mag_grad_detJ', 'negative_detJ']
@@ -352,8 +380,6 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
 
     # sanity check: proportion of negative Jacobian points should be lower than 1
     assert results['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
-
-
 
     """
     Validation:
@@ -380,7 +406,6 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
                                      f"val_results_best.json")
             xutils.save_dict_to_json(results, save_path)
 
-
         # save validation visual results
         # (outputs of the last iteration should still be in scope)
         val_results_dir = args.model_dir + "/val_visual_results"
@@ -390,6 +415,11 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
         target_original = target_original.cpu().numpy().squeeze()  # (N, H, W)
         source = source.cpu().numpy().squeeze()  # (N, H, W)
         warped_source = warped_source.cpu().numpy().squeeze()  # (N, H, W)
+
+        # normalise for correct visualisation
+        target_original = normaliser_minmax(target_original)
+        source = normaliser_minmax(source)
+        warped_source = normaliser_minmax(warped_source)
 
         save_val_visual_results(target, target_original, source, warped_source, warped_target_original,
                                 dvf, dvf_gt,
@@ -404,16 +434,19 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
                                  "test_results.json".format(args.restore_file, args.three_slices))
         xutils.save_dict_to_json(results, save_path)
 
+
         # save evaluated metrics for individual test subjects in pandas dataframe for boxplots
-        subj_id_buffer = data.val_dataloader.dataset.dir_list  # this list should be in the same order as subjects are evaluated
+        subj_id_buffer = data.val_dataloader.dataset.subject_list  # this list should be in the same order as subjects are evaluated
         df_buffer = []
         column_method = ['DL'] * len(subj_id_buffer)
 
         # save RMSE and AEE
         rmse_data = {'Method': column_method,
                      'ID': subj_id_buffer,
-                     'RMSE': RMSE_buffer,
-                     'AEE': AEE_buffer}
+                     'AEE': AEE_buffer,
+                     'RMSE_dvf': RMSE_dvf_buffer,
+                     'RMSE': RMSE_buffer
+                     }
         rmse_df = pd.DataFrame(data=rmse_data)
         rmse_df.to_pickle(f"{args.model_dir}/DL_test_subjects_rmse.pkl")
 
@@ -424,7 +457,6 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
                     'NegDetJac': negative_detJ_buffer}
         jac_df = pd.DataFrame(data=jac_data)
         jac_df.to_pickle(f"{args.model_dir}/DL_test_subjects_jacDet.pkl")
-
 
         # todo: option to save all outputs to be analysed later
 
@@ -480,24 +512,23 @@ if __name__ == '__main__':
     params = xutils.Params(json_path)
 
     # set up data
-    logging.info("Eval data path: {}".format(params.eval_data_path))
+    """Data"""
+    logging.info("Setting up data loaders...")
     data = Data(args, params)
-    data.use_ukbb_cardiac()
+    data.use_brain()
+    logging.info("- Done.")
+    """"""
 
-    # instantiate model and move to device
-    if params.network == "BaseNet":
-        model = BaseNet()
-    elif params.network == "SiameseFCN":
-        model = SiameseFCN()
-    else:
-        raise ValueError("Unknown network!")
+    """Model & Optimiser"""
+    model = RegDVF(params.network, transform_model=params.transform_model)
     model = model.to(device=args.device)
 
     # reload network parameters from saved model file
-    logging.info("Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
+    logging.info(
+        "Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
     xutils.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
     evaluate_brain(model, loss_fn, data, params, args, val=False)
-    logging.info("Evaluation complete. Model path {}".format(args.model_path))
+    logging.info("Evaluation complete. Model path {}".format(args.model_dir))

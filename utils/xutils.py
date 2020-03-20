@@ -306,9 +306,9 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
     ax.set_title('Target (T1-syn)', fontsize=title_font_size, pad=title_pad)
 
     ax = plt.subplot(2, 4, 2)
-    plt.imshow(source, cmap='gray')
+    plt.imshow(target_original, cmap='gray')
     plt.axis('off')
-    ax.set_title('Source (T2)', fontsize=title_font_size, pad=title_pad)
+    ax.set_title('Target original (T1)', fontsize=title_font_size, pad=title_pad)
 
     # calculate the error before and after reg
     error_before = target - target_original
@@ -431,3 +431,4 @@ def save_val_visual_results(target, target_original, source, warped_source, warp
     plot_results_t1t2(target_fr, target_original_fr, source_fr, warped_source_fr, warped_target_original_fr,
                       dvf_fr, dvf_gt_fr,
                       save_path=fig_save_path, dpi=dpi)
+
