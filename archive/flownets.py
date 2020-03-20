@@ -1,12 +1,11 @@
 """FlowNet networks"""
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn import init
 
-from model.correlation_package.correlation import Correlation
+from archive.correlation_package import Correlation
 # todo: add these back!
-from model.submodules import conv, deconv, predict_flow, spatial_transform
+from model.submodules import conv, deconv, predict_flow
 
 
 # --- FlowNetC --- #
