@@ -144,15 +144,9 @@ def categorical_dice_volume(mask1, mask2, label_class=0):
     return dice
 
 
-def rmse(output, truth):
-    """
-    Root Mean Squre Error between two numpy arrays of shape (H, W, N)
-    Averaged over N
-    """
-    return np.mean(np.sqrt((np.mean((output - truth) ** 2, axis=(0, 1)))))
 
 
-def computeJacobianDeterminant2D(flow, rescaleFlow=True, save_path=None):
+def computeJacobianDeterminant2D(flow, rescaleFlow=False, save_path=None):
     """
     Calculate determinant of Jacobian of the transformation
 
@@ -194,13 +188,14 @@ def computeJacobianDeterminant2D(flow, rescaleFlow=True, save_path=None):
     return jac_det, mean_grad_detJ, negative_detJ
 
 
-def detJac_stack(flow_stack, rescaleFlow=True):
+def detJac_stack(flow_stack, rescaleFlow=False):
     """
     Calculate determinant of Jacobian for a stack of 2D displacement fields.
 
     Args:
         flow_stack: (ndarray shape N, H, W, 2) 2D stack of disp/flow fields
-        rescaleFlow: rescale flow to undo coordinate to [-1,1] normalisation, default True.
+        rescaleFlow: rescale flow to reverse coordinate normalisation,
+                        i.e. if True DVF input is assumed in [-1,1] coordinate
 
     Returns:
         mean_grad_jac_det, mean_negative_detJ: averaged over slices in the stack
@@ -209,7 +204,7 @@ def detJac_stack(flow_stack, rescaleFlow=True):
     mean_grad_detJ_buffer = []
     mean_negatvie_detJ_buffer = []
 
-    for slice_idx in range(flow_stack.shape[-1]):
+    for slice_idx in range(flow_stack.shape[0]):
         flow = flow_stack[slice_idx, :, :, :]
         _, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(flow, rescaleFlow=rescaleFlow)
         mean_grad_detJ_buffer += [mean_grad_detJ]
@@ -219,3 +214,35 @@ def detJac_stack(flow_stack, rescaleFlow=True):
     negative_detJ_mean = np.mean(mean_negatvie_detJ_buffer)
 
     return mean_grad_detJ_mean, negative_detJ_mean
+
+""" Image intensity """
+def rmse(x, y):
+    """Standard RMSE formula, square root over mean
+    (https://wikimedia.org/api/rest_v1/media/math/render/svg/6d689379d70cd119e3a9ed3c8ae306cafa5d516d)
+    """
+    return np.sqrt(((x - y) ** 2).mean())
+
+def rmseN(output, truth):
+    """
+    Root Mean Squre Error between two numpy arrays of shape (H, W, N)
+    Mean over N
+    """
+    return np.mean(np.sqrt((np.mean((output - truth) ** 2, axis=(0, 1)))))
+
+
+""" DVF """
+def aee(x, y):
+    """
+    Average End point error (mean over point-wise L2 norm) input shape: (..., 2)
+    """
+    return np.sqrt( ((x - y)**2 ).sum(axis=-1) ).mean()
+
+
+def rmse_dvf(x, y):
+    """
+    RMSE of DVF using standard RMSE formula, square root over mean of square sum of dx
+    input shape: (..., 2)
+    """
+    return np.sqrt( ((x-y)**2).sum(axis=-1).mean() )
+
+

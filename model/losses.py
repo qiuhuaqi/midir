@@ -31,6 +31,42 @@ def diffusion_loss(dvf):
     dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
     return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
 
+
+def bending_energy_loss(dvf):
+    """
+    Bending Energy regularisation (Rueckert et al., 1999)
+
+    Args:
+        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field
+
+    Returns:
+        BE: (Scalar)
+    """
+
+    # 1st order derivatives
+    # boundary handling with padding to ensure all points are regularised
+    dvf_padx = F.pad(dvf, (0, 0, 1, 0))  # pad H by 1 before, (N, 2, H+1, W)
+    dvf_pady = F.pad(dvf, (1, 0, 0, 0))  # pad W by 1 before, (N, 2, H, W+1)
+
+    dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
+    dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
+
+
+    # 2nd order derivatives
+    dvf_dx_padx = F.pad(dvf_dx, (0, 0, 1, 0))  # (N, 2, H+1, W)
+    dvf_dx_pady = F.pad(dvf_dx, (1, 0, 0, 0))  # (N, 2, H, W+1)
+    dvf_dy_padx = F.pad(dvf_dy, (0, 0, 1, 0))  # (N, 2, H+1, W)
+    dvf_dy_pady = F.pad(dvf_dy, (1, 0, 0, 0))  # (N, 2, H, W+1)
+
+    dvf_dxdx = dvf_dx_padx[:, :, 1:, :] - dvf_dx_padx[:, :, :-1, :]  # (N, 2, H, W)
+    dvf_dxdy = dvf_dx_pady[:, :, :, 1:] - dvf_dx_pady[:, :, :, :-1]  # (N, 2, H, W)
+    dvf_dydx = dvf_dy_padx[:, :, 1:, :] - dvf_dy_padx[:, :, :-1, :]  # (N, 2, H, W)
+    dvf_dydy = dvf_dy_pady[:, :, :, 1:] - dvf_dy_pady[:, :, :, :-1]  # (N, 2, H, W)
+
+    # print(dvf_dxdx.size(), dvf_dxdy.size(), dvf_dydx.size(), dvf_dydy.size())
+    return (dvf_dxdx.pow(2).sum(dim=1) + dvf_dxdy.pow(2).sum(dim=1) + dvf_dydx.pow(2).sum(dim=1) + dvf_dydy.pow(2).sum(dim=1)).mean()
+
+
 def huber_loss_spatial(dvf):
     """
     Calculate approximated spatial Huber loss
@@ -139,7 +175,6 @@ class NMILoss(nn.Module):
                 source):
 
         """pre-processing"""
-        # todo: this normalisation is optional
         # normalise intensity range of both images to [0, 1] and cast to float 32
         target = normalise_torch(target.float(), self.target_min, self.target_max)
         source = normalise_torch(source.float(), self.source_min, self.source_max)
@@ -200,7 +235,8 @@ sim_losses = {"MSE": nn.MSELoss(),
               "NMI": NMILoss()}
 reg_losses = {"huber_spt": huber_loss_spatial,
               "huber_temp": huber_loss_temporal,
-              "diffusion": diffusion_loss}
+              "diffusion": diffusion_loss,
+              "be": bending_energy_loss}
 
 
 def loss_fn(dvf, target, warped_source, params):

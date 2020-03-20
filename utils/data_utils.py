@@ -1,4 +1,4 @@
-"""Utility functions for general data processing"""
+"""Nifiti image file utils"""
 import numpy as np
 import nibabel as nib
 import os

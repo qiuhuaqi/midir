@@ -45,7 +45,7 @@ if __name__ == '__main__':
     #     assert t1_subj == t2_subj
 
     with tqdm(total=len(t1_list)) as t:
-        for t1 in t1_list:
+        for t1 in sorted(t1_list):
             subject_path_prefix = "-".join(t1.split("-")[:-1])  # $PATH_TO_DATA/$subject_prefix
             subject_prefix = subject_path_prefix.split("/")[-1]
 
@@ -103,25 +103,35 @@ if __name__ == '__main__':
             """run segmentation"""
             if args.process_first:
                 t1_brain_resampled_label_path = subject_output_dir + "/T1-brain-resampled_subcor_label.nii.gz"
-                assert path.exists( t1_brain_resampled_path), \
+                assert path.exists(t1_brain_resampled_path), \
                     "T1 brain resampled does not exist, check brain extraction?"
 
+                # skip the subject is segmentation already exists
+                if path.exists(subject_output_dir + "/T1-brain-resampled_subcor_label_all_fast_firstseg.nii.gz"):
+                    continue
+
+                bad_datapoint = ["IXI028-Guys-1038"]
+                if subject_prefix in bad_datapoint:
+                    print(f"WARNING: skipping subject {subject_prefix}")
+                    continue
+
+                # run segmentation using FSL FIRST
                 cmd_segment_t1_resampled = f"run_first_all -b -m auto " \
                                            f"-i {t1_brain_resampled_path} -o {t1_brain_resampled_label_path} "
                 subprocess.run(cmd_segment_t1_resampled, check=True, shell=True)
 
-                # clean up the additional FSL FIRST output
-                subject_first_output_dir = subject_output_dir + "/first_output"
-                if not path.exists(subject_first_output_dir):
-                    os.makedirs(subject_first_output_dir)
-                first_output_list = glob(subject_output_dir + "/*.vtk") \
-                                    + glob(subject_output_dir + "/*bvars") \
-                                    + glob(subject_output_dir + "/*.logs") \
-                                    + glob(subject_output_dir + "/*.com*") \
-                                    + glob(subject_output_dir + "/*firstseg.nii.gz") \
-                                    + glob(subject_output_dir + "/*_std_sub*")
-                for x in first_output_list:
-                    os.system(f"mv {x} {subject_output_dir}")
+                # # clean up the additional FSL FIRST output
+                # subject_first_output_dir = subject_output_dir + "/first_output"
+                # if not path.exists(subject_first_output_dir):
+                #     os.makedirs(subject_first_output_dir)
+                # first_output_list = glob(subject_output_dir + "/*.vtk") \
+                #                     + glob(subject_output_dir + "/*bvars") \
+                #                     + glob(subject_output_dir + "/*.logs") \
+                #                     + glob(subject_output_dir + "/*.com*") \
+                #                     + glob(subject_output_dir + "/*firstseg.nii.gz") \
+                #                     + glob(subject_output_dir + "/*_std_sub*")
+                # for x in first_output_list:
+                #     os.system(f"mv {x} {subject_output_dir}")
 
             t.update()
 

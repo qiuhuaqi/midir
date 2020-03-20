@@ -13,6 +13,9 @@ import numpy as np
 
 from utils import dvf_utils
 from utils.metrics import computeJacobianDeterminant2D
+from utils.dvf_utils import show_warped_grid
+
+import random
 
 class Params():
     """Class that loads hyperparameters from a json file.
@@ -157,8 +160,8 @@ def save_dict_to_json(d, json_path):
 
 
 def plot_results(target, source, warped_source, dvf, save_path=None, title_font_size=20, show_fig=False, dpi=100):
-    """Plot all motion related results in a single figure,
-    here we assume dvf is normalised to [-1, 1] coordinate"""
+    """Plot all motion related results in a single figure
+    dvf is expected to be in number of pixels"""
 
     # convert flow into HSV flow with white background
     hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
@@ -212,8 +215,8 @@ def plot_results(target, source, warped_source, dvf, save_path=None, title_font_
     interval = 3  # interval between points on the grid
     background = source
     quiver_flow = np.zeros_like(dvf)
-    quiver_flow[:, :, 0] = dvf[:, :, 0] * dvf.shape[0] / 2
-    quiver_flow[:, :, 1] = dvf[:, :, 1] * dvf.shape[1] / 2
+    quiver_flow[:, :, 0] = dvf[:, :, 0]
+    quiver_flow[:, :, 1] = dvf[:, :, 1]
     mesh_x, mesh_y = np.meshgrid(range(0, dvf.shape[1] - 1, interval),
                                  range(0, dvf.shape[0] - 1, interval))
     plt.imshow(background[:, :], cmap='gray')
@@ -284,4 +287,148 @@ def save_train_result(target, source, warped_source, dvf, save_result_dir, epoch
         os.remove(fig_save_path)
     imageio.mimwrite(os.path.join(save_result_dir, f'epoch_{epoch}.gif'), png_buffer, fps=fps)
 
+
+def plot_results_t1t2(target, target_original, source, warped_source, warped_target_original, dvf, dvf_gt,
+                      save_path=None, title_font_size=20, show_fig=False, dpi=100):
+    """Plot all motion related results in a single figure
+    dvf is expected to be in number of pixels"""
+
+    # convert flow into HSV flow with white background
+    hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+
+    ## set up the figure
+    fig = plt.figure(figsize=(30, 18))
+    title_pad = 10
+
+    ax = plt.subplot(2, 4, 1)
+    plt.imshow(target, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Target (T1-syn)', fontsize=title_font_size, pad=title_pad)
+
+    ax = plt.subplot(2, 4, 2)
+    plt.imshow(target_original, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Target original (T1)', fontsize=title_font_size, pad=title_pad)
+
+    # calculate the error before and after reg
+    error_before = target - target_original
+    error_after = target - warped_target_original
+
+    # error before
+    ax = plt.subplot(2, 4, 3)
+    # plt.imshow(error_before, vmin=-255, vmax=255, cmap='gray')
+    plt.imshow(error_before, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Error before', fontsize=title_font_size, pad=title_pad)
+
+    # error after
+    ax = plt.subplot(2, 4, 4)
+    # plt.imshow(error_after, vmin=-255, vmax=255, cmap='gray')
+    plt.imshow(error_after, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Error after', fontsize=title_font_size, pad=title_pad)
+
+    ax = plt.subplot(2, 4, 5)
+    plt.imshow(warped_target_original, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Target predict', fontsize=title_font_size, pad=title_pad)
+
+    ax = plt.subplot(2, 4, 6)
+    plt.imshow(warped_source, cmap='gray')
+    plt.axis('off')
+    ax.set_title('Warped source', fontsize=title_font_size, pad=title_pad)
+
+    # deformed grid ground truth
+    ax = plt.subplot(2, 4, 7)
+    bg_img = np.zeros_like(target)
+    show_warped_grid(ax, dvf_gt, bg_img, interval=3, title="$\phi_{GT}$", fontsize=title_font_size)
+
+    ax = plt.subplot(2, 4, 8)
+    show_warped_grid(ax, dvf, bg_img, interval=3, title="$\phi_{pred}$", fontsize=title_font_size)
+
+    # # hsv flow
+    # ax = plt.subplot(2, 4, 7)
+    # plt.imshow(hsv_flow)
+    # plt.axis('off')
+    # ax.set_title('HSV', fontsize=title_font_size, pad=title_pad)
+
+    # # quiver, or "Displacement Vector Field" (DVF)
+    # ax = plt.subplot(2, 4, 6)
+    # interval = 3  # interval between points on the grid
+    # background = source
+    # quiver_flow = np.zeros_like(dvf)
+    # quiver_flow[:, :, 0] = dvf[:, :, 0]
+    # quiver_flow[:, :, 1] = dvf[:, :, 1]
+    # mesh_x, mesh_y = np.meshgrid(range(0, dvf.shape[1] - 1, interval),
+    #                              range(0, dvf.shape[0] - 1, interval))
+    # plt.imshow(background[:, :], cmap='gray')
+    # plt.quiver(mesh_x, mesh_y,
+    #            quiver_flow[mesh_y, mesh_x, 1], quiver_flow[mesh_y, mesh_x, 0],
+    #            angles='xy', scale_units='xy', scale=1, color='g')
+    # plt.axis('off')
+    # ax.set_title('DVF', fontsize=title_font_size, pad=title_pad)
+
+    # # det Jac
+    # ax = plt.subplot(2, 4, 8)
+    # jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
+    # spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
+    #         (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
+    #         (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
+    #         (1, (0.94509803921568625, 0.41176470588235292, 0.07450980392156863))]
+    # cmap = matplotlib.colors.LinearSegmentedColormap.from_list('detjac', spec)
+    # plt.imshow(jac_det, vmin=-1, vmax=7, cmap=cmap)
+    # plt.axis('off')
+    # ax.set_title('Jacobian (Grad: {0:.2f}, Neg: {1:.2f}%)'.format(mean_grad_detJ, negative_detJ * 100),
+    #              fontsize=int(title_font_size*0.9), pad=title_pad)
+    # # split and extend this axe for the colorbar
+    # from mpl_toolkits.axes_grid1 import make_axes_locatable
+    # divider = make_axes_locatable(ax)
+    # cax1 = divider.append_axes("right", size="5%", pad=0.05)
+    # cb = plt.colorbar(cax=cax1)
+    # cb.ax.tick_params(labelsize=20)
+
+    # adjust subplot placements and spacing
+    plt.subplots_adjust(left=0.0001, right=0.99, top=0.9, bottom=0.1, wspace=0.001, hspace=0.1)
+
+    # saving
+    if save_path is not None:
+        fig.savefig(save_path, bbox_inches='tight', dpi=dpi)
+
+    if show_fig:
+        plt.show()
+    plt.close()
+
+
+
+def save_val_visual_results(target, target_original, source, warped_source, warped_target_original,
+                            dvf, dvf_gt,
+                            save_result_dir, epoch, dpi=50):
+    """
+    Randomly save 1 slice from N-slice stack (not a sequence)
+    Args:
+        target: (N, H, W)
+        source: (N, H, W)
+        warped_source: (N, H, W)
+        dvf: (N, H, W, 2)
+        save_result_dir:
+        epoch:
+        dpi: image resolution
+
+    Returns:
+
+    """
+    z = random.randint(0, target.shape[0]-1)
+    dvf_fr = dvf[z, :, :, :]  # (H, W, 2)
+    dvf_gt_fr = dvf_gt[z, :, :, :]
+
+    target_fr = target[z, :, :]  # (H, W)
+    source_fr = source[z, :, :]  # (H, W)
+    warped_source_fr = warped_source[z, :, :]  # (H, W)
+    target_original_fr = target_original[z, :, :]
+    warped_target_original_fr = warped_target_original[z, :, :]
+
+    fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_slice_{z}.png')
+    plot_results_t1t2(target_fr, target_original_fr, source_fr, warped_source_fr, warped_target_original_fr,
+                      dvf_fr, dvf_gt_fr,
+                      save_path=fig_save_path, dpi=dpi)
 

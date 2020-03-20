@@ -83,7 +83,7 @@ def spatial_transform(source, dvf, mode="bilinear"):
 
     Args:
         source: source image, Tensor of shape (N, Ch, H, W)
-        dvf: (Tensor, Nx2xHxW) displacement vector field from target to source, in number of pixels
+        dvf: (Tensor, Nx2xHxW) displacement vector field from target to source, in [-1,1] coordinate
         interp: method of interpolation
 
     Returns:
@@ -105,9 +105,10 @@ def spatial_transform(source, dvf, mode="bilinear"):
 
     # using x-y (column_num, row_num) order
     deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
-    deformed_image = F.grid_sample(source, deformed_grid,
+    deformed_image = F.grid_sample(source.type_as(deformed_grid), deformed_grid,
                                    mode=mode,
                                    padding_mode="border",
                                    align_corners=True)
 
     return deformed_image
+

@@ -51,7 +51,7 @@ def nmi_from_joint_entropy_pytorch(joint_hist, eps=1e-12):
     nmi = torch.mean((entropy_ref + entropy_tar) / entropy_joint)
     return nmi
 
-from model.mutual_info.histogram import JointHistParzenTorch
+from archive.mutual_info.histogram import JointHistParzenTorch
 def nmi_loss(x, y):
     joint_hist_fn = JointHistParzenTorch().to(device=x.device)
     joint_hist = joint_hist_fn(x, y)
