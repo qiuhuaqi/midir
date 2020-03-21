@@ -14,7 +14,7 @@ from tqdm import tqdm
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--data_dir", default="/vol/biomedic2/hq615/PROJECTS/1_cardiac_motion/data/brats17/miccai2020")
+parser.add_argument("--data_dir", default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/miccai2020")
 
 parser.add_argument("-cps", default=10, type=int, help="Control point spacing of the synthesis model.")
 parser.add_argument("-sigma", default=8, type=float, help="Sigma for Gaussian filter in deformation synthesis")
@@ -44,7 +44,7 @@ crop_size = args.crop_size
 for val_test in ["val", "test"]:
     print(f"Generating: {val_test} dataset...")
 
-    data_dir = f"/vol/biomedic2/hq615/PROJECTS/1_cardiac_motion/data/brats17/miccai2020/{val_test}"
+    data_dir = f"{data_root_dir}/{val_test}"
     output_dir = data_root_dir + \
                  f"/{val_test}_crop{crop_size}_sigma{sigma}_cps{cps}_dispRange{disp_range[0]}-{disp_range[1]}_sliceRange{slice_range[0]}-{slice_range[1]}"
     if not path.exists(output_dir):
