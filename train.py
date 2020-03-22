@@ -12,9 +12,9 @@ from model.losses import loss_fn
 from eval import evaluate_brain
 from utils import xutils
 
-# set random seed so the random seeding of workers is reproducible
-import numpy as np
-np.random.seed(7)
+# set random seed for workers generating random deformation
+import random
+random.seed(12)
 
 
 def train_and_validate(model, optimizer, loss_fn, data, params):
@@ -49,8 +49,12 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
 
                 """brain data"""
                 target, source, target_original, brain_mask, dvf_gt = data_point
-                target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
-                source = source.to(device=args.device)  # (Nx1xHxW)
+                if params.modality == "multi":
+                    target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
+                    source = source.to(device=args.device)  # (Nx1xHxW)
+                elif params.modality == "mono":
+                    target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
+                    source = target_original.to(device=args.device)  # (Nx1xHxW)
                 """"""
 
                 # network inference & loss
@@ -121,11 +125,6 @@ if __name__ == '__main__':
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
 
-    # cardiac only
-    parser.add_argument('--no_three_slices',
-                        action='store_true',
-                        help="Evaluate metrics on all instead of 3 slices.")
-
     parser.add_argument('--no_cuda',
                         action='store_true')
 
@@ -159,9 +158,6 @@ if __name__ == '__main__':
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No JSON configuration file found at {}".format(json_path)
     params = xutils.Params(json_path)
-
-    # set the three slices
-    args.three_slices = not args.no_three_slices
 
     """Data"""
     logging.info("Setting up data loaders...")

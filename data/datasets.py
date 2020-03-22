@@ -18,7 +18,7 @@ Data object:
 - Standarlise data interface
 """
 
-class Data():
+class Data(object):
     def __init__(self, *args):
         self.train_dataset = None
         self.val_dataset = None
@@ -31,14 +31,20 @@ class Data():
         self.args = args[0]
         self.params = args[1]
 
+
     @staticmethod
     def _worker_init_fn(worker_id):
         """Callback function passed to DataLoader to initialise the workers"""
-        # generate a random sequence of seeds for the workers
+        # # generate a random sequence of seeds for the workers
+        # print(f"Random state before generating the random seed: {random.getstate()}")
+
         random_seed = random.randint(0, 2 ** 32 - 1)
-        ##debug
-        print(f"Random seed for worker {worker_id} is: {random_seed}")
-        ##
+
+        # ##debug
+        # print(f"Random state after generating the random seed: {random.getstate()}")
+        # print(f"Random seed for worker {worker_id} is: {random_seed}")
+        # ##
+
         np.random.seed(random_seed)
 
     def use_brain(self):
@@ -58,11 +64,12 @@ class Data():
 
         self.train_dataloader = ptdata.DataLoader(self.train_dataset,
                                                   batch_size=self.params.batch_size,
-                                                  shuffle=True,
+                                                  shuffle=False,
                                                   num_workers=self.args.num_workers,
                                                   pin_memory=self.args.cuda,
-                                                  worker_init_fn=self._worker_init_fn
+                                                  worker_init_fn=self._worker_init_fn  # random seeding
                                                   )
+
 
         # validation
         self.val_dataset = Brats2D(self.params.data_path,
@@ -80,6 +87,7 @@ class Data():
                                                 num_workers=self.args.num_workers,
                                                 pin_memory=self.args.cuda
                                                 )
+
 
         # testing
         self.test_dataset = Brats2D(self.params.data_path,
@@ -102,11 +110,26 @@ class Data():
 ########################################################
 # Datasets
 ########################################################
+
+## debug: dummy dataset
+class DummyDataset(ptdata.Dataset):
+
+    def __init__(self):
+        pass
+
+    def __getitem__(self, index):
+        # print("random state: ", random.getstate())
+        return 7
+
+    def __len__(self):
+        return 2
+
+
+
 """
 Brain Datasets
 """
 from utils.image_utils import synthesis_elastic_deformation
-
 
 class Brats2D(ptdata.Dataset):
     def __init__(self,

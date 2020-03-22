@@ -17,7 +17,7 @@ from utils.dvf_utils import show_warped_grid
 
 import random
 
-class Params():
+class Params(object):
     """Class that loads hyperparameters from a json file.
 
     Example:
@@ -27,7 +27,6 @@ class Params():
     params.learning_rate = 0.5  # change the value of learning_rate in params
     ```
     """
-
     def __init__(self, json_path):
         with open(json_path) as f:
             params = json.load(f)
