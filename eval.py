@@ -20,7 +20,7 @@ from utils.xutils import save_val_visual_results
 
 from data.dataset_utils import Normalise
 
-def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=False):
+def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False):
     """
     Evaluate the model and returns metrics as a dict and evaluation loss
 
@@ -52,20 +52,26 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
         # iterate over validation subjects
         for idx, data_point in enumerate(data.val_dataloader):
 
-            target, source, target_original, brain_mask, dvf_gt = data_point  # (1, N, (2,) H, W)
             # input data now is completely not normalised
+            target, source, target_original, brain_mask, dvf_gt = data_point  # (1, N, (2,) H, W)
 
-            # [run49] fix: val data is not normalised, normalising only for network inference
-            # (this is very not efficient)
+            if params.modality == "mono":
+                source = target_original
+
+            # intensity normalisation (val & test data are saved w/o normalisation)
+            normaliser_meanstd = Normalise(mode="meanstd")
             normaliser_minmax = Normalise(mode="minmax")
-            normaliser_meanstd = Normalise(mode="meanstd")  # these only work on Numpy array and will make a deep copy
-            target_input = normaliser_minmax(target[0, :, :, :].numpy())  # input shape to normaliser is (N, H, W)
-            source_input = normaliser_minmax(source[0, :, :, :].numpy())
-            target_input = torch.from_numpy(target_input).unsqueeze(1)  # recover the shape (N, 1, H, W)
-            source_input = torch.from_numpy(source_input).unsqueeze(1)
+            target_input = normaliser_minmax(normaliser_meanstd(target.numpy())).transpose(1, 0, 2, 3)
+            target_input = torch.from_numpy(target_input)
+            source_input = normaliser_minmax(normaliser_meanstd(source.numpy())).transpose(1, 0, 2, 3)
+            source_input = torch.from_numpy(source_input)  # (N, 1, H, W)
+            ##
+
             target_input = target_input.to(device=args.device)  # (Nx1xHxW)
             source_input = source_input.to(device=args.device)  # (Nx1xHxW)
-            ##
+
+            print(target_input.size())
+            print(source_input.size())
 
             with torch.no_grad():
                 # compute DVF and warped source image towards target
@@ -80,23 +86,19 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
                 # reverse-normalise DVF to number of pixels
                 dvf *= params.crop_size / 2
 
-                # todo: warping labels for dice
-
-
             """
             Calculating metrics
             (metrics calculation works with shape image: NxHxW, DVF: NxHxWx2)
             """
-            ## AEE
+            ## DVF error
             # to numpy tensor
             dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
             dvf_gt = dvf_gt.numpy().squeeze().transpose(0, 2, 3, 1)  # (N, H, W, 2)
 
-            ## experimental: mask both prediction and ground truth with brain mask
+            # mask both prediction and ground truth with brain mask
             brain_mask = brain_mask.cpu().numpy()[0,...]  # (N, H, W)
             dvf_brainmasked = dvf * brain_mask[..., np.newaxis]  # (N, H, W, 2) * (N, H, W, 1)
             dvf_gt_brain_masked = dvf_gt * brain_mask[..., np.newaxis]
-            ##
 
             # find brian mask bbox mask
             mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask)
@@ -110,6 +112,8 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
                             mask_bbox[0][0]:mask_bbox[0][1],
                             mask_bbox[1][0]:mask_bbox[1][1],
                             :]  # (N, H', W', 2)
+
+            # measure both Averaged End-point Error (AEE) and RMSE of DVF (in Qin et al. IPMI 2019)
             AEE = aee(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
             AEE_buffer += [AEE]
             RMSE_dvf = rmse_dvf(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
@@ -117,12 +121,11 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
 
             ## RMSE(image)
             #   between the target (T1-moved by ground truth DVF) and the warped_target_original (T1-moved by predicted DVF)
-            # to numpy tensor
-            target = target.cpu().numpy().squeeze()  # (N, H, W)
-            warped_target_original = warped_target_original.cpu().numpy().squeeze()  # (N, H, W)
-
             # [run49 fix] minmax normalise to [0,1] for metric evaluation (to be comparable Qin Chen's numbers)
+            # todo: to measure RMSE the target and the warped target original really should be normalised by the same ratio
+            target = target.cpu().numpy().squeeze()  # (N, H, W)
             target = normaliser_minmax(target)  # T1 warped by ground truth DVF
+            warped_target_original = warped_target_original.cpu().numpy().squeeze()  # (N, H, W)
             warped_target_original = normaliser_minmax(warped_target_original)  # T1 warped warped by predicted DVF
             ##
 
@@ -137,8 +140,6 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
 
             RMSE = rmse(target_masked, warped_target_original_masked)
             RMSE_buffer += [RMSE]
-
-            # todo: dice metrics
 
             # determinant of Jacobian
             mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_brainmasked_bbox_cropped, rescaleFlow=False)
@@ -201,14 +202,15 @@ def evaluate_brain(model, loss_fn, data, params, args, epoch=0, val=False, save=
         if not os.path.exists(val_results_dir):
             os.makedirs(val_results_dir)
 
+        # visualisation
         target_original = target_original.cpu().numpy().squeeze()  # (N, H, W)
-        source = source.cpu().numpy().squeeze()  # (N, H, W)
-        warped_source = warped_source.cpu().numpy().squeeze()  # (N, H, W)
+        source = source.numpy().squeeze()  # (N, H, W)
+        warped_source = warped_source.cpu().numpy().squeeze()  # (N, H, W), normalised
 
-        # normalise for correct visualisation
+        # normalise for correct visualisation of error
+        # todo: again the warped source is not normalised the same way as source target, etc. This is why the network model should only output DVF
         target_original = normaliser_minmax(target_original)
         source = normaliser_minmax(source)
-        warped_source = normaliser_minmax(warped_source)
 
         save_val_visual_results(target, target_original, source, warped_source, warped_target_original,
                                 dvf, dvf_gt,
@@ -319,5 +321,5 @@ if __name__ == '__main__':
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
-    evaluate_brain(model, loss_fn, data, params, args, val=False)
+    evaluate(model, loss_fn, data, params, args, val=False)
     logging.info("Evaluation complete. Model path {}".format(args.model_dir))

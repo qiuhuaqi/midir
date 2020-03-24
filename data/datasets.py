@@ -1,5 +1,4 @@
 """Datasets written in compliance with Pytorch DataLoader interface"""
-import datetime
 import os
 import os.path as path
 import random
@@ -10,7 +9,6 @@ import torch
 import torch.utils.data as ptdata
 
 from data.dataset_utils import CenterCrop, Normalise, ToTensor
-import torchvision.transforms as tvtransforms
 
 """
 Data object:

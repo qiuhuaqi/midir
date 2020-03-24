@@ -29,11 +29,7 @@ class BaseNet(nn.Module):
         self.conv4 = conv_block_1(1024, 64)
         self.conv5 = conv_block_1(1024, 64)
 
-        self.ffd = ffd
-        if self.ffd:
-            self.conv6 = nn.Conv2d(64 * 2, 64, 1)  # only output at control point parameters resolution
-        else:
-            self.conv6 = nn.Conv2d(64 * 5, 64, 1)
+        self.conv6 = nn.Conv2d(64 * 5, 64, 1)
         self.conv7 = conv_block_1(64, 64, 1, 1, 0)
         self.conv8 = nn.Conv2d(64, 2, 1)
 
@@ -78,17 +74,12 @@ class BaseNet(nn.Module):
         net['out4'] = self.conv4(net['concat4'])
         net['out5'] = self.conv5(net['concat5'])
 
-        if self.ffd:
-            # upsample to image size / cps x down sample for FFD
-            net['out5_up'] = F.interpolate(net['out5'], scale_factor=2, mode='bilinear', align_corners=True)
-            net['concat'] = torch.cat((net['out4'], net['out5_up']), 1)
-        else:
-            # upsample all to full resolution and concatenate for full-res DVF
-            net['out2_up'] = F.interpolate(net['out2'], scale_factor=2, mode='bilinear', align_corners=True)
-            net['out3_up'] = F.interpolate(net['out3'], scale_factor=4, mode='bilinear', align_corners=True)
-            net['out4_up'] = F.interpolate(net['out4'], scale_factor=8, mode='bilinear', align_corners=True)
-            net['out5_up'] = F.interpolate(net['out5'], scale_factor=16, mode='bilinear', align_corners=True)
-            net['concat'] = torch.cat((net['out1'], net['out2_up'], net['out3_up'], net['out4_up'], net['out5_up']), 1)
+        # upsample all to full resolution and concatenate for full-res DVF
+        net['out2_up'] = F.interpolate(net['out2'], scale_factor=2, mode='bilinear', align_corners=True)
+        net['out3_up'] = F.interpolate(net['out3'], scale_factor=4, mode='bilinear', align_corners=True)
+        net['out4_up'] = F.interpolate(net['out4'], scale_factor=8, mode='bilinear', align_corners=True)
+        net['out5_up'] = F.interpolate(net['out5'], scale_factor=16, mode='bilinear', align_corners=True)
+        net['concat'] = torch.cat((net['out1'], net['out2_up'], net['out3_up'], net['out4_up'], net['out5_up']), 1)
 
         # final convolution and output
         net['comb_1'] = self.conv6(net['concat'])

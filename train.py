@@ -9,7 +9,7 @@ import torch
 from data.datasets import Data
 from model.models import RegDVF
 from model.losses import loss_fn
-from eval import evaluate_brain
+from eval import evaluate
 from utils import xutils
 
 # set random seed for workers generating random deformation
@@ -49,12 +49,11 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
 
                 """brain data"""
                 target, source, target_original, brain_mask, dvf_gt = data_point
-                if params.modality == "multi":
-                    target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
-                    source = source.to(device=args.device)  # (Nx1xHxW)
-                elif params.modality == "mono":
-                    target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
-                    source = target_original.to(device=args.device)  # (Nx1xHxW)
+                if params.modality == "mono":
+                    source = target_original
+
+                target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
+                source = source.to(device=args.device)  # (Nx1xHxW)
                 """"""
 
                 # network inference & loss
@@ -85,7 +84,7 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics, val_loss = evaluate_brain(model, loss_fn, data, params, args, epoch=epoch, val=True)
+            val_metrics, val_loss = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
 
             if params.is_best:
                 logging.info("Best model found at epoch {} ...".format(epoch+1))
