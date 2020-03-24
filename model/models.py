@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from model.networks import BaseNet, SiameseFCN, BaseNetFFD
 from model.submodules import spatial_transform
-from model.transformations import BSplineFFDTransform, OpticalFlowTransform
+from model.transforms import BSplineFFDTransform, OpticalFlowTransform
 
 """General Spatial Transformer Network model"""
 class RegDVF(nn.Module):
@@ -27,6 +27,5 @@ class RegDVF(nn.Module):
 
     def forward(self, target, source):
         output = self.network(target, source)
-        # print(output.size())
         return self.transform_model(output, source)  # dvf, warped_source
 

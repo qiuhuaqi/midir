@@ -9,12 +9,12 @@ import torch
 from data.datasets import Data
 from model.models import RegDVF
 from model.losses import loss_fn
-from eval import evaluate_brain
+from eval import evaluate
 from utils import xutils
 
-# set random seed so the random seeding of workers is reproducible
-import numpy as np
-np.random.seed(7)
+# set random seed for workers generating random deformation
+import random
+random.seed(12)
 
 
 def train_and_validate(model, optimizer, loss_fn, data, params):
@@ -49,6 +49,9 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
 
                 """brain data"""
                 target, source, target_original, brain_mask, dvf_gt = data_point
+                if params.modality == "mono":
+                    source = target_original
+
                 target = target.to(device=args.device)  # (Nx1xHxW), N=batch_size
                 source = source.to(device=args.device)  # (Nx1xHxW)
                 """"""
@@ -81,7 +84,7 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics, val_loss = evaluate_brain(model, loss_fn, data, params, args, epoch=epoch, val=True)
+            val_metrics, val_loss = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
 
             if params.is_best:
                 logging.info("Best model found at epoch {} ...".format(epoch+1))
@@ -121,11 +124,6 @@ if __name__ == '__main__':
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
 
-    # cardiac only
-    parser.add_argument('--no_three_slices',
-                        action='store_true',
-                        help="Evaluate metrics on all instead of 3 slices.")
-
     parser.add_argument('--no_cuda',
                         action='store_true')
 
@@ -159,9 +157,6 @@ if __name__ == '__main__':
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No JSON configuration file found at {}".format(json_path)
     params = xutils.Params(json_path)
-
-    # set the three slices
-    args.three_slices = not args.no_three_slices
 
     """Data"""
     logging.info("Setting up data loaders...")
