@@ -10,7 +10,7 @@ from data.datasets import Data
 from model.models import RegDVF
 from model.losses import loss_fn
 from eval import evaluate
-from utils import xutils
+from utils import misc
 
 # set random seed for workers generating random deformation
 import random
@@ -31,11 +31,11 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
     if args.restore_file is not None:
         restore_path = os.path.join(args.model_dir, args.restore_file + '.pth.tar')
         logging.info("Restoring parameters from {}".format(restore_path))
-        xutils.load_checkpoint(restore_path, model, optimizer)
+        misc.load_checkpoint(restore_path, model, optimizer)
 
     # set up TensorboardX summary writers
-    train_summary_writer = xutils.set_summary_writer(args.model_dir, 'train')
-    val_summary_writer = xutils.set_summary_writer(args.model_dir, 'val')
+    train_summary_writer = misc.set_summary_writer(args.model_dir, 'train')
+    val_summary_writer = misc.set_summary_writer(args.model_dir, 'val')
 
     """Training loop"""
     for epoch in range(params.num_epochs):
@@ -90,11 +90,11 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
                 logging.info("Best model found at epoch {} ...".format(epoch+1))
 
             # save model checkpoint
-            xutils.save_checkpoint({'epoch': epoch + 1,
+            misc.save_checkpoint({'epoch': epoch + 1,
                                     'state_dict': model.state_dict(),
                                     'optim_dict': optimizer.state_dict()},
-                                   is_best=params.is_best,
-                                   checkpoint=args.model_dir)
+                                 is_best=params.is_best,
+                                 checkpoint=args.model_dir)
 
             # write validation metric results to Tensorboard
             for key, value in val_metrics.items():
@@ -149,14 +149,14 @@ if __name__ == '__main__':
         os.makedirs(args.model_dir)
 
     # set up the logger
-    xutils.set_logger(os.path.join(args.model_dir, 'train.log'))
+    misc.set_logger(os.path.join(args.model_dir, 'train.log'))
     logging.info("What a beautiful day to save lives!")
     logging.info("Model: {}".format(args.model_dir))
 
     # load config parameters from the JSON file
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No JSON configuration file found at {}".format(json_path)
-    params = xutils.Params(json_path)
+    params = misc.Params(json_path)
 
     """Data"""
     logging.info("Setting up data loaders...")

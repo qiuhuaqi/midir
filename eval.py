@@ -13,12 +13,12 @@ from model.models import RegDVF
 from model.submodules import spatial_transform
 from model.losses import loss_fn
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, rmse, rmse_dvf, aee
-from utils import xutils
+from utils import misc
 
-from utils.image_utils import bbox_from_mask
-from utils.xutils import save_val_visual_results
+from utils.image import bbox_from_mask
+from utils.misc import save_val_visual_results
 
-from data.dataset_utils import Normalise
+from data.utils import Normalise
 
 def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False):
     """
@@ -69,9 +69,6 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
 
             target_input = target_input.to(device=args.device)  # (Nx1xHxW)
             source_input = source_input.to(device=args.device)  # (Nx1xHxW)
-
-            print(target_input.size())
-            print(source_input.size())
 
             with torch.no_grad():
                 # compute DVF and warped source image towards target
@@ -188,13 +185,13 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
         # save the most recent results JSON
         save_path = os.path.join(args.model_dir,
                                  f"val_results_last.json")
-        xutils.save_dict_to_json(results, save_path)
+        misc.save_dict_to_json(results, save_path)
 
         # save the validation results for the best model JSON
         if params.is_best:
             save_path = os.path.join(args.model_dir,
                                      f"val_results_best.json")
-            xutils.save_dict_to_json(results, save_path)
+            misc.save_dict_to_json(results, save_path)
 
         # save validation visual results
         # (outputs of the last iteration should still be in scope)
@@ -223,7 +220,7 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
         # save the overall test results
         save_path = os.path.join(args.model_dir,
                                  "test_results.json".format(args.restore_file, args.three_slices))
-        xutils.save_dict_to_json(results, save_path)
+        misc.save_dict_to_json(results, save_path)
 
 
         # save evaluated metrics for individual test subjects in pandas dataframe for boxplots
@@ -295,12 +292,12 @@ if __name__ == '__main__':
     args.three_slices = not args.no_three_slices
 
     # set up a logger
-    xutils.set_logger(os.path.join(args.model_dir, 'eval.log'))
+    misc.set_logger(os.path.join(args.model_dir, 'eval.log'))
 
     # load parameters from model JSON file
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
-    params = xutils.Params(json_path)
+    params = misc.Params(json_path)
 
     # set up data
     """Data"""
@@ -317,7 +314,7 @@ if __name__ == '__main__':
     # reload network parameters from saved model file
     logging.info(
         "Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
-    xutils.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
+    misc.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")

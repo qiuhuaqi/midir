@@ -8,7 +8,7 @@ import nibabel as nib
 import torch
 import torch.utils.data as ptdata
 
-from data.dataset_utils import CenterCrop, Normalise, ToTensor
+from data.utils import CenterCrop, Normalise, ToTensor, synthesis_elastic_deformation
 
 """
 Data object:
@@ -127,7 +127,7 @@ class DummyDataset(ptdata.Dataset):
 """
 Brain Datasets
 """
-from utils.image_utils import synthesis_elastic_deformation
+
 
 class Brats2D(ptdata.Dataset):
     def __init__(self,

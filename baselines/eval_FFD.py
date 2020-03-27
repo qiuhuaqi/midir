@@ -7,12 +7,12 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from data.dataset_utils import Normalise
-from utils.data_utils import split_volume_idmat
+from data.utils import Normalise
+from utils.split_nifti import split_volume_idmat
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, aee, rmse, rmse_dvf
-from utils import xutils
-from utils.dvf_utils import dof_to_dvf
-from utils.image_utils import bbox_from_mask
+from utils import misc
+from utils.dvf import dof_to_dvf
+from utils.image import bbox_from_mask
 
 parser = argparse.ArgumentParser()
 ## MIRTK FFD parameters
@@ -39,7 +39,7 @@ if not os.path.exists(model_dir):
 parout = os.path.join(model_dir, "par.conf")
 
 # set up a logger
-xutils.set_logger(os.path.join(model_dir, 'ffd_eval.log'))
+misc.set_logger(os.path.join(model_dir, 'ffd_eval.log'))
 logging.info('Starting FFD evaluation...')
 
 
@@ -219,7 +219,7 @@ assert results['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding po
 
 # save
 save_path = os.path.join(model_dir, "test_results.json")
-xutils.save_dict_to_json(results, save_path)
+misc.save_dict_to_json(results, save_path)
 
 
 

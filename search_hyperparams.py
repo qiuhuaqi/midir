@@ -5,7 +5,7 @@ import os
 from subprocess import check_call
 import sys
 
-from utils import xutils
+from utils import misc
 
 
 PYTHON = sys.executable  # note: need to activate virtualenv before
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     json_path = os.path.join(args.parent_dir, 'params.json')
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
-    params = xutils.Params(json_path)
+    params = misc.Params(json_path)
 
     # Perform hypersearch of parameters
     for huber_spatial in args.huber_spatials:

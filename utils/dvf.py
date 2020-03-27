@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import os
 import nibabel as nib
 import imageio
-from utils.imageio_utils import save_gif, save_png, save_nifti
+from utils.imageio import save_gif, save_png, save_nifti
 from model.submodules import spatial_transform
 
 

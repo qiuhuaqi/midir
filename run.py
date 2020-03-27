@@ -3,7 +3,7 @@ import argparse
 import os
 from subprocess import check_call
 import sys
-from utils import xutils
+from utils import misc
 
 PYTHON = sys.executable  # note: need to activate virtualenv before
 

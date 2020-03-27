@@ -13,7 +13,7 @@ import numpy as np
 
 from model.submodules import spatial_transform
 
-from utils import image_utils
+from utils import image
 # Values for occlusion decision threshold
 ALPHA = 0.01
 BETA = 0.5

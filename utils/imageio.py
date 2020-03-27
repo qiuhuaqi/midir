@@ -7,11 +7,8 @@ import nibabel as nib
 import imageio
 import os
 import numpy as np
-from PIL import Image
 
-
-def upsample_image(image, size):
-    return np.array(Image.fromarray(image).resize((size, size)))
+from utils.image import upsample_image
 
 
 def save_nifti(ndarray, path, nim, verbose=False):

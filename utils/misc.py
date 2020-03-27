@@ -1,3 +1,4 @@
+"""Miscellaneous Utility functions such as parameter parsing, model saving/loading, visualising results"""
 import os
 import json
 import logging
@@ -11,9 +12,9 @@ import matplotlib
 import imageio
 import numpy as np
 
-from utils import dvf_utils
+from utils import dvf
 from utils.metrics import computeJacobianDeterminant2D
-from utils.dvf_utils import show_warped_grid
+from utils.dvf import show_warped_grid
 
 import random
 
@@ -163,7 +164,7 @@ def plot_results(target, source, warped_source, dvf, save_path=None, title_font_
     dvf is expected to be in number of pixels"""
 
     # convert flow into HSV flow with white background
-    hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+    hsv_flow = dvf.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))
@@ -293,7 +294,7 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
     dvf is expected to be in number of pixels"""
 
     # convert flow into HSV flow with white background
-    hsv_flow = dvf_utils.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+    hsv_flow = dvf.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))

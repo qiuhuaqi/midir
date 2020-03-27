@@ -1,65 +1,113 @@
-"""Image/Array utils"""
+"""Utility functions for data loading"""
+import math
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import math
+from torch.nn import functional as F
+
 from model.submodules import spatial_transform
+from utils.image import bbox_from_mask
 
-# -- image normalisation to 0 - 255
-def normalise_numpy(x, norm_min=0.0, norm_max=255.0):
-    return float(norm_max - norm_min) * (x - np.min(x)) / (np.max(x) - np.min(x))
-
-
-def normalise_torch(x, nmin=0.0, nmax=255.0):
-    return (nmax - nmin) * (x - x.min()) / (x.max() - x.min())
-
-
-def bbox_from_mask(mask, pad_ratio=0.2):
+"""OOP version to use with Torchvision Transforms"""
+class CenterCrop(object):
     """
-    Find a bounding box indices of a mask (with positive > 0)
-    (largest bounding box of N masks)
-    The indices follows Python indexing rule and can be directly used for slicing
-
-    Args:
-        mask: (ndarray NxHxW)
-        pad_ratio: ratio of distance between the edge of mask bounding box to image boundary to pad
-
-    Return:
-        None: if structure in mask is too small
-
-        bbox: list [[dim_i_min, dim_i_max], [dim_j_min, dim_j_max], ...] otherwise
-        bbox_mask: (ndarray NxHxW) binary mask which is 1 inside the bbox, 0 outside
-
+    Central crop numpy array
+    Input shape: (N, H, W)
+    Output shape: (N, H', W')
     """
-    mask_indices = np.nonzero(mask > 0)
-    bbox_i = (mask_indices[1].min(), mask_indices[1].max()+1)
-    bbox_j = (mask_indices[2].min(), mask_indices[2].max()+1)
-    # bbox_k = (mask_indices[3].min(), mask_indices[3].max()+1)
+    def __init__(self, output_size=192):
+        assert isinstance(output_size, (int, tuple))
+        if isinstance(output_size, int):
+            self.output_size = (output_size, output_size)
+        else:
+            assert len(output_size) == 2, "'output_size' can only be a single integer or a pair of integers"
+            self.output_size = output_size
+
+    def __call__(self, image):
+        h, w = image.shape[-2:]
+
+        # pad to output size with zeros if image is smaller than crop size
+        if h < self.output_size[0]:
+            h_before = (self.output_size[0] - h) // 2
+            h_after = self.output_size[0] - h - h_before
+            image = np.pad(image, ((0 ,0), (h_before, h_after), (0, 0)), mode='constant')
+
+        if w < self.output_size[1]:
+            w_before = (self.output_size[1] - w) // 2
+            w_after = self.output_size[1] - w - w_before
+            image = np.pad(image, ((0, 0), (0, 0), (w_before, w_after)), mode='constant')
+
+        # then continue with normal cropping
+        h, w = image.shape[-2:]  # update shape numbers after padding
+        h_start = h//2 - self.output_size[0]//2
+        w_start = w//2 - self.output_size[1]//2
+
+        h_end = h_start + self.output_size[0]
+        w_end = w_start + self.output_size[1]
+
+        cropped_image = image[..., h_start:h_end, w_start:w_end]
+
+        assert cropped_image.shape[-2:] == self.output_size
+        return cropped_image
 
 
-    # pad 20% of minimum distance to the image boundaries (10% each side)
-    if pad_ratio > 1:
-        print("Invalid padding value (>1), set to 1")
-        pad_ratio = 1
+class Normalise(object):
+    """
+    Normalise image of any shape to range
+    (image - mean) / std
+    mode:
+        'minmax': normalise the image using its min and max to range [0, 1]
+        'fixed': normalise the image by a fixed ration determined by the input arguments (preferred for image registration)
+        'meanstd': normalise to mean=0, std=1
+    """
 
-    bbox_pad_i = pad_ratio * min(bbox_i[0], mask.shape[1] - bbox_i[1])
-    bbox_pad_j = pad_ratio * min(bbox_j[0], mask.shape[2] - bbox_j[1])
-    # bbox_pad_k = 0.2 * min(bbox_k[0], image.shape[3] - bbox_k[1])
+    def __init__(self, mode='minmax',
+                 min_in=0.0, max_in=255.0,
+                 min_out=0.0, max_out=1.0):
+        self.mode = mode
+        self.min_in = min_in,
+        self.max_in = max_in
+        self.min_out = min_out
+        self.max_out = max_out
 
-    bbox_i = (bbox_i[0] - int(bbox_pad_i/2), bbox_i[1] + int(bbox_pad_i/2))
-    bbox_j = (bbox_j[0] - int(bbox_pad_j/2), bbox_j[1] + int(bbox_pad_j/2))
-    # bbox_k = (bbox_k[0] - int(bbox_pad_k/2), bbox_k[1] + int(bbox_pad_k/2))
-    bbox = [bbox_i, bbox_j]
+        if self.mode == 'fixed':
+            self.norm_ratio = (max_out - min_out) * (max_in - min_in)
 
-    # bbox mask
-    bbox_mask = np.zeros(mask.shape, dtype=np.float32)
-    bbox_mask[:, bbox_i[0]:bbox_i[1], bbox_j[0]:bbox_j[1]] = 1.0
+    def __call__(self, image, thres=(.05, 99.95)):
 
-    return bbox, bbox_mask
+        # intensity clipping
+        clip_min, clip_max = np.percentile(image, thres)
+        image_clipped = image.copy()
+        image_clipped[image < clip_min] = clip_min
+        image_clipped[image > clip_max] = clip_max
+        image = image_clipped  # re-assign reference
+
+        if self.mode == 'minmax':  # determine the input min-max from input
+            min_in = image.min()
+            max_in = image.max()
+            image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in + 1e-5)
+
+        elif self.mode == 'fixed':  # use a fixed ratio
+            image_norm = image * self.norm_ratio
+
+        elif self.mode == 'meanstd':
+            image_norm = (image - image.mean()) / image.std()
+
+        else:
+            raise ValueError("Normalisation mode not recogonised.")
+        return image_norm
+
+
+class ToTensor(object):
+    """Convert ndarrays in sample to Tensors."""
+    def __call__(self, image):
+        return torch.from_numpy(image)
 
 
 
-class GaussianFilter():
+"""Deformation synthesis using control point + Gaussian filter model"""
+class GaussianFilter(object):
     def __init__(self, sigma, kernel_size=None, dim=2):
         """
         Using class to avoid repeated computation of Gaussian kernel
@@ -110,12 +158,10 @@ class GaussianFilter():
         self.kernel = self.kernel.view(1, 1, *self.kernel.size())
         self.kernel = self.kernel.repeat(num_channel, *[1] * (self.kernel.dim() - 1))  # (Ch, 1, *[1]*input.dim())
         self.kernel = self.kernel.type_as(x)
-        
+
         with torch.no_grad():
             output = self.conv(x, weight=self.kernel, groups=num_channel, padding=int(self.kernel_size // 2))
         return output.numpy()
-
-
 
 
 def synthesis_elastic_deformation(image,

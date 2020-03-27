@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.image_utils import normalise_torch
+from utils.image import normalise_torch
 
 ##############################################################################################
 # --- Regularisation loss --- #

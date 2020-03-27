@@ -18,7 +18,7 @@ from data.dataset_transforms import CenterCrop, Normalise, ToTensor
 from data.datasets import CardiacMR_2D_Eval_UKBB, CardiacMR_2D_Inference_UKBB
 from model.submodules import spatial_transform
 from utils.metrics import contour_distances_stack
-from utils import xutils
+from utils import misc
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_dir',
@@ -202,7 +202,7 @@ def inference(model, subject_data_dir, eval_data, subject_output_dir, args, para
 
         # save the metrics to a JSON file
         metrics_save_path = os.path.join(subject_output_dir, 'metrics.json')
-        xutils.save_dict_to_json(metrics, metrics_save_path)
+        misc.save_dict_to_json(metrics, metrics_save_path)
 
         if args.nifti:
             # save wapred ES segmentations and original (but cropped) ED segmentation into niftis
@@ -235,7 +235,7 @@ if __name__ == '__main__':
     # load params from model JSON file
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
-    params = xutils.Params(json_path)
+    params = misc.Params(json_path)
 
     # set up save dir
     output_dir = os.path.join(args.model_dir, 'inference')
@@ -243,7 +243,7 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     # set up logger
-    xutils.set_logger(os.path.join(output_dir, 'inference.log'))
+    misc.set_logger(os.path.join(output_dir, 'inference.log'))
     logging.info("Inference model: {}".format(args.model_dir))
 
     # set up the model
@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
     # reload network parameters from saved model file
     logging.info("Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
-    xutils.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
+    misc.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
 
     # set up eval dataloader to evaluate motion metrics
     eval_dataset = CardiacMR_2D_Eval_UKBB(args.data_path,

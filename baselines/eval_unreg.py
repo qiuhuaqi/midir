@@ -7,9 +7,9 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from data.dataset_utils import CenterCrop
+from data.utils import CenterCrop
 from utils.metrics import categorical_dice_stack, contour_distances_stack
-from utils import xutils
+from utils import misc
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', default='data/ukbb/small_set_ukbb2964/test', help="Directory containing test data")
@@ -34,7 +34,7 @@ if not os.path.exists(output_dir):
 args.three_slices = not args.no_three_slices
 
 # set up a logger
-xutils.set_logger(os.path.join(output_dir, 'unreg_eval.log'))
+misc.set_logger(os.path.join(output_dir, 'unreg_eval.log'))
 logging.info('Starting Unreg evaluation...')
 
 # unregistered metric buffers
@@ -153,6 +153,6 @@ unreg_metrics = {'dice_lv_mean': np.mean(unreg_dice_lv_buffer), 'dice_lv_std': n
                  }
 
 unreg_save_path = '{0}/unreg_results_3slices_{1}.json'.format(output_dir, args.three_slices)
-xutils.save_dict_to_json(unreg_metrics, unreg_save_path)
+misc.save_dict_to_json(unreg_metrics, unreg_save_path)
 
 logging.info("Evaluation of unregistered images complete. Metric results saved at: \n\t{}".format(output_dir))
