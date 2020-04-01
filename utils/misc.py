@@ -12,9 +12,8 @@ import matplotlib
 import imageio
 import numpy as np
 
-from utils import dvf
 from utils.metrics import computeJacobianDeterminant2D
-from utils.dvf import show_warped_grid
+from utils.transform import show_warped_grid, flow_to_hsv
 
 import random
 
@@ -164,7 +163,7 @@ def plot_results(target, source, warped_source, dvf, save_path=None, title_font_
     dvf is expected to be in number of pixels"""
 
     # convert flow into HSV flow with white background
-    hsv_flow = dvf.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+    hsv_flow = flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))
@@ -288,13 +287,17 @@ def save_train_result(target, source, warped_source, dvf, save_result_dir, epoch
     imageio.mimwrite(os.path.join(save_result_dir, f'epoch_{epoch}.gif'), png_buffer, fps=fps)
 
 
-def plot_results_t1t2(target, target_original, source, warped_source, warped_target_original, dvf, dvf_gt,
+def plot_results_t1t2(target,
+                      target_original,
+                      source,
+                      warped_source,
+                      target_pred,
+                      dvf,
+                      dvf_gt,
                       save_path=None, title_font_size=20, show_fig=False, dpi=100):
     """Plot all motion related results in a single figure
     dvf is expected to be in number of pixels"""
 
-    # convert flow into HSV flow with white background
-    hsv_flow = dvf.flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))
@@ -312,24 +315,24 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
 
     # calculate the error before and after reg
     error_before = target - target_original
-    error_after = target - warped_target_original
+    error_after = target - target_pred
 
     # error before
     ax = plt.subplot(2, 4, 3)
-    # plt.imshow(error_before, vmin=-255, vmax=255, cmap='gray')
-    plt.imshow(error_before, cmap='gray')
+    plt.imshow(error_before, vmin=-2, vmax=2, cmap='gray')  # assuming images were normalised to [0, 1]
+    # plt.imshow(error_before, cmap='gray')
     plt.axis('off')
     ax.set_title('Error before', fontsize=title_font_size, pad=title_pad)
 
     # error after
     ax = plt.subplot(2, 4, 4)
-    # plt.imshow(error_after, vmin=-255, vmax=255, cmap='gray')
-    plt.imshow(error_after, cmap='gray')
+    plt.imshow(error_after, vmin=-2, vmax=2, cmap='gray')  # assuming images were normalised to [0, 1]
+    # plt.imshow(error_after, cmap='gray')
     plt.axis('off')
     ax.set_title('Error after', fontsize=title_font_size, pad=title_pad)
 
     ax = plt.subplot(2, 4, 5)
-    plt.imshow(warped_target_original, cmap='gray')
+    plt.imshow(target_pred, cmap='gray')
     plt.axis('off')
     ax.set_title('Target predict', fontsize=title_font_size, pad=title_pad)
 
@@ -347,12 +350,16 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
     show_warped_grid(ax, dvf, bg_img, interval=3, title="$\phi_{pred}$", fontsize=title_font_size)
 
     # # hsv flow
+    # convert flow into HSV flow with white background
+    hsv_flow = flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
+    # todo: DVF shape change to be applied
     # ax = plt.subplot(2, 4, 7)
     # plt.imshow(hsv_flow)
     # plt.axis('off')
     # ax.set_title('HSV', fontsize=title_font_size, pad=title_pad)
 
     # # quiver, or "Displacement Vector Field" (DVF)
+    # todo: DVF shape change to (2, H, W) to be applied
     # ax = plt.subplot(2, 4, 6)
     # interval = 3  # interval between points on the grid
     # background = source
@@ -370,6 +377,7 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
 
     # # det Jac
     # ax = plt.subplot(2, 4, 8)
+    # todo: DVF shape change to (2, H, W) to be applied
     # jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
     # spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
     #         (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
@@ -400,35 +408,43 @@ def plot_results_t1t2(target, target_original, source, warped_source, warped_tar
 
 
 
-def save_val_visual_results(target, target_original, source, warped_source, warped_target_original,
-                            dvf, dvf_gt,
+def save_val_visual_results(target,
+                            target_original,
+                            source,
+                            warped_source,
+                            target_pred,
+                            dvf,
+                            dvf_gt,
                             save_result_dir, epoch, dpi=50):
     """
     Randomly save 1 slice from N-slice stack (not a sequence)
     Args:
-        target: (N, H, W)
-        source: (N, H, W)
-        warped_source: (N, H, W)
-        dvf: (N, H, W, 2)
+        target: (N, 1, H, W)
+        source: (N, 1, H, W)
+        warped_source: (N, 1, H, W)
+        dvf: (N, 2, H, W)
         save_result_dir:
         epoch:
         dpi: image resolution
-
-    Returns:
-
     """
     z = random.randint(0, target.shape[0]-1)
-    dvf_fr = dvf[z, :, :, :]  # (H, W, 2)
-    dvf_gt_fr = dvf_gt[z, :, :, :]
 
-    target_fr = target[z, :, :]  # (H, W)
-    source_fr = source[z, :, :]  # (H, W)
-    warped_source_fr = warped_source[z, :, :]  # (H, W)
-    target_original_fr = target_original[z, :, :]
-    warped_target_original_fr = warped_target_original[z, :, :]
+    target = target[z, 0, ...]  # (H, W)
+    source = source[z, 0, ...]  # (H, W)
+    warped_source = warped_source[z, 0, ...]  # (H, W)
+    target_original = target_original[z, 0, ...]  # (H, W)
+    target_pred = target_pred[z, 0, ...]  # (H, W)
+
+    dvf = dvf[z, ...]  # (2, H, W)
+    dvf_gt = dvf_gt[z, ...] # (2, H, W)
 
     fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_slice_{z}.png')
-    plot_results_t1t2(target_fr, target_original_fr, source_fr, warped_source_fr, warped_target_original_fr,
-                      dvf_fr, dvf_gt_fr,
+    plot_results_t1t2(target,
+                      target_original,
+                      source,
+                      warped_source,
+                      target_pred,
+                      dvf,
+                      dvf_gt,
                       save_path=fig_save_path, dpi=dpi)
 

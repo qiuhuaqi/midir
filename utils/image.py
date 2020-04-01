@@ -1,18 +1,128 @@
 """Image/Array utils"""
 import numpy as np
 from PIL import Image
+import torch
 
 
-# -- image normalisation to 0 - 255
-def normalise_numpy(x, norm_min=0.0, norm_max=255.0):
-    return float(norm_max - norm_min) * (x - np.min(x)) / (np.max(x) - np.min(x))
+def normalise_intensity(x,
+                        mode="minmax",
+                        min_in=0.0, max_in=255.0,
+                        min_out=0.0, max_out=1.0,
+                        clip=False, clip_range_percentile=(0.05, 99.95),
+                        ):
+    """
+    Intensity normalisation (& optional percentile clipping)
+    for both Numpy Array and Pytorch Tensor of arbitrary dimensions.
+
+    The "mode" of normalisation indicates different ways to normalise the intensities, including:
+    1) "meanstd": normalise to 0 mean 1 std;
+    2) "minmax": normalise to specified (min, max) range;
+    3) "fixed": normalise with a fixed ratio
+
+    Args:
+        x: (ndarray / Tensor, shape (N, *dims))
+        mode: (str) indicate normalisation mode
+        min_in: (float) minimum value of the input (assumed value for fixed mode)
+        max_in: (float) maximum value of the input (assumed value for fixed mode)
+        min_out: (float) minimum value of the output
+        max_out: (float) maximum value of the output
+        clip: (boolean) value clipping if True
+        clip_range_percentile: (tuple of floats) percentiles (min, max) to determine the thresholds for clipping
+
+    Returns:
+        x: (same as input) in-place op on input x
+    """
+
+    # determine data dimension
+    dim = len(x.shape) - 1
+    image_axis = tuple(range(1, 1 + dim))  # (1,2) for 2D; (1,2,3) for 3D
+
+    # Numpy Array version
+    if type(x) is np.ndarray:
+
+        # Clipping
+        if clip:
+            # intensity clipping
+            clip_min, clip_max = np.percentile(x, clip_range_percentile, axis=image_axis, keepdims=True)
+            x = np.clip(x, clip_min, clip_max)
+
+        # Normalise meanstd
+        if mode is "meanstd":
+            mean = np.mean(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
+            std = np.std(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
+            x = (x - mean) / std  # axis should match & broadcast
+
+        # Normalise minmax
+        elif mode is "minmax":
+            min_in = np.amin(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
+            max_in = np.amax(x, axis=image_axis, keepdims=True)  # (N, *range(dim)))
+            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
+
+        # Fixed ratio
+        elif mode is "fixed":
+            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
+
+        else:
+            raise ValueError("Intensity normalisation mode not understood."
+                             "Expect either one of: 'meanstd', 'minmax', 'fixed'")
 
 
-def normalise_torch(x, nmin=0.0, nmax=255.0):
-    return (nmax - nmin) * (x - x.min()) / (x.max() - x.min())
+    # Pytorch Tensor version
+    elif type(x) is torch.Tensor:
+        # todo: clipping not supported at the moment (requires Pytorch version of the np.percentile()
 
-def upsample_image(image, size):
-    return np.array(Image.fromarray(image).resize((size, size)))
+        # Normalise meanstd
+        if mode is "meanstd":
+            mean = torch.mean(x, dim=image_axis, keepdim=True)  # (N, *range(dim))
+            std = torch.std(x, dim=image_axis, keepdim=True)  # (N, *range(dim))
+            x = (x - mean) / std  # axis should match & broadcast
+
+        # Normalise minmax
+        elif mode is "minmax":
+            min_in = x.flatten(start_dim=1, end_dim=-1).min(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
+            max_in = x.flatten(start_dim=1, end_dim=-1).max(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
+            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
+
+        # Fixed ratio
+        elif mode is "fixed":
+            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
+
+        else:
+            raise ValueError("Intensity normalisation mode not understood."
+                             "Expect either one of: 'meanstd', 'minmax', 'fixed'")
+
+    else:
+        raise RuntimeError("Intensity normalisation: input data type not understood. "
+                           "Expect either Numpy ndarray or Pytorch Tensor")
+    return x
+
+
+
+# todo: (for Pytorch version of the normalisation function) modify the following function from
+# ()
+# to enable the option `keep_dims` and (maybe) linear interpolation
+
+# def percentile(t: torch.tensor, q: float) -> Union[int, float]:
+#     """
+#     Return the ``q``-th percentile of the flattened input tensor's data.
+#
+#     CAUTION:
+#      * Needs PyTorch >= 1.1.0, as ``torch.kthvalue()`` is used.
+#      * Values are not interpolated, which corresponds to
+#        ``numpy.percentile(..., interpolation="nearest")``.
+#
+#     :param t: Input tensor.
+#     :param q: Percentile to compute, which must be between 0 and 100 inclusive.
+#     :return: Resulting value (scalar).
+#     """
+#     # Note that ``kthvalue()`` works one-based, i.e. the first sorted value
+#     # indeed corresponds to k=1, not k=0! Use float(q) instead of q directly,
+#     # so that ``round()`` returns an integer, even if q is a np.float32.
+#     k = 1 + round(.01 * float(q) * (t.numel() - 1))
+#     result = t.view(-1).kthvalue(k).values.item()
+#     return result
+
+
 
 def bbox_from_mask(mask, pad_ratio=0.2):
     """
@@ -21,14 +131,14 @@ def bbox_from_mask(mask, pad_ratio=0.2):
     The indices follows Python indexing rule and can be directly used for slicing
 
     Args:
-        mask: (ndarray NxHxW)
+        mask: (ndarray, shape (N, H, W))
         pad_ratio: ratio of distance between the edge of mask bounding box to image boundary to pad
 
     Return:
         None: if structure in mask is too small
 
         bbox: list [[dim_i_min, dim_i_max], [dim_j_min, dim_j_max], ...] otherwise
-        bbox_mask: (ndarray NxHxW) binary mask which is 1 inside the bbox, 0 outside
+        bbox_mask: (ndarray, shape (N, H, W)) binary mask which is 1 inside the bbox, 0 outside
 
     """
     mask_indices = np.nonzero(mask > 0)
@@ -57,4 +167,7 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 
     return bbox, bbox_mask
 
+
+def upsample_image(image, size):
+    return np.array(Image.fromarray(image).resize((size, size)))
 

@@ -215,6 +215,8 @@ def detJac_stack(flow_stack, rescaleFlow=False):
 
     return mean_grad_detJ_mean, negative_detJ_mean
 
+
+
 """ Image intensity """
 def rmse(x, y):
     """Standard RMSE formula, square root over mean
@@ -222,27 +224,29 @@ def rmse(x, y):
     """
     return np.sqrt(((x - y) ** 2).mean())
 
-def rmseN(output, truth):
-    """
-    Root Mean Squre Error between two numpy arrays of shape (H, W, N)
-    Mean over N
-    """
-    return np.mean(np.sqrt((np.mean((output - truth) ** 2, axis=(0, 1)))))
+# def rmseN(output, truth):
+#     """
+#     Root Mean Squre Error between two numpy arrays of shape (H, W, N)
+#     Mean over N
+#     """
+#     return np.mean(np.sqrt((np.mean((output - truth) ** 2, axis=(0, 1)))))
 
 
-""" DVF """
+
+""" DVF accuracy """
 def aee(x, y):
     """
-    Average End point error (mean over point-wise L2 norm) input shape: (..., 2)
+    Average End point error (mean over point-wise L2 norm)
+    Input DVF shape: (N, 2, *(dims))
     """
-    return np.sqrt( ((x - y)**2 ).sum(axis=-1) ).mean()
+    return np.sqrt( ((x - y)**2 ).sum(axis=1) ).mean()
 
 
 def rmse_dvf(x, y):
     """
     RMSE of DVF using standard RMSE formula, square root over mean of square sum of dx
-    input shape: (..., 2)
+    Input DVF shape: (N, 2, *(dims))
     """
-    return np.sqrt( ((x-y)**2).sum(axis=-1).mean() )
+    return np.sqrt( ((x-y)**2).sum(axis=1).mean() )
 
 

@@ -12,22 +12,19 @@ from data.datasets import Data
 from model.models import RegDVF
 from model.submodules import spatial_transform
 from model.losses import loss_fn
-from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, rmse, rmse_dvf, aee
+from utils.metrics import detJac_stack, rmse, rmse_dvf, aee
+from utils.image import bbox_from_mask, normalise_intensity
+from utils.misc import save_val_visual_results
 from utils import misc
 
-from utils.image import bbox_from_mask
-from utils.misc import save_val_visual_results
-
-from data.utils import Normalise
-
-def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False):
+def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=False):
     """
     Evaluate the model and returns metrics as a dict and evaluation loss
 
     Args:
         model:
         loss_fn:
-        data: (instance of Data object)
+        dataloader: validation / testing dataloader
         params:
         args:
         val: (boolean) indicates validation (True) or testing (False)
@@ -48,98 +45,100 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
     mean_mag_grad_detJ_buffer = []
     negative_detJ_buffer = []
 
-    with tqdm(total=len(data.val_dataloader)) as t:
+    with tqdm(total=len(dataloader)) as t:
         # iterate over validation subjects
-        for idx, data_point in enumerate(data.val_dataloader):
+        for idx, data_point in enumerate(dataloader):
 
             # input data now is completely not normalised
             target, source, target_original, brain_mask, dvf_gt = data_point  # (1, N, (2,) H, W)
 
+            # reshaping
+            target = target.transpose(0, 1)  # (N, 1, H, W)
+            source = source.transpose(0, 1)  # (N, 1, H, W)
+            target_original = target_original.transpose(0, 1)  # (N, 1, H, W)
+            brain_mask = brain_mask.transpose(0, 1)  # (N, 1, H, W)
+            dvf_gt = dvf_gt[0, ...]  # (N, 2, H, W)
+
+            # mono-modal case
             if params.modality == "mono":
                 source = target_original
 
-            # intensity normalisation (val & test data are saved w/o normalisation)
-            normaliser_meanstd = Normalise(mode="meanstd")
-            normaliser_minmax = Normalise(mode="minmax")
-            target_input = normaliser_minmax(normaliser_meanstd(target.numpy())).transpose(1, 0, 2, 3)
-            target_input = torch.from_numpy(target_input)
-            source_input = normaliser_minmax(normaliser_meanstd(source.numpy())).transpose(1, 0, 2, 3)
-            source_input = torch.from_numpy(source_input)  # (N, 1, H, W)
-            ##
+            # intensity normalisation (val & test data is only min-max normalised)
+            target_input = target.numpy().copy()  # because normalisation op is in-place
+            target_input = normalise_intensity(target_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
+            target_input = torch.from_numpy(target_input).to(device=args.device)  # (Nx1xHxW)
 
-            target_input = target_input.to(device=args.device)  # (Nx1xHxW)
-            source_input = source_input.to(device=args.device)  # (Nx1xHxW)
+            source_input = source.numpy().copy()
+            source_input = normalise_intensity(source_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
+            source_input = torch.from_numpy(source_input).to(device=args.device)  # (Nx1xHxW)
 
             with torch.no_grad():
                 # compute DVF and warped source image towards target
-                dvf, warped_source = model(target_input, source_input)
-                val_loss, _ = loss_fn(dvf, target_input, warped_source, params)
+                dvf, warped_source_input = model(target_input, source_input)
+                val_loss, _ = loss_fn(dvf, target_input, warped_source_input, params)
                 val_loss_buffer += [val_loss]
 
-                # warp original target image using the same dvf
-                target_original = target_original.to(device=args.device).permute(1, 0, 2, 3)  # (Nx1xHxW)
-                warped_target_original = spatial_transform(target_original, dvf)
+                # warp original target image using the predicted dvf
+                target_pred = spatial_transform(target_original.to(device=args.device), dvf).cpu()
+
+                # warp minmax normalised source image using predicted dvf for visualisation
+                warped_source = spatial_transform(source.to(device=args.device), dvf).cpu()
 
                 # reverse-normalise DVF to number of pixels
+                dvf = dvf.cpu()
                 dvf *= params.crop_size / 2
+
+            # cast images (N, 1, H, W) and dvf (N, 2, H, W) to numpy tensor
+            # for metrics and visualisation
+            target = target.numpy()
+            target_original = target_original.numpy()
+            target_pred = target_pred.numpy()
+            source = source.numpy()
+            warped_source = warped_source.numpy()
+            brain_mask = brain_mask.numpy()
+
+            dvf = dvf.numpy()
+            dvf_gt = dvf_gt.numpy()
 
             """
             Calculating metrics
-            (metrics calculation works with shape image: NxHxW, DVF: NxHxWx2)
             """
-            ## DVF error
-            # to numpy tensor
-            dvf = dvf.data.cpu().numpy().transpose(0, 2, 3, 1)  # (N, H, W, 2)
-            dvf_gt = dvf_gt.numpy().squeeze().transpose(0, 2, 3, 1)  # (N, H, W, 2)
-
+            ## DVF accuracy vs. ground truth
             # mask both prediction and ground truth with brain mask
-            brain_mask = brain_mask.cpu().numpy()[0,...]  # (N, H, W)
-            dvf_brainmasked = dvf * brain_mask[..., np.newaxis]  # (N, H, W, 2) * (N, H, W, 1)
-            dvf_gt_brain_masked = dvf_gt * brain_mask[..., np.newaxis]
+            dvf_brain_masked = dvf * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
+            dvf_gt_brain_masked = dvf_gt * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
 
             # find brian mask bbox mask
-            mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask)
+            mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask[:, 0, ...])
 
-            # mask DVF with mask bbox (actually slicing)
-            dvf_brainmasked_bbox_cropped = dvf_brainmasked[:,
-                         mask_bbox[0][0]:mask_bbox[0][1],
-                         mask_bbox[1][0]:mask_bbox[1][1],
-                         :]  # (N, H', W', 2)
-            dvf_gt_brain_masked_bbox_cropped = dvf_gt_brain_masked[:,
-                            mask_bbox[0][0]:mask_bbox[0][1],
-                            mask_bbox[1][0]:mask_bbox[1][1],
-                            :]  # (N, H', W', 2)
+            # crop out DVF within the brain mask bbox
+            dvf_brain_bbox_cropped = dvf_brain_masked[:, :,
+                                     mask_bbox[0][0]:mask_bbox[0][1],
+                                     mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
+            dvf_gt_brain_bbox_cropped = dvf_gt_brain_masked[:, :,
+                                        mask_bbox[0][0]:mask_bbox[0][1],
+                                        mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
 
             # measure both Averaged End-point Error (AEE) and RMSE of DVF (in Qin et al. IPMI 2019)
-            AEE = aee(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
-            AEE_buffer += [AEE]
-            RMSE_dvf = rmse_dvf(dvf_brainmasked_bbox_cropped, dvf_gt_brain_masked_bbox_cropped)
-            RMSE_dvf_buffer += [RMSE_dvf]
+            AEE_buffer += [aee(dvf_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
+            RMSE_dvf_buffer += [rmse_dvf(dvf_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
 
-            ## RMSE(image)
-            #   between the target (T1-moved by ground truth DVF) and the warped_target_original (T1-moved by predicted DVF)
-            # [run49 fix] minmax normalise to [0,1] for metric evaluation (to be comparable Qin Chen's numbers)
-            # todo: to measure RMSE the target and the warped target original really should be normalised by the same ratio
-            target = target.cpu().numpy().squeeze()  # (N, H, W)
-            target = normaliser_minmax(target)  # T1 warped by ground truth DVF
-            warped_target_original = warped_target_original.cpu().numpy().squeeze()  # (N, H, W)
-            warped_target_original = normaliser_minmax(warped_target_original)  # T1 warped warped by predicted DVF
-            ##
 
-            # measure only the brain bounding box area to avoid background errors
-            target_masked = target[:,
-                            mask_bbox[0][0]:mask_bbox[0][1],
-                            mask_bbox[1][0]:mask_bbox[1][1],
-                            ]  # (N, H', W')
-            warped_target_original_masked = warped_target_original[:,
-                                            mask_bbox[0][0]:mask_bbox[0][1],
-                                            mask_bbox[1][0]:mask_bbox[1][1]]  # (N, H', W')
+            ## RMSE(image) between the target and the target_pred
+            # crop out the images within the brain mask bbox to avoid background
+            target_brain_bbox_cropped = target[:, :,
+                                        mask_bbox[0][0]:mask_bbox[0][1],
+                                        mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 1, H', W')
+            target_pred_brain_bbox_cropped = target_pred[:, :,
+                                             mask_bbox[0][0]:mask_bbox[0][1],
+                                             mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 1, H', W')
 
-            RMSE = rmse(target_masked, warped_target_original_masked)
-            RMSE_buffer += [RMSE]
+            RMSE_buffer += [rmse(target_brain_bbox_cropped, target_pred_brain_bbox_cropped)]
 
-            # determinant of Jacobian
-            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_brainmasked_bbox_cropped, rescaleFlow=False)
+
+            ## Jacobian metrics
+            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_brain_bbox_cropped.transpose(0, 2, 3, 1),
+                                                              rescaleFlow=False)
             mean_mag_grad_detJ_buffer += [mean_grad_detJ]
             negative_detJ_buffer += [mean_negative_detJ]
             """"""
@@ -169,10 +168,10 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
     assert results['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
 
     """
-    Validation:
+    Validation only:
     """
     if val:
-        # determine if this is the best model yet
+        # determine if this is the best model so far
         current_one_metric = np.mean([results['RMSE_mean'], results['AEE_mean']])  # error metrics, lower the better
         if epoch + 1 == params.val_epochs:
             # initialise for the first validation
@@ -182,39 +181,34 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
             params.is_best = True
             params.best_one_metric = current_one_metric
 
-        # save the most recent results JSON
+        ## Saving results JSON files
+        # save results of this validation
         save_path = os.path.join(args.model_dir,
                                  f"val_results_last.json")
         misc.save_dict_to_json(results, save_path)
 
-        # save the validation results for the best model JSON
+        # save the results for the best model
         if params.is_best:
             save_path = os.path.join(args.model_dir,
                                      f"val_results_best.json")
             misc.save_dict_to_json(results, save_path)
 
-        # save validation visual results
-        # (outputs of the last iteration should still be in scope)
+        ## validation visual results
         val_results_dir = args.model_dir + "/val_visual_results"
         if not os.path.exists(val_results_dir):
             os.makedirs(val_results_dir)
 
-        # visualisation
-        target_original = target_original.cpu().numpy().squeeze()  # (N, H, W)
-        source = source.numpy().squeeze()  # (N, H, W)
-        warped_source = warped_source.cpu().numpy().squeeze()  # (N, H, W), normalised
-
-        # normalise for correct visualisation of error
-        # todo: again the warped source is not normalised the same way as source target, etc. This is why the network model should only output DVF
-        target_original = normaliser_minmax(target_original)
-        source = normaliser_minmax(source)
-
-        save_val_visual_results(target, target_original, source, warped_source, warped_target_original,
-                                dvf, dvf_gt,
+        save_val_visual_results(target,
+                                target_original,
+                                source,
+                                warped_source,
+                                target_pred,
+                                dvf,
+                                dvf_gt,
                                 val_results_dir, epoch, dpi=50)
 
     """
-    Testing: 
+    Testing only: 
     """
     if not val:
         # save the overall test results
@@ -224,7 +218,7 @@ def evaluate(model, loss_fn, data, params, args, epoch=0, val=False, save=False)
 
 
         # save evaluated metrics for individual test subjects in pandas dataframe for boxplots
-        subj_id_buffer = data.val_dataloader.dataset.subject_list  # this list should be in the same order as subjects are evaluated
+        subj_id_buffer = dataloader.dataset.subject_list  # this list should be in the same order as subjects are evaluated
         df_buffer = []
         column_method = ['DL'] * len(subj_id_buffer)
 
@@ -256,6 +250,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_dir',
                         default='experiments/base_model',
                         help="Directory containing params.json")
+
     parser.add_argument('--restore_file',
                         default='best',
                         help="Prefix of the checkpoint file:"
@@ -275,6 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu',
                         default=0,
                         help='Choose the GPU to run on, pass -1 to use CPU')
+
     args = parser.parse_args()
 
     # set the GPU to use and device
@@ -318,5 +314,5 @@ if __name__ == '__main__':
 
     # run the evaluation and calculate the metrics
     logging.info("Running evaluation...")
-    evaluate(model, loss_fn, data, params, args, val=False)
+    evaluate(model, loss_fn, data.test_dataloader, params, args, val=False)
     logging.info("Evaluation complete. Model path {}".format(args.model_dir))

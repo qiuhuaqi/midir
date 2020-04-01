@@ -84,7 +84,7 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
         """Validation"""
         if (epoch + 1) % params.val_epochs == 0 or (epoch + 1) == params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
-            val_metrics, val_loss = evaluate(model, loss_fn, data, params, args, epoch=epoch, val=True)
+            val_metrics, val_loss = evaluate(model, loss_fn, data.val_dataloader, params, args, epoch=epoch, val=True)
 
             if params.is_best:
                 logging.info("Best model found at epoch {} ...".format(epoch+1))
@@ -102,7 +102,8 @@ def train_and_validate(model, optimizer, loss_fn, data, params):
                                               value,
                                               global_step=epoch * len(data.train_dataloader))
             # write validation loss to Tensorborad
-            val_summary_writer.add_scalar('val_loss', val_loss,
+            val_summary_writer.add_scalar('loss',
+                                          val_loss.data,
                                           global_step=epoch * len(data.train_dataloader))
             logging.info("Done.")
         """"""

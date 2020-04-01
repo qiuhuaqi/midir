@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.image import normalise_torch
+from utils.image import normalise_intensity
 
 ##############################################################################################
 # --- Regularisation loss --- #
@@ -114,7 +114,7 @@ def huber_loss_temporal(dvf):
 from model import window_func
 
 
-class NMILoss(nn.Module):
+class MILoss(nn.Module):
     def __init__(self,
                  target_min=0.0,
                  target_max=1.0,
@@ -175,9 +175,11 @@ class NMILoss(nn.Module):
                 source):
 
         """pre-processing"""
-        # normalise intensity range of both images to [0, 1] and cast to float 32
-        target = normalise_torch(target.float(), self.target_min, self.target_max)
-        source = normalise_torch(source.float(), self.source_min, self.source_max)
+        # normalise intensity range of both images to [0, 1] (using Pytorch version of the norm function)
+        target = normalise_intensity(target[:, 0, ...],
+                                     mode='minmax', min_out=self.target_min, max_out=self.target_max).unsqueeze(1)
+        source = normalise_intensity(source[:, 0, ...],
+                                     mode='minmax', min_out=self.source_min, max_out=self.source_max).unsqueeze(1)
 
         # flatten images to (N, 1, H*W)
         target = target.view(target.size()[0], target.size()[1], -1)
@@ -232,7 +234,7 @@ class NMILoss(nn.Module):
 Construct the loss function (similarity + regularisation)
 """
 sim_losses = {"MSE": nn.MSELoss(),
-              "NMI": NMILoss()}
+              "NMI": MILoss()}
 reg_losses = {"huber_spt": huber_loss_spatial,
               "huber_temp": huber_loss_temporal,
               "diffusion": diffusion_loss,

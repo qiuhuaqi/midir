@@ -15,6 +15,7 @@ class CenterCrop(object):
     Central crop numpy array
     Input shape: (N, H, W)
     Output shape: (N, H', W')
+    # todo: write functional API for central cropping
     """
     def __init__(self, output_size=192):
         assert isinstance(output_size, (int, tuple))
@@ -215,24 +216,23 @@ def synthesis_elastic_deformation(image,
 
     # apply Gaussian smoothing
     gaussian_filter_fn = GaussianFilter(sigma=sigma)
-    dvf = gaussian_filter_fn(dvf_sparse)
+    dvf = gaussian_filter_fn(dvf_sparse)  # (N, 2, H, W)
     assert dvf.shape == dvf_sparse.shape, "DVF shape changed after Guassian smoothing"
     """"""
 
     """Mask the DVF with ROI bounding box"""
     bbox, mask_bbox_mask = bbox_from_mask(roi_mask, pad_ratio=bbox_pad_ratio)
-    dvf *= np.expand_dims(mask_bbox_mask, 1)  # mask is expanded to (Nx1xHxW)
+    dvf *= mask_bbox_mask[:, np.newaxis, ...]  # (N, 2, H, W)
 
-    # (future work) define the active region
+    # (future work) define the active region of the control point grid
     # active_region_i = (max(0, bbox_i[0] - 4*sigma + 1), min(image_shape[1], bbox_i[1] + 4*sigma - 1))
     # active_region_k = (max(0, bbox_k[0] - 4*sigma + 1), min(image_shape[3], bbox_k[1] + 4*sigma - 1))
     """"""
+
     # deform image
     dvf = dvf * 2 / dvf.shape[-1] # normalise DVF to pytorch coordinate space
     image_deformed = spatial_transform(torch.from_numpy(image).unsqueeze(1),  # (Nx1xHxW)
-                                       torch.from_numpy(dvf))
-
-    image_deformed = image_deformed.squeeze(1).numpy()  # (NxHxW)
+                                       torch.from_numpy(dvf)).squeeze(1).numpy()  # (NxHxW)
     dvf = dvf * dvf.shape[-1] / 2  # reverse normalisation
 
     return image_deformed, dvf, mask_bbox_mask

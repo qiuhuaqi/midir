@@ -11,7 +11,7 @@ from data.utils import Normalise
 from utils.split_nifti import split_volume_idmat
 from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, aee, rmse, rmse_dvf
 from utils import misc
-from utils.dvf import dof_to_dvf
+from utils.transform import dof_to_dvf
 from utils.image import bbox_from_mask
 
 parser = argparse.ArgumentParser()
