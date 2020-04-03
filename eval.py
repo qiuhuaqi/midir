@@ -65,11 +65,11 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
 
             # intensity normalisation (val & test data is only min-max normalised)
             target_input = target.numpy().copy()  # because normalisation op is in-place
-            target_input = normalise_intensity(target_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
+            # target_input = normalise_intensity(target_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
             target_input = torch.from_numpy(target_input).to(device=args.device)  # (Nx1xHxW)
 
             source_input = source.numpy().copy()
-            source_input = normalise_intensity(source_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
+            # source_input = normalise_intensity(source_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
             source_input = torch.from_numpy(source_input).to(device=args.device)  # (Nx1xHxW)
 
             with torch.no_grad():

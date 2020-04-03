@@ -192,9 +192,9 @@ class Brats2D(ptdata.Dataset):
                 dvf_crop += [self.cropper(dvf[:, dim, :, :])]  # (N, H, W)
             dvf = np.array(dvf_crop).transpose((1, 0, 2, 3))  # (N, 2, H, W)
 
-            # intensity normalisation 2: meanstd
-            target, target_original, source = map(lambda x: normalise_intensity(x, mode="meanstd"),
-                                                  [target, target_original, source])  # (1, H, W)
+            # # intensity normalisation 2: meanstd
+            # target, target_original, source = map(lambda x: normalise_intensity(x, mode="meanstd"),
+            #                                       [target, target_original, source])  # (1, H, W)
 
 
         ## Generate val/test data: all slices in range, crop, minmax normalisation
