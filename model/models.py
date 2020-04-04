@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from model.networks import BaseNet, SiameseFCN, BaseNetFFD
 from model.submodules import spatial_transform
-from model.transforms import BSplineFFDTransform, OpticalFlowTransform
+from model.transforms import BSplineFFDTransform, DVFTransform
 
 """General Spatial Transformer Network model"""
 class RegDVF(nn.Module):
@@ -21,7 +21,7 @@ class RegDVF(nn.Module):
         if transform_model == "ffd":
             self.transform_model = BSplineFFDTransform(cps=cps)
         elif transform_model == "dvf":
-            self.transform_model = OpticalFlowTransform()
+            self.transform_model = DVFTransform()
         else:
             raise ValueError("Unknown transformation model.")
 

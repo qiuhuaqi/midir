@@ -230,9 +230,9 @@ def synthesis_elastic_deformation(image,
     """"""
 
     # deform image
-    dvf = dvf * 2 / dvf.shape[-1] # normalise DVF to pytorch coordinate space
+    dvf *= 2 / dvf.shape[-1] # normalise DVF to pytorch coordinate space
     image_deformed = spatial_transform(torch.from_numpy(image).unsqueeze(1),  # (Nx1xHxW)
                                        torch.from_numpy(dvf)).squeeze(1).numpy()  # (NxHxW)
-    dvf = dvf * dvf.shape[-1] / 2  # reverse normalisation
+    dvf *= dvf.shape[-1] / 2  # reverse normalisation
 
     return image_deformed, dvf, mask_bbox_mask

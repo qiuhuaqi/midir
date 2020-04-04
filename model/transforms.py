@@ -4,7 +4,7 @@ from model.window_func import cubic_bspline_torch
 from model.submodules import spatial_transform
 
 
-class BSplineFFDTransform():
+class BSplineFFDTransform(object):
     def __init__(self, cps=8):
         """
         (i,j) refer to points on spatially on each DVF dimensions,
@@ -64,7 +64,7 @@ class BSplineFFDTransform():
         return dvf, warped_source
 
 
-class OpticalFlowTransform():
+class DVFTransform(object):
     def __init__(self):
         pass
     def __call__(self, x, source):

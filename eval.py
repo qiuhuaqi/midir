@@ -63,7 +63,8 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             if params.modality == "mono":
                 source = target_original
 
-            # intensity normalisation (val & test data is only min-max normalised)
+            ### (deprecated)
+            # meanstd intensity normalisation (val & test data is only min-max normalised)
             target_input = target.numpy().copy()  # because normalisation op is in-place
             # target_input = normalise_intensity(target_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
             target_input = torch.from_numpy(target_input).to(device=args.device)  # (Nx1xHxW)
@@ -71,22 +72,23 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             source_input = source.numpy().copy()
             # source_input = normalise_intensity(source_input[:, 0, ...], mode="meanstd")[:, np.newaxis, ...]
             source_input = torch.from_numpy(source_input).to(device=args.device)  # (Nx1xHxW)
+            ###
 
             with torch.no_grad():
                 # compute DVF and warped source image towards target
-                dvf, warped_source_input = model(target_input, source_input)
-                val_loss, _ = loss_fn(dvf, target_input, warped_source_input, params)
+                dvf_pred, warped_source_input = model(target_input, source_input)
+                val_loss, _ = loss_fn(dvf_pred, target_input, warped_source_input, params)
                 val_loss_buffer += [val_loss]
 
                 # warp original target image using the predicted dvf
-                target_pred = spatial_transform(target_original.to(device=args.device), dvf).cpu()
+                target_pred = spatial_transform(target_original.to(device=args.device), dvf_pred).cpu()
 
                 # warp minmax normalised source image using predicted dvf for visualisation
-                warped_source = spatial_transform(source.to(device=args.device), dvf).cpu()
+                warped_source = spatial_transform(source.to(device=args.device), dvf_pred).cpu()
 
                 # reverse-normalise DVF to number of pixels
-                dvf = dvf.cpu()
-                dvf *= params.crop_size / 2
+                dvf_pred = dvf_pred.cpu()
+                dvf_pred *= params.crop_size / 2
 
             # cast images (N, 1, H, W) and dvf (N, 2, H, W) to numpy tensor
             # for metrics and visualisation
@@ -97,7 +99,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             warped_source = warped_source.numpy()
             brain_mask = brain_mask.numpy()
 
-            dvf = dvf.numpy()
+            dvf_pred = dvf_pred.numpy()
             dvf_gt = dvf_gt.numpy()
 
             """
@@ -105,14 +107,14 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             """
             ## DVF accuracy vs. ground truth
             # mask both prediction and ground truth with brain mask
-            dvf_brain_masked = dvf * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
+            dvf_pred_brain_masked = dvf_pred * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
             dvf_gt_brain_masked = dvf_gt * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
 
             # find brian mask bbox mask
             mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask[:, 0, ...])
 
             # crop out DVF within the brain mask bbox
-            dvf_brain_bbox_cropped = dvf_brain_masked[:, :,
+            dvf_pred_brain_bbox_cropped = dvf_pred_brain_masked[:, :,
                                      mask_bbox[0][0]:mask_bbox[0][1],
                                      mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
             dvf_gt_brain_bbox_cropped = dvf_gt_brain_masked[:, :,
@@ -120,8 +122,8 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
                                         mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
 
             # measure both Averaged End-point Error (AEE) and RMSE of DVF (in Qin et al. IPMI 2019)
-            AEE_buffer += [aee(dvf_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
-            RMSE_dvf_buffer += [rmse_dvf(dvf_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
+            AEE_buffer += [aee(dvf_pred_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
+            RMSE_dvf_buffer += [rmse_dvf(dvf_pred_brain_bbox_cropped, dvf_gt_brain_bbox_cropped)]
 
 
             ## RMSE(image) between the target and the target_pred
@@ -137,7 +139,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
 
 
             ## Jacobian metrics
-            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_brain_bbox_cropped.transpose(0, 2, 3, 1),
+            mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_pred_brain_bbox_cropped.transpose(0, 2, 3, 1),  # (N, H, W, 2)
                                                               rescaleFlow=False)
             mean_mag_grad_detJ_buffer += [mean_grad_detJ]
             negative_detJ_buffer += [mean_negative_detJ]
@@ -152,7 +154,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
     rmse_criteria = ["AEE", "RMSE_dvf", "RMSE"]
     for cr in rmse_criteria:
         result_name = cr
-        the_buffer = locals()[f'{result_name}_buffer']
+        the_buffer = locals()[f'{result_name}_buffer']  # get buffer object from local namespace
         results[f'{result_name}_mean'] = np.mean(the_buffer)
         results[f'{result_name}_std'] = np.std(the_buffer)
 
@@ -190,7 +192,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
         # save the results for the best model
         if params.is_best:
             save_path = os.path.join(args.model_dir,
-                                     f"val_results_best.json")
+                                     f"val_results_best_ep{epoch}.json")
             misc.save_dict_to_json(results, save_path)
 
         ## validation visual results
@@ -203,7 +205,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
                                 source,
                                 warped_source,
                                 target_pred,
-                                dvf,
+                                dvf_pred,
                                 dvf_gt,
                                 val_results_dir, epoch, dpi=50)
 

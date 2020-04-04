@@ -224,28 +224,20 @@ def rmse(x, y):
     """
     return np.sqrt(((x - y) ** 2).mean())
 
-# def rmseN(output, truth):
-#     """
-#     Root Mean Squre Error between two numpy arrays of shape (H, W, N)
-#     Mean over N
-#     """
-#     return np.mean(np.sqrt((np.mean((output - truth) ** 2, axis=(0, 1)))))
-
-
 
 """ DVF accuracy """
 def aee(x, y):
     """
     Average End point error (mean over point-wise L2 norm)
-    Input DVF shape: (N, 2, *(dims))
+    Input DVF shape: (N, dim, *(sizes))
     """
     return np.sqrt( ((x - y)**2 ).sum(axis=1) ).mean()
 
 
 def rmse_dvf(x, y):
     """
-    RMSE of DVF using standard RMSE formula, square root over mean of square sum of dx
-    Input DVF shape: (N, 2, *(dims))
+    RMSE of DVF (square root over mean of sum squared)
+    Input DVF shape: (N, dim, *(sizes))
     """
     return np.sqrt( ((x-y)**2).sum(axis=1).mean() )
 
