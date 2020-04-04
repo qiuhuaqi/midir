@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from model.networks import BaseNet, SiameseFCN, BaseNetFFD
 from model.submodules import spatial_transform
-from model.transforms import BSplineFFDTransform, DVFTransform
+from model.transformation import BSplineFFDTransform, DVFTransform
 
 """General Spatial Transformer Network model"""
 class RegDVF(nn.Module):

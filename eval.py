@@ -14,6 +14,7 @@ from model.submodules import spatial_transform
 from model.losses import loss_fn
 from utils.metrics import detJac_stack, rmse, rmse_dvf, aee
 from utils.image import bbox_from_mask, normalise_intensity
+from utils.transform import normalise_dvf, denormalise_dvf
 from utils.misc import save_val_visual_results
 from utils import misc
 
@@ -88,7 +89,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
 
                 # reverse-normalise DVF to number of pixels
                 dvf_pred = dvf_pred.cpu()
-                dvf_pred *= params.crop_size / 2
+                dvf_pred = denormalise_dvf(dvf_pred)
 
             # cast images (N, 1, H, W) and dvf (N, 2, H, W) to numpy tensor
             # for metrics and visualisation
@@ -192,7 +193,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
         # save the results for the best model
         if params.is_best:
             save_path = os.path.join(args.model_dir,
-                                     f"val_results_best_ep{epoch}.json")
+                                     f"val_results_best.json")
             misc.save_dict_to_json(results, save_path)
 
         ## validation visual results

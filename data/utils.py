@@ -4,10 +4,10 @@ import math
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.nn import functional as F
 
 from model.submodules import spatial_transform
 from utils.image import bbox_from_mask
+from utils.transform import normalise_dvf, denormalise_dvf
 
 """OOP version to use with Torchvision Transforms"""
 class CenterCrop(object):
@@ -230,9 +230,8 @@ def synthesis_elastic_deformation(image,
     """"""
 
     # deform image
-    dvf *= 2 / dvf.shape[-1] # normalise DVF to pytorch coordinate space
+    dvf = normalise_dvf(dvf)
     image_deformed = spatial_transform(torch.from_numpy(image).unsqueeze(1),  # (Nx1xHxW)
                                        torch.from_numpy(dvf)).squeeze(1).numpy()  # (NxHxW)
-    dvf *= dvf.shape[-1] / 2  # reverse normalisation
-
+    dvf = denormalise_dvf(dvf)
     return image_deformed, dvf, mask_bbox_mask

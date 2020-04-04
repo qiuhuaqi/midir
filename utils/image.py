@@ -88,12 +88,12 @@ def normalise_intensity(x,
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
 
         else:
-            raise ValueError("Intensity normalisation mode not understood."
-                             "Expect either one of: 'meanstd', 'minmax', 'fixed'")
+            raise ValueError("Intensity normalisation mode not recognised."
+                             "Expect: 'meanstd', 'minmax', 'fixed'")
 
     else:
-        raise RuntimeError("Intensity normalisation: input data type not understood. "
-                           "Expect either Numpy ndarray or Pytorch Tensor")
+        raise RuntimeError("Intensity normalisation: input data type not recognised. "
+                           "Expect: numpy.ndarray or torch.Tensor")
     return x
 
 

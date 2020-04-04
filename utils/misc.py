@@ -13,7 +13,7 @@ import imageio
 import numpy as np
 
 from utils.metrics import computeJacobianDeterminant2D
-from utils.transform import show_warped_grid, flow_to_hsv
+from utils.vis import flow_to_hsv, show_warped_grid
 
 import random
 
