@@ -125,8 +125,9 @@ if __name__ == '__main__':
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
 
-    parser.add_argument('--no_cuda',
-                        action='store_true')
+    parser.add_argument('--cpu',
+                        action='store_true',
+                        help='Use CPU if given')
 
     parser.add_argument('--gpu',
                         default=0,
@@ -140,10 +141,11 @@ if __name__ == '__main__':
 
     # set up device
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)  # select GPU
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
-    args.device = torch.device('cpu')  # CPU by default
+    args.cuda = not args.cpu and torch.cuda.is_available()
     if args.cuda:
         args.device = torch.device('cuda')
+    else:
+        args.device = torch.device('cpu')
 
     # set up model dir
     if not os.path.exists(args.model_dir):

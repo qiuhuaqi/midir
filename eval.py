@@ -91,6 +91,12 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
                 dvf_pred = dvf_pred.cpu()
                 dvf_pred = denormalise_dvf(dvf_pred)
 
+                # set predicted DVF to zeros when measuring identity transformation (Id) baseline
+                # if args.Id_baseline:
+                #     dvf_pred *= 0.
+                #     ## dev
+                #     print(dvf_pred.mean(), dvf_pred.max())
+
             # cast images (N, 1, H, W) and dvf (N, 2, H, W) to numpy tensor
             # for metrics and visualisation
             target = target.numpy()
@@ -215,8 +221,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
     """
     if not val:
         # save the overall test results
-        save_path = os.path.join(args.model_dir,
-                                 "test_results.json".format(args.restore_file, args.three_slices))
+        save_path = os.path.join(args.model_dir, "test_results.json")
         misc.save_dict_to_json(results, save_path)
 
 
@@ -254,17 +259,18 @@ if __name__ == '__main__':
                         default='experiments/base_model',
                         help="Directory containing params.json")
 
+    parser.add_argument('--Id_baseline',
+                        action='store_true',
+                        help="Test identity transformation baseline")
+
     parser.add_argument('--restore_file',
                         default='best',
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
 
-    parser.add_argument('--no_three_slices',
+    parser.add_argument('--cpu',
                         action='store_true',
-                        help="Evaluate metrics on all instead of 3 slices.")
-
-    parser.add_argument('--no_cuda',
-                        action='store_true')
+                        help='Use CPU if given')
 
     parser.add_argument('--num_workers',
                         default=8,
@@ -274,11 +280,12 @@ if __name__ == '__main__':
                         default=0,
                         help='Choose the GPU to run on, pass -1 to use CPU')
 
+
     args = parser.parse_args()
 
     # set the GPU to use and device
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.cuda = not args.cpu and torch.cuda.is_available()
     if args.cuda:
         args.device = torch.device('cuda')
     else:
@@ -287,18 +294,16 @@ if __name__ == '__main__':
     # check whether the model directory exists
     assert os.path.exists(args.model_dir), "No model dir found at {}".format(args.model_dir)
 
-    # set the three slices
-    args.three_slices = not args.no_three_slices
-
     # set up a logger
     misc.set_logger(os.path.join(args.model_dir, 'eval.log'))
+    logging.info("What a beautiful day to save lives!")
+    logging.info("Model: {}".format(args.model_dir))
 
     # load parameters from model JSON file
     json_path = os.path.join(args.model_dir, 'params.json')
     assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
     params = misc.Params(json_path)
 
-    # set up data
     """Data"""
     logging.info("Setting up data loaders...")
     data = Data(args, params)
@@ -306,16 +311,15 @@ if __name__ == '__main__':
     logging.info("- Done.")
     """"""
 
-    """Model & Optimiser"""
+    """Model and parameter loading"""
     model = RegDVF(params.network, transform_model=params.transform_model)
     model = model.to(device=args.device)
 
-    # reload network parameters from saved model file
-    logging.info(
-        "Loading model from saved file: {}".format(os.path.join(args.model_dir, args.restore_file + '.pth.tar')))
+    logging.info(f"Loading model parameters from: "
+                 f"{os.path.join(args.model_dir, args.restore_file + '.pth.tar')}")
     misc.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
 
-    # run the evaluation and calculate the metrics
+    """Run evaluation"""
     logging.info("Running evaluation...")
     evaluate(model, loss_fn, data.test_dataloader, params, args, val=False)
     logging.info("Evaluation complete. Model path {}".format(args.model_dir))

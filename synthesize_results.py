@@ -12,7 +12,7 @@ parser.add_argument('--parent_dir', default='experiments',
                     help='Directory containing results of experiments')
 parser.add_argument('--result_file', default='test_results.json',
                     help='Name of the files to search and collect result')
-parser.add_argument('--save_file', default='results.csv',
+parser.add_argument('--save_file', default='test_results.csv',
                     help='Name of the file to save the results summary to.')
 
 
