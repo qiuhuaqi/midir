@@ -24,11 +24,14 @@ def diffusion_loss(dvf):
     """
 
     # boundary handling with padding to ensure all points are regularised
-    dvf_padx = F.pad(dvf, (0, 0, 1, 0))  # pad H by 1 before, (N, 2, H+1, W)
-    dvf_pady = F.pad(dvf, (1, 0, 0, 0))  # pad W by 1 before, (N, 2, H, W+1)
+    # consideration of forward differences dx[i] = x[i+1] - x[i]
+    # Neumann boundary conditions
+    dvf_padx = F.pad(dvf, (0, 0, 0, 1), mode='replicate')  # pad H by 1 after, (N, 2, H+1, W)
+    dvf_pady = F.pad(dvf, (0, 1, 0, 0), mode='replicate')  # pad W by 1 after, (N, 2, H, W+1)
 
     dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
     dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
+
     return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
 
 
@@ -45,18 +48,22 @@ def bending_energy_loss(dvf):
 
     # 1st order derivatives
     # boundary handling with padding to ensure all points are regularised
-    dvf_padx = F.pad(dvf, (0, 0, 1, 0))  # pad H by 1 before, (N, 2, H+1, W)
-    dvf_pady = F.pad(dvf, (1, 0, 0, 0))  # pad W by 1 before, (N, 2, H, W+1)
+    # consideration of forward differences dx[i] = x[i+1] - x[i]
+    # Neumann boundary conditions
+    dvf_padx = F.pad(dvf, (0, 0, 0, 1), mode='replicate')  # pad H by 1 before, (N, 2, H+1, W)
+    dvf_pady = F.pad(dvf, (0, 1, 0, 0), mode='replicate')  # pad W by 1 before, (N, 2, H, W+1)
 
     dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
     dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
 
 
     # 2nd order derivatives
-    dvf_dx_padx = F.pad(dvf_dx, (0, 0, 1, 0))  # (N, 2, H+1, W)
-    dvf_dx_pady = F.pad(dvf_dx, (1, 0, 0, 0))  # (N, 2, H, W+1)
-    dvf_dy_padx = F.pad(dvf_dy, (0, 0, 1, 0))  # (N, 2, H+1, W)
-    dvf_dy_pady = F.pad(dvf_dy, (1, 0, 0, 0))  # (N, 2, H, W+1)
+    # consideration of backward differences dxx[i] = dx[i] - dx[i-1]
+    # Dirichlet boundary conditions
+    dvf_dx_padx = F.pad(dvf_dx, (0, 0, 1, 0), mode='replicate')  # (N, 2, H+1, W)
+    dvf_dx_pady = F.pad(dvf_dx, (1, 0, 0, 0), mode='replicate')  # (N, 2, H, W+1)
+    dvf_dy_padx = F.pad(dvf_dy, (0, 0, 1, 0), mode='replicate')  # (N, 2, H+1, W)
+    dvf_dy_pady = F.pad(dvf_dy, (1, 0, 0, 0), mode='replicate')  # (N, 2, H, W+1)
 
     dvf_dxdx = dvf_dx_padx[:, :, 1:, :] - dvf_dx_padx[:, :, :-1, :]  # (N, 2, H, W)
     dvf_dxdy = dvf_dx_pady[:, :, :, 1:] - dvf_dx_pady[:, :, :, :-1]  # (N, 2, H, W)
