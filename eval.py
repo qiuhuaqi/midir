@@ -2,10 +2,13 @@
 
 from tqdm import tqdm
 import os
+from os import path
+
 import argparse
 import logging
 import numpy as np
 import pandas as pd
+import nibabel as nib
 import torch
 
 from data.datasets import Data
@@ -45,6 +48,12 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
 
     mean_mag_grad_detJ_buffer = []
     negative_detJ_buffer = []
+
+    # set up a test result directory
+    if not val:
+        test_result_dir = path.join(args.model_dir, "test_results")
+        if not path.exists(test_result_dir):
+            os.makedirs(test_result_dir)
 
     with tqdm(total=len(dataloader)) as t:
         # iterate over validation subjects
@@ -106,19 +115,19 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             warped_source = warped_source.numpy()
             brain_mask = brain_mask.numpy()
 
-            dvf_pred = dvf_pred.numpy()
-            dvf_gt = dvf_gt.numpy()
+            dvf_pred = dvf_pred.numpy()  # (N, 2, H, W)
+            dvf_gt = dvf_gt.numpy()  # (N, 2, H, W)
 
             """
             Calculating metrics
             """
             ## DVF accuracy vs. ground truth
+            # find brian mask bbox mask
+            mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask[:, 0, ...])
+
             # mask both prediction and ground truth with brain mask
             dvf_pred_brain_masked = dvf_pred * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
             dvf_gt_brain_masked = dvf_gt * brain_mask   # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
-
-            # find brian mask bbox mask
-            mask_bbox, mask_bbox_mask = bbox_from_mask(brain_mask[:, 0, ...])
 
             # crop out DVF within the brain mask bbox
             dvf_pred_brain_bbox_cropped = dvf_pred_brain_masked[:, :,
@@ -152,36 +161,65 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
             negative_detJ_buffer += [mean_negative_detJ]
             """"""
 
+            """ Save predicted DVF and warped images """
+            if args.save:
+                test_output_dir = path.join(test_result_dir, "output")
+                if not path.exists(test_output_dir):
+                    os.makedirs(test_output_dir)
+
+                subj_id = dataloader.dataset.subject_list[idx]
+                subject_output_dir = path.join(test_output_dir, subj_id)
+                if not path.exists(subject_output_dir):
+                    os.makedirs(subject_output_dir)
+
+                nib.save(nib.Nifti1Image(target.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/target.nii.gz")
+
+                nib.save(nib.Nifti1Image(source.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/source.nii.gz")
+
+                nib.save(nib.Nifti1Image(target_original.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/target_original.nii.gz")
+
+                nib.save(nib.Nifti1Image(target_pred.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/target_pred.nii.gz")
+
+                nib.save(nib.Nifti1Image(dvf_gt.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/dvf_gt.nii.gz")
+
+                nib.save(nib.Nifti1Image(dvf_pred.transpose(2,3,0,1), np.eye(4)),
+                         f"{subject_output_dir}/dvf_pred.nii.gz")
+
             t.update()
 
     # construct metrics dict
-    results = {}
+    results_dict = {}
 
     # RMSE (dvf) and RMSE (image)
     rmse_criteria = ["AEE", "RMSE_dvf", "RMSE"]
     for cr in rmse_criteria:
         result_name = cr
         the_buffer = locals()[f'{result_name}_buffer']  # get buffer object from local namespace
-        results[f'{result_name}_mean'] = np.mean(the_buffer)
-        results[f'{result_name}_std'] = np.std(the_buffer)
+        results_dict[f'{result_name}_mean'] = np.mean(the_buffer)
+        results_dict[f'{result_name}_std'] = np.std(the_buffer)
 
     # regularity
     reg_criteria = ['mean_mag_grad_detJ', 'negative_detJ']
     for cr in reg_criteria:
         result_name = cr
         the_buffer = locals()[f'{result_name}_buffer']
-        results[f'{result_name}_mean'] = np.mean(the_buffer)
-        results[f'{result_name}_std'] = np.std(the_buffer)
+        results_dict[f'{result_name}_mean'] = np.mean(the_buffer)
+        results_dict[f'{result_name}_std'] = np.std(the_buffer)
 
     # sanity check: proportion of negative Jacobian points should be lower than 1
-    assert results['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
+    assert results_dict['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
 
     """
     Validation only:
     """
     if val:
         # determine if this is the best model so far
-        current_one_metric = np.mean([results['RMSE_mean'], results['AEE_mean']])  # error metrics, lower the better
+        current_one_metric = np.mean([results_dict['RMSE_mean'], results_dict['AEE_mean']])  # error metrics, lower the better
         if epoch + 1 == params.val_epochs:
             # initialise for the first validation
             params.is_best = False
@@ -192,19 +230,19 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
 
         ## Saving results JSON files
         # save results of this validation
-        save_path = os.path.join(args.model_dir,
+        save_path = path.join(args.model_dir,
                                  f"val_results_last.json")
-        misc.save_dict_to_json(results, save_path)
+        misc.save_dict_to_json(results_dict, save_path)
 
         # save the results for the best model
         if params.is_best:
-            save_path = os.path.join(args.model_dir,
+            save_path = path.join(args.model_dir,
                                      f"val_results_best.json")
-            misc.save_dict_to_json(results, save_path)
+            misc.save_dict_to_json(results_dict, save_path)
 
         ## validation visual results
         val_results_dir = args.model_dir + "/val_visual_results"
-        if not os.path.exists(val_results_dir):
+        if not path.exists(val_results_dir):
             os.makedirs(val_results_dir)
 
         save_val_visual_results(target,
@@ -221,9 +259,8 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
     """
     if not val:
         # save the overall test results
-        save_path = os.path.join(args.model_dir, "test_results.json")
-        misc.save_dict_to_json(results, save_path)
-
+        save_path = path.join(test_result_dir, "test_results.json")
+        misc.save_dict_to_json(results_dict, save_path)
 
         # save evaluated metrics for individual test subjects in pandas dataframe for boxplots
         subj_id_buffer = dataloader.dataset.subject_list  # this list should be in the same order as subjects are evaluated
@@ -238,7 +275,7 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
                      'RMSE': RMSE_buffer
                      }
         rmse_df = pd.DataFrame(data=rmse_data)
-        rmse_df.to_pickle(f"{args.model_dir}/DL_test_subjects_rmse.pkl")
+        rmse_df.to_pickle(f"{test_result_dir}/DL_test_subjects_rmse.pkl")
 
         # save detJac metrics
         jac_data = {'Method': column_method,
@@ -246,11 +283,11 @@ def evaluate(model, loss_fn, dataloader, params, args, epoch=0, val=False, save=
                     'GradDetJac': mean_mag_grad_detJ_buffer,
                     'NegDetJac': negative_detJ_buffer}
         jac_df = pd.DataFrame(data=jac_data)
-        jac_df.to_pickle(f"{args.model_dir}/DL_test_subjects_jacDet.pkl")
+        jac_df.to_pickle(f"{test_result_dir}/DL_test_subjects_jacDet.pkl")
 
         # todo: option to save all outputs to be analysed later
 
-    return results, torch.stack(val_loss_buffer).mean()
+    return results_dict, torch.stack(val_loss_buffer).mean()
 
 
 if __name__ == '__main__':
@@ -267,6 +304,10 @@ if __name__ == '__main__':
                         default='best',
                         help="Prefix of the checkpoint file:"
                              " 'best' for best model, or 'last' for the last saved checkpoint")
+
+    parser.add_argument('--save',
+                        action='store_true',
+                        help="Save deformed images and predicted DVF etc. if True.")
 
     parser.add_argument('--cpu',
                         action='store_true',
@@ -292,16 +333,16 @@ if __name__ == '__main__':
         args.device = torch.device('cpu')
 
     # check whether the model directory exists
-    assert os.path.exists(args.model_dir), "No model dir found at {}".format(args.model_dir)
+    assert path.exists(args.model_dir), "No model dir found at {}".format(args.model_dir)
 
     # set up a logger
-    misc.set_logger(os.path.join(args.model_dir, 'eval.log'))
+    misc.set_logger(path.join(args.model_dir, 'eval.log'))
     logging.info("What a beautiful day to save lives!")
     logging.info("Model: {}".format(args.model_dir))
 
     # load parameters from model JSON file
-    json_path = os.path.join(args.model_dir, 'params.json')
-    assert os.path.isfile(json_path), "No json configuration file found at {}".format(json_path)
+    json_path = path.join(args.model_dir, 'params.json')
+    assert path.isfile(json_path), "No json configuration file found at {}".format(json_path)
     params = misc.Params(json_path)
 
     """Data"""
@@ -316,8 +357,8 @@ if __name__ == '__main__':
     model = model.to(device=args.device)
 
     logging.info(f"Loading model parameters from: "
-                 f"{os.path.join(args.model_dir, args.restore_file + '.pth.tar')}")
-    misc.load_checkpoint(os.path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
+                 f"{path.join(args.model_dir, args.restore_file + '.pth.tar')}")
+    misc.load_checkpoint(path.join(args.model_dir, args.restore_file + '.pth.tar'), model)
 
     """Run evaluation"""
     logging.info("Running evaluation...")

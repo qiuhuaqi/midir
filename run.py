@@ -1,7 +1,7 @@
 """Run experiments"""
 import argparse
 import os
-from subprocess import check_call
+import subprocess
 import sys
 
 PYTHON = sys.executable  # note: need to activate virtualenv before
@@ -16,7 +16,7 @@ parser.add_argument('--model_dir',
                     help='Directory containing params.json')
 
 parser.add_argument('--restore_file',
-                    default=None,
+                    default='best',
                     help="Optional, name of the file in --model_dir containing weights to reload before training w/o postfix")
 
 parser.add_argument('--gpu',
@@ -47,15 +47,15 @@ if not args.local:
 
 # run command
 print(cmd)
-check_call(cmd, shell=True)
+subprocess.run(cmd, check=True, shell=True)
 
 
 # collect results if evaluating/testing
 if args.run == 'eval':
     cmd_results = f"python src/synthesize_results.py " \
-                                  f"--parent_dir {args.model_dir} " \
+                                  f"--parent_dir {args.model_dir}/test_results " \
                                   f"--result_file test_results.json " \
                                   f"--save_file test_results.csv"
     print("Collecting test results: ")
     print(cmd_results)
-    check_call(cmd_results, shell=True)
+    subprocess.run(cmd, check=True, shell=True)

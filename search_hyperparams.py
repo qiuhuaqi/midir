@@ -2,7 +2,7 @@
 
 import argparse
 import os
-from subprocess import check_call
+import subprocess
 import sys
 
 from utils import misc
@@ -63,4 +63,4 @@ for reg_weight in args.reg_weights:
         cmd += " --local"
 
     print(f"Launching job: \n\t{cmd}")
-    check_call(cmd, shell=True)
+    subprocess.run(cmd, check=True, shell=True)
