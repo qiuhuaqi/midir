@@ -5,7 +5,9 @@ from model.submodules import spatial_transform
 
 
 class BSplineFFDTransform(object):
-    def __init__(self, cps=8):
+    def __init__(self,
+                 crop_size=192,
+                 cps=8):
         """
         (i,j) refer to points on spatially on each DVF dimensions,
         where (x, y) refer to the dimensions of DVF
@@ -13,6 +15,7 @@ class BSplineFFDTransform(object):
         Args:
             cps: control point spacing
         """
+        self.crop_size = crop_size
         self.cps = cps
 
         # design the kernel
@@ -28,15 +31,17 @@ class BSplineFFDTransform(object):
         # pass through B-spline kernel
         bspline_kernel_i = cubic_bspline_torch(kernel_i / cps) * (1 / cps)
         bspline_kernel_j = cubic_bspline_torch(kernel_j / cps) * (1 / cps)
+
+        # proper scalling results in very small initial values
         # bspline_kernel_i = cubic_bspline_torch(kernel_i / cps)
-        # bspline_kernel_j = cubic_bspline_torch(kernel_j / cps)  # proper scalling results in very small initial values
+        # bspline_kernel_j = cubic_bspline_torch(kernel_j / cps)
 
         # product of filters of the 2 dimensions
         kernel = bspline_kernel_i * bspline_kernel_j
         self.kernel = kernel.unsqueeze(0).unsqueeze(0)  # (1, 1, kernel_size, kernel_size)
         self.kernel = self.kernel.repeat(2, 1, 1, 1).float()  # (2, 1, kernel_size, kernel_size)
 
-    def __call__(self, x, source):
+    def __call__(self, x):
         """
         Args:
             x: (N, 2, Kh, Kw) network output used as control point parameters
@@ -47,41 +52,21 @@ class BSplineFFDTransform(object):
             warped_source: (N, 1, H, W)
         """
         # compute DVF from B-spline control point parameters
-        self.kernel = self.kernel.to(device=source.device)
+        self.kernel = self.kernel.to(device=x.device)
         dvf = F.conv_transpose2d(x, weight=self.kernel, stride=self.cps + 1, groups=2)
 
-        ## debug: see kernel value
-        # print(self.kernel.mean(), self.kernel.max())
-
         # todo: only works with symmetrical image now
-        crop_start = dvf.size()[-1]//2 - source.size()[-1]//2
-        crop_end =  crop_start + source.shape[-1]
+        crop_start = dvf.size()[-1]//2 - self.crop_size//2
+        crop_end =  crop_start + self.crop_size
         dvf = dvf[:, :, crop_start: crop_end, crop_start:crop_end]
-        assert dvf.size()[-2:] == source.size()[-2:], "Cropped FFD-DVF has different size as the image"
-
-        # apply spatial transformation
-        warped_source = spatial_transform(source, dvf)
-        return dvf, warped_source
+        return dvf
 
 
 class DVFTransform(object):
     def __init__(self):
         pass
-    def __call__(self, x, source):
-        """
-        Optical flow transformation model
 
-        Args:
-            x: (N, 2, H, W) network output, should be full image size
-            source: (N, 1, H, W) source image
-
-        Returns:
-            dvf: (N, 2, H, W)
-            warped_source: (N, 1, H, W)
-
-        """
-        # apply spatial transformation
-        dvf = x
-        warped_source = spatial_transform(source, dvf)
-        return dvf, warped_source
+    def __call__(self, x):
+        """Optical flow transformation"""
+        return x
 

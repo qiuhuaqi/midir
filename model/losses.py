@@ -233,34 +233,36 @@ class MILoss(nn.Module):
 """
 Construct the loss function (similarity + regularisation)
 """
-sim_losses = {"MSE": nn.MSELoss(),
-              "NMI": MILoss()}
-reg_losses = {"huber_spt": huber_loss_spatial,
-              "huber_temp": huber_loss_temporal,
-              "diffusion": diffusion_loss,
-              "be": bending_energy_loss}
-
-
-def loss_fn(dvf, target, warped_source, params):
+def loss_fn(data_dict, params):
     """
     Unsupervised loss function
 
     Args:
-        target: (Tensor, shape NxchxHxW) target image
-        warped_source: (Tensor, shape NxchxHxW) registered source image
-        params: (object) model parameters
+        data_dict: (dict) dictionary containing data
+            {
+                "target": (Tensor, shape (N, ch, *dims)) target image
+                "warped_source": (Tensor, shape (N, ch, *dims)) deformed source image
+                "dvf_pred": (Tensor, shape (N, dim, *dims)) DVF predicted
+                ...
+            }
+        params: (object) parameters from params.json
 
     Returns:
         loss: (scalar) loss value
         losses: (dict) dictionary of individual losses (weighted)
     """
-
     # todo: allow extra parameters to be passed to loss functions
-    #  (e.g. NMI number of bins)
+    #  (e.g. NMI number of bins) via MILoss(*args, **kwargs)
+    sim_losses = {"MSE": nn.MSELoss(),
+                  "NMI": MILoss()}
+    reg_losses = {"huber_spt": huber_loss_spatial,
+                  "huber_temp": huber_loss_temporal,
+                  "diffusion": diffusion_loss,
+                  "be": bending_energy_loss}
 
-    sim_loss = sim_losses[params.sim_loss](target, warped_source) * params.sim_weight
-    reg_loss = reg_losses[params.reg_loss](dvf) * params.reg_weight
+    sim_loss = sim_losses[params.sim_loss](data_dict["target"], data_dict["warped_source"]) * params.sim_weight
+    reg_loss = reg_losses[params.reg_loss](data_dict["dvf_pred"]) * params.reg_weight
 
-    loss = sim_loss + reg_loss
-    losses = {params.sim_loss: sim_loss,  params.reg_loss: reg_loss}
-    return loss, losses
+    return {"loss": sim_loss + reg_loss,
+            params.sim_loss: sim_loss,
+            params.reg_loss: reg_loss}

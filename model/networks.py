@@ -9,7 +9,7 @@ class BaseNet(nn.Module):
     The Network in paper:
     C. Qin et al., “Joint learning of motion estimation and segmentation for cardiac MR image sequences,” MICCAI 2018
     """
-    def __init__(self, ffd=False):
+    def __init__(self):
         super(BaseNet, self).__init__()
         self.conv_blocks1 = conv_blocks_2(1, 64)
         self.conv_blocks2 = conv_blocks_2(64, 128, 2)

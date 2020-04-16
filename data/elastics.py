@@ -1,110 +1,11 @@
-"""Utility functions for data loading"""
 import math
-
 import numpy as np
 import torch
-import torch.nn.functional as F
+from torch.nn import functional as F
 
 from model.submodules import spatial_transform
 from utils.image import bbox_from_mask
 from utils.transform import normalise_dvf, denormalise_dvf
-
-"""OOP version to use with Torchvision Transforms"""
-class CenterCrop(object):
-    """
-    Central crop numpy array
-    Input shape: (N, H, W)
-    Output shape: (N, H', W')
-    # todo: write functional API for central cropping
-    """
-    def __init__(self, output_size=192):
-        assert isinstance(output_size, (int, tuple))
-        if isinstance(output_size, int):
-            self.output_size = (output_size, output_size)
-        else:
-            assert len(output_size) == 2, "'output_size' can only be a single integer or a pair of integers"
-            self.output_size = output_size
-
-    def __call__(self, image):
-        h, w = image.shape[-2:]
-
-        # pad to output size with zeros if image is smaller than crop size
-        if h < self.output_size[0]:
-            h_before = (self.output_size[0] - h) // 2
-            h_after = self.output_size[0] - h - h_before
-            image = np.pad(image, ((0 ,0), (h_before, h_after), (0, 0)), mode='constant')
-
-        if w < self.output_size[1]:
-            w_before = (self.output_size[1] - w) // 2
-            w_after = self.output_size[1] - w - w_before
-            image = np.pad(image, ((0, 0), (0, 0), (w_before, w_after)), mode='constant')
-
-        # then continue with normal cropping
-        h, w = image.shape[-2:]  # update shape numbers after padding
-        h_start = h//2 - self.output_size[0]//2
-        w_start = w//2 - self.output_size[1]//2
-
-        h_end = h_start + self.output_size[0]
-        w_end = w_start + self.output_size[1]
-
-        cropped_image = image[..., h_start:h_end, w_start:w_end]
-
-        assert cropped_image.shape[-2:] == self.output_size
-        return cropped_image
-
-
-class Normalise(object):
-    """
-    Normalise image of any shape to range
-    (image - mean) / std
-    mode:
-        'minmax': normalise the image using its min and max to range [0, 1]
-        'fixed': normalise the image by a fixed ration determined by the input arguments (preferred for image registration)
-        'meanstd': normalise to mean=0, std=1
-    """
-
-    def __init__(self, mode='minmax',
-                 min_in=0.0, max_in=255.0,
-                 min_out=0.0, max_out=1.0):
-        self.mode = mode
-        self.min_in = min_in,
-        self.max_in = max_in
-        self.min_out = min_out
-        self.max_out = max_out
-
-        if self.mode == 'fixed':
-            self.norm_ratio = (max_out - min_out) * (max_in - min_in)
-
-    def __call__(self, image, thres=(.05, 99.95)):
-
-        # intensity clipping
-        clip_min, clip_max = np.percentile(image, thres)
-        image_clipped = image.copy()
-        image_clipped[image < clip_min] = clip_min
-        image_clipped[image > clip_max] = clip_max
-        image = image_clipped  # re-assign reference
-
-        if self.mode == 'minmax':  # determine the input min-max from input
-            min_in = image.min()
-            max_in = image.max()
-            image_norm = (image - min_in) * (self.max_out - self.min_out) / (max_in - min_in + 1e-5)
-
-        elif self.mode == 'fixed':  # use a fixed ratio
-            image_norm = image * self.norm_ratio
-
-        elif self.mode == 'meanstd':
-            image_norm = (image - image.mean()) / image.std()
-
-        else:
-            raise ValueError("Normalisation mode not recogonised.")
-        return image_norm
-
-
-class ToTensor(object):
-    """Convert ndarrays in sample to Tensors."""
-    def __call__(self, image):
-        return torch.from_numpy(image)
-
 
 
 """Deformation synthesis using control point + Gaussian filter model"""
@@ -221,8 +122,8 @@ def synthesis_elastic_deformation(image,
     """"""
 
     """Mask the DVF with ROI bounding box"""
-    bbox, mask_bbox_mask = bbox_from_mask(roi_mask, pad_ratio=bbox_pad_ratio)
-    dvf *= mask_bbox_mask[:, np.newaxis, ...]  # (N, 2, H, W)
+    mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask, pad_ratio=bbox_pad_ratio)
+    dvf *= mask_bbox_mask[:, np.newaxis, ...]  # (N, dim, (*dims)) * (N, 1, (*dims))
 
     # (future work) define the active region of the control point grid
     # active_region_i = (max(0, bbox_i[0] - 4*sigma + 1), min(image_shape[1], bbox_i[1] + 4*sigma - 1))
@@ -234,4 +135,5 @@ def synthesis_elastic_deformation(image,
     image_deformed = spatial_transform(torch.from_numpy(image).unsqueeze(1),  # (Nx1xHxW)
                                        torch.from_numpy(dvf)).squeeze(1).numpy()  # (NxHxW)
     dvf = denormalise_dvf(dvf)
-    return image_deformed, dvf, mask_bbox_mask
+
+    return image_deformed, dvf

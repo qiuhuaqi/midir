@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(1, "./src")
 
-from data.datasets import Brats2D
+from data.datasets import Brain2dDataset
 
 import nibabel as nib
 import numpy as np
@@ -47,13 +47,13 @@ for val_test in ["val", "test"]:
         os.makedirs(output_dir)
 
     # construct the dataset
-    brats2d_dataset = Brats2D(data_dir,
-                              run="generate",
-                              slice_range=args.slice_range,
-                              sigma=args.sigma,
-                              cps=args.cps,
-                              disp_range=args.disp_range,
-                              crop_size=args.crop_size)
+    brats2d_dataset = Brain2dDataset(data_dir,
+                                     run="generate",
+                                     slice_range=args.slice_range,
+                                     sigma=args.sigma,
+                                     cps=args.cps,
+                                     disp_range=args.disp_range,
+                                     crop_size=args.crop_size)
 
     if args.debug:
         print(data_dir)

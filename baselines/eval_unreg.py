@@ -7,7 +7,7 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from data.utils import CenterCrop
+from data.transforms import CenterCrop
 from utils.metrics import categorical_dice_stack, contour_distances_stack
 from utils import misc
 

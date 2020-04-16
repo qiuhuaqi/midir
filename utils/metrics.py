@@ -1,5 +1,3 @@
-"""Metrics"""
-
 import numpy as np
 import cv2
 from scipy.spatial.distance import directed_hausdorff
@@ -7,6 +5,197 @@ import SimpleITK as sitk
 import matplotlib
 import matplotlib.pyplot as plt
 import os
+
+from utils.image import bbox_from_mask, bbox_crop
+
+
+def calculate_metrics(metric_data, metric_groups):
+    """
+    Wrapper function for calculating all metrics.
+    Args:
+        metric_data: (dict) data used for calculation of metrics
+        metric_groups: (list of strings) name of metric groups
+
+    Returns:
+        metrics_results: (dict) {metric_name: metric_value}
+    """
+    metric_results = {}
+
+    # keys must match those in metric_groups and params.metric_groups
+    metric_group_fns = {'dvf_metrics': calculate_dvf_metrics,
+                        'image_metrics': calculate_image_metrics}
+
+    for metric_group in metric_groups:
+        metric_results.update(metric_group_fns[metric_group](metric_data))
+
+    return metric_results
+
+
+"""
+Transformation metrics
+"""
+def calculate_dvf_metrics(metric_data):
+    """
+    Calculate DVF-related metrics.
+    If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
+
+    Args:
+        metric_data: (dict) dvf shape (N, dim, *dims), roi mask shape (N, 1, *(dims))
+
+    Returns:
+        metric_results: (dict)
+    """
+
+    # unpack metric data, keys must match metric_data input
+    dvf_pred = metric_data['dvf_pred']
+    dvf_gt = metric_data['dvf_gt']
+
+    if 'roi_mask' in metric_data.keys():
+        roi_mask = metric_data['roi_mask']  # (N, 1, *(dims))
+
+        # find brian mask bbox mask
+        mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
+
+        # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
+        dvf_pred *= roi_mask
+        dvf_gt *= roi_mask
+
+        # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
+        dvf_pred = bbox_crop(dvf_pred, mask_bbox)
+        dvf_gt = bbox_crop(dvf_gt, mask_bbox)
+
+    ## Jacobian metrics
+    mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_pred.transpose(0, 2, 3, 1),  # (N, H, W, 2)
+                                                      rescaleFlow=False)
+
+    # metric keys must match params specification
+    return {'aee': calculate_aee(dvf_pred, dvf_gt),
+            'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt),
+            'mean_grad_detJ': mean_grad_detJ,
+            'mean_negative_detJ': mean_negative_detJ}
+
+
+def calculate_aee(x, y):
+    """
+    Average End point error (mean over point-wise L2 norm)
+    Input DVF shape: (N, dim, *(sizes))
+    """
+    return np.sqrt(((x - y) ** 2).sum(axis=1)).mean()
+
+
+def calculate_rmse_dvf(x, y):
+    """
+    RMSE of DVF (square root over mean of sum squared)
+    Input DVF shape: (N, dim, *(sizes))
+    """
+    return np.sqrt(((x - y) ** 2).sum(axis=1).mean())
+
+
+def computeJacobianDeterminant2D(dvf, rescaleFlow=False, save_path=None):
+    """
+    Calculate determinant of Jacobian of the transformation
+
+    Args:
+        dvf: (ndarry, shape HxHx2)
+        rescaleFlow: scale the deformation field by image size/2,
+                        if True [-1, 1] coordinate system is assumed for flow
+        save_path:
+
+    Returns:
+        jac_det: the determinant of Jacobian for each point, same dimension as input
+        mean_grad_jac_det: mean of the value of det(J)
+        below_zero_jac_det: ration (0~1) of points that have negative det(J)
+
+    """
+    if rescaleFlow:
+        # scale the deformation field to convert coordinate system from [-1, 1] range to pixel number
+        dvf = dvf * np.asarray((dvf.shape[0] / 2., dvf.shape[1] / 2.))
+
+    # calculate det Jac using SimpleITK
+    flow_img = sitk.GetImageFromArray(dvf, isVector=True)
+    jac_det_filt = sitk.DisplacementFieldJacobianDeterminant(flow_img)
+    jac_det = sitk.GetArrayFromImage(jac_det_filt)
+
+    mean_grad_detJ = np.mean(np.abs(np.gradient(jac_det)))
+    negative_detJ = np.sum((jac_det < 0)) / (jac_det.shape[0] * jac_det.shape[1])  # ratio of negative det(Jac)
+
+    # render and save det(Jac) image
+    if save_path is not None:
+        spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
+                (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
+                (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
+                (1, (0.94509803921568625, 0.41176470588235292, 0.07450980392156863))]
+        cmap = matplotlib.colors.LinearSegmentedColormap.from_list('detjac', spec)
+        save_path = os.path.join(save_path, 'detJ.png')
+        plt.imsave(save_path, jac_det, vmin=-1, vmax=7,
+                   cmap=cmap)  # vmin=-2., vmax=2., cmap='RdBu_r') # cmap=plt.cm.gray)
+        # plt.imshow(jac_det, vmin=-1, vmax=7, cmap=cmap)
+        # plt.show()
+    return jac_det, mean_grad_detJ, negative_detJ
+
+
+def detJac_stack(flow_stack, rescaleFlow=False):
+    """
+    Calculate determinant of Jacobian for a stack of 2D displacement fields.
+
+    Args:
+        flow_stack: (ndarray shape N, H, W, 2) 2D stack of disp/flow fields
+        rescaleFlow: rescale flow to reverse coordinate normalisation,
+                        i.e. if True DVF input is assumed in [-1,1] coordinate
+
+    Returns:
+        mean_grad_jac_det, mean_negative_detJ: averaged over slices in the stack
+
+    """
+    mean_grad_detJ_buffer = []
+    mean_negatvie_detJ_buffer = []
+
+    for slice_idx in range(flow_stack.shape[0]):
+        flow = flow_stack[slice_idx, :, :, :]
+        _, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(flow, rescaleFlow=rescaleFlow)
+        mean_grad_detJ_buffer += [mean_grad_detJ]
+        mean_negatvie_detJ_buffer += [negative_detJ]
+
+    mean_grad_detJ_mean = np.mean(mean_grad_detJ_buffer)
+    negative_detJ_mean = np.mean(mean_negatvie_detJ_buffer)
+
+    return mean_grad_detJ_mean, negative_detJ_mean
+
+
+""""""
+
+"""
+Image intensity  metrics
+"""
+def calculate_image_metrics(metric_data):
+    # unpack metric data, keys must match metric_data input
+    img = metric_data['target']
+    img_pred = metric_data['target_pred']  # (N, 1, *(dims))
+
+    if 'roi_mask' in metric_data.keys():
+        roi_mask = metric_data['roi_mask']
+
+        # find brian mask bbox mask
+        mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
+
+        # crop out image within the roi mask bounding box
+        img = bbox_crop(img, mask_bbox)
+        img_pred = bbox_crop(img_pred, mask_bbox)
+    return {'rmse': calculate_rmse(img, img_pred)}
+
+
+def calculate_rmse(x, y):
+    """Standard RMSE formula, square root over mean
+    (https://wikimedia.org/api/rest_v1/media/math/render/svg/6d689379d70cd119e3a9ed3c8ae306cafa5d516d)
+    """
+    return np.sqrt(((x - y) ** 2).mean())
+
+
+""""""
+
+"""
+Segmentation metrics
+"""
 
 
 def contour_distances_2d(image1, image2, dx=1):
@@ -122,7 +311,6 @@ def categorical_dice_stack(mask1, mask2, label_class=0):
     return dice
 
 
-
 def categorical_dice_volume(mask1, mask2, label_class=0):
     """
     Dice score of a specified class between two volumes of label masks.
@@ -144,101 +332,4 @@ def categorical_dice_volume(mask1, mask2, label_class=0):
     return dice
 
 
-
-
-def computeJacobianDeterminant2D(flow, rescaleFlow=False, save_path=None):
-    """
-    Calculate determinant of Jacobian of the transformation
-
-    Args:
-        flow: (ndarry, shape HxHx2) optical flow or displacement field of the deformation
-        rescaleFlow: scale the deformation field by image size/2,
-                        if True [-1, 1] coordinate system is assumed for flow
-        save_path:
-
-    Returns:
-        jac_det: the determinant of Jacobian for each point, same dimension as input
-        mean_grad_jac_det: mean of the value of det(J)
-        below_zero_jac_det: ration (0~1) of points that have negative det(J)
-
-    """
-    if rescaleFlow:
-        # scale the deformation field to convert coordinate system from [-1, 1] range to pixel number
-        flow = flow * np.asarray((flow.shape[0] / 2., flow.shape[1] / 2.))
-
-    # calculate det Jac using SimpleITK
-    flow_img = sitk.GetImageFromArray(flow, isVector=True)
-    jac_det_filt = sitk.DisplacementFieldJacobianDeterminant(flow_img)
-    jac_det = sitk.GetArrayFromImage(jac_det_filt)
-
-    mean_grad_detJ = np.mean(np.abs(np.gradient(jac_det)))
-    negative_detJ = np.sum((jac_det < 0)) / (jac_det.shape[0] * jac_det.shape[1])  # ratio of negative det(Jac)
-    
-    # render and save det(Jac) image
-    if save_path is not None:
-        spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
-                (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
-                (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
-                (1, (0.94509803921568625, 0.41176470588235292, 0.07450980392156863))]
-        cmap = matplotlib.colors.LinearSegmentedColormap.from_list('detjac', spec)
-        save_path = os.path.join(save_path, 'detJ.png')
-        plt.imsave(save_path, jac_det, vmin=-1, vmax=7, cmap=cmap)  # vmin=-2., vmax=2., cmap='RdBu_r') # cmap=plt.cm.gray)
-        # plt.imshow(jac_det, vmin=-1, vmax=7, cmap=cmap)
-        # plt.show()
-    return jac_det, mean_grad_detJ, negative_detJ
-
-
-def detJac_stack(flow_stack, rescaleFlow=False):
-    """
-    Calculate determinant of Jacobian for a stack of 2D displacement fields.
-
-    Args:
-        flow_stack: (ndarray shape N, H, W, 2) 2D stack of disp/flow fields
-        rescaleFlow: rescale flow to reverse coordinate normalisation,
-                        i.e. if True DVF input is assumed in [-1,1] coordinate
-
-    Returns:
-        mean_grad_jac_det, mean_negative_detJ: averaged over slices in the stack
-
-    """
-    mean_grad_detJ_buffer = []
-    mean_negatvie_detJ_buffer = []
-
-    for slice_idx in range(flow_stack.shape[0]):
-        flow = flow_stack[slice_idx, :, :, :]
-        _, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(flow, rescaleFlow=rescaleFlow)
-        mean_grad_detJ_buffer += [mean_grad_detJ]
-        mean_negatvie_detJ_buffer += [negative_detJ]
-
-    mean_grad_detJ_mean = np.mean(mean_grad_detJ_buffer)
-    negative_detJ_mean = np.mean(mean_negatvie_detJ_buffer)
-
-    return mean_grad_detJ_mean, negative_detJ_mean
-
-
-
-""" Image intensity """
-def rmse(x, y):
-    """Standard RMSE formula, square root over mean
-    (https://wikimedia.org/api/rest_v1/media/math/render/svg/6d689379d70cd119e3a9ed3c8ae306cafa5d516d)
-    """
-    return np.sqrt(((x - y) ** 2).mean())
-
-
-""" DVF accuracy """
-def aee(x, y):
-    """
-    Average End point error (mean over point-wise L2 norm)
-    Input DVF shape: (N, dim, *(sizes))
-    """
-    return np.sqrt( ((x - y)**2 ).sum(axis=1) ).mean()
-
-
-def rmse_dvf(x, y):
-    """
-    RMSE of DVF (square root over mean of sum squared)
-    Input DVF shape: (N, dim, *(sizes))
-    """
-    return np.sqrt( ((x-y)**2).sum(axis=1).mean() )
-
-
+""""""

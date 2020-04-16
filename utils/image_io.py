@@ -1,5 +1,5 @@
 """
-Utility functions to handle image IO.
+Utility functions to handle image io.
 Huaqi Qiu, Jan 2019.
 """
 
@@ -7,23 +7,34 @@ import nibabel as nib
 import imageio
 import os
 import numpy as np
-
 from utils.image import upsample_image
 
+def load_nifti(path, data_type="float32", nim=False):
+    xnim = nib.load(path)
+    x = xnim.get_data().astype(data_type)
+    if nim:
+        return x, xnim
+    else:
+        return x
 
-def save_nifti(ndarray, path, nim, verbose=False):
+
+def save_nifti(x, path, nim=None, verbose=False):
     """
     Save a numpy array to a nifti file
 
     Args:
-        ndarray: numpy array
+        x: (numpy.ndarray) data
         path: destination path
-        nim: nibabel's nim object, to provide the nifti header
+        nim: Nibabel nim object, to provide the nifti header
+        verbose: (boolean)
 
     Returns:
         N/A
     """
-    nim_save = nib.Nifti1Image(ndarray, nim.affine, nim.header)
+    if nim is not None:
+        nim_save = nib.Nifti1Image(x, nim.affine, nim.header)
+    else:
+        nim_save = nib.Nifti1Image(x, np.eye(4))
     nib.save(nim_save, path)
 
     if verbose:

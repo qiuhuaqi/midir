@@ -8,9 +8,9 @@ import logging
 from tqdm import tqdm
 import pandas as pd
 
-from data.utils import Normalise
-from utils.split_nifti import split_volume_idmat
-from utils.metrics import categorical_dice_stack, contour_distances_stack, detJac_stack, aee, rmse, rmse_dvf
+from data.transforms import Normalise
+from data.split_nifti import split_volume_idmat
+from utils.metrics import detJac_stack, calculate_aee, calculate_rmse, calculate_rmse_dvf
 from utils import misc
 from utils.transform import dof_to_dvf
 from utils.image import bbox_from_mask
@@ -217,10 +217,10 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
                                   mask_bbox[0][0]:mask_bbox[0][1],
                                   mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
 
-        AEE = aee(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
+        AEE = calculate_aee(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
         print("AEE: ", AEE)
         AEE_buffer += [AEE]
-        RMSE_dvf = rmse_dvf(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
+        RMSE_dvf = calculate_rmse_dvf(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
         print("RMSE(DVF): ", RMSE_dvf)
         RMSE_DVF_buffer += [RMSE_dvf]
 
@@ -233,7 +233,7 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
                                        mask_bbox[0][0]:mask_bbox[0][1],
                                        mask_bbox[1][0]:mask_bbox[1][1]]  # (N, H', W')
 
-        RMSE = rmse(target_roi_bbox_cropped, target_pred_roi_bbox_cropped)
+        RMSE = calculate_rmse(target_roi_bbox_cropped, target_pred_roi_bbox_cropped)
         RMSE_buffer += [RMSE]
 
         # Jacobian related metrics

@@ -123,6 +123,41 @@ def normalise_intensity(x,
 #     return result
 
 
+def mask_and_crop(x, roi_mask):
+    """
+    Mask input by roi_mask and crop by roi_mask bounding box
+
+    Args:
+        x: (numpy.nadarry, shape (N, ch, *dims))
+        roi_mask: (numpy.nadarry, shape (N, ch, *dims))
+
+    Returns:
+
+    """
+    # find brian mask bbox mask
+    mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
+
+    # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
+    x *= roi_mask[:, np.newaxis, ...]
+
+    # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
+    x = bbox_crop(x, mask_bbox)
+    return x
+
+
+def bbox_crop(x, bbox):
+    """
+    Crop image by slicing uisng bounding box indices
+
+    Args:
+        x: (numpy.ndarray, shape (N, ch, *dims))
+        bbox: (tuple of tuples) ((bbox_min_dim1, bbox_max_dim1), (bbox_min_dim2, bbox_max_dim2), ...)
+
+    Returns:
+        cropped x
+    """
+    return x[:, :, bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+
 
 def bbox_from_mask(mask, pad_ratio=0.2):
     """
@@ -170,4 +205,6 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 
 def upsample_image(image, size):
     return np.array(Image.fromarray(image).resize((size, size)))
+
+
 
