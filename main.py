@@ -20,9 +20,9 @@ parser.add_argument('--model_dir',
                     default='experiments/base_model',
                     help="Directory containing params.json")
 
-parser.add_argument('--restore_file',
-                    default=None,
-                    help="Prefix of the checkpoint file:"
+parser.add_argument('--ckpt_file',
+                    default="best.pth.tar",
+                    help="Name of the checkpoint file in model_dir:"
                          " 'best.pth.tar' for best model, or 'last.pth.tar' for the last saved checkpoint")
 
 parser.add_argument('--save',
@@ -43,8 +43,6 @@ parser.add_argument('--num_workers',
 
 args = parser.parse_args()
 
-
-# check model dir
 assert os.path.exists(args.model_dir), f"Model directory does not exist at \n\t {args.model_dir}."
 
 # set up device
@@ -73,7 +71,7 @@ brain2d_data = Brain2dData(args, params)
 logging.info("- Done.")
 """"""
 
-"""Model & Optimiser"""
+"""Model"""
 logging.info("Setting up Model...")
 reg_model = RegModel(params)
 reg_model = reg_model.to(device=args.device)
@@ -87,14 +85,14 @@ if args.run == "train":
     logging.info("Training and validation complete.")
 
 elif args.run == "test":
-    model_ckpt_path = f"{args.model_dir}/{args.restore_file}.pth.tar"
+    model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
     assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
     logging.info(f"Loading model parameters from: {model_ckpt_path}")
     misc_utils.load_checkpoint(model_ckpt_path, reg_model)
 
-    logging.info("Running evaluation...")
+    logging.info("Running testing...")
     evaluate(reg_model, loss_fn, brain2d_data.test_dataloader, args, val=False)
-    logging.info("Evaluation complete. Model path {}".format(args.model_dir))
+    logging.info("Testing complete.")
 
 else:
     raise ValueError("Run mode not recognised.")

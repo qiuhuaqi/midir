@@ -62,7 +62,7 @@ class MetricReporter(Reporter):
         method_column = ['DL'] * len(self.id_list)
         df_dict = {'Method': method_column, 'ID': self.id_list}
         for metric_name in self.report:
-            df_dict[metric_name] = self.report[metric_name]['list'],
+            df_dict[metric_name] = self.report[metric_name]['list']
 
         df = pd.DataFrame(data=df_dict)
         df.to_pickle(save_path)

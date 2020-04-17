@@ -83,7 +83,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 subj_id = dataloader.dataset.subject_list[idx]
                 subject_output_dir = misc_utils.setup_dir(path.join(output_dir, subj_id))
 
-                for name, save_data in data_dict:
+                for name, save_data in data_dict.items():
                     imageio_utils.save_nifti(save_data.transpose(2, 3, 0, 1), f"{subject_output_dir}/{name}.nii.gz")
             """"""
 
@@ -113,4 +113,4 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     else:  # Testing
         # save mean-std and dataframe of metric results
         metrics_reporter.save_mean_std(result_dir + "/test_metrics_results.json")
-        metrics_reporter.save_df(result_dir + "/test_metric_results.pkl")
+        metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl")

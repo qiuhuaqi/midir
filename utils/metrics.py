@@ -57,8 +57,8 @@ def calculate_dvf_metrics(metric_data):
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
         # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
-        dvf_pred *= roi_mask
-        dvf_gt *= roi_mask
+        dvf_pred = dvf_pred * roi_mask
+        dvf_gt = dvf_gt * roi_mask
 
         # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
         dvf_pred = bbox_crop(dvf_pred, mask_bbox)

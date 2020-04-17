@@ -1,13 +1,14 @@
+import os
 import torch
 from tqdm import tqdm
 import logging
 
+from runners.inference import process_batch
 from runners.eval import evaluate
 import utils.misc as misc_utils
 
 # set random seed for workers generating random deformation
 # random.seed(12)
-from runners.inference import process_batch
 
 
 def train_and_validate(model, loss_fn, data, args):
@@ -24,17 +25,17 @@ def train_and_validate(model, loss_fn, data, args):
 
     # reload weights from a specified file to resume training
     if args.restore_file is not None:
-        restore_path = f"{args.model_dir}/{args.restore_file}"
-        logging.info(f"Loading model parameters from: \n\t{restore_path}")
-        misc_utils.load_checkpoint(restore_path, model, optimizer)
+        model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
+        assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
+        logging.info(f"Loading model parameters from: {model_ckpt_path}")
+        misc_utils.load_checkpoint(model_ckpt_path, model)
 
     # set up TensorboardX summary writers
     train_tb_writer = misc_utils.set_summary_writer(args.model_dir, 'train')
     val_tb_writer = misc_utils.set_summary_writer(args.model_dir, 'val')
 
-    """Training loop"""
     for epoch in range(model.params.num_epochs):
-        """Train for 1 epoch"""
+        """Train for one epoch"""
         logging.info('Epoch number {}/{}'.format(epoch + 1, model.params.num_epochs))
         model.epoch_num = epoch
 
@@ -59,7 +60,7 @@ def train_and_validate(model, loss_fn, data, args):
                     for loss_name, loss_value in losses.items():
                         train_tb_writer.add_scalar(f'losses/{loss_name}', loss_value.data, global_step=model.iter_num)
 
-                # update tqdm & show the loss value after the progress bar
+                # update tqdm & show the loss value
                 t.set_postfix(loss=f'{losses["loss"].data:05.3f}')
                 t.update()
         """"""
@@ -68,7 +69,6 @@ def train_and_validate(model, loss_fn, data, args):
         if (epoch + 1) % model.params.val_epochs == 0 or (epoch + 1) == model.params.num_epochs:
             logging.info("Validating at epoch: {} ...".format(epoch + 1))
 
-            # run model validation
             evaluate(model, loss_fn, data.val_dataloader, args, tb_writer=val_tb_writer, val=True)
 
             # save model
