@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch.nn import functional as F
 
-from model.submodules import spatial_transform
+from model.transformations import spatial_transform
 from utils.image import bbox_from_mask
 from utils.transform import normalise_dvf, denormalise_dvf
 

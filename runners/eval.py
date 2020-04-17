@@ -2,7 +2,7 @@ from os import path
 from tqdm import tqdm
 
 import torch
-from model.submodules import spatial_transform
+from model.transformations import spatial_transform
 from runners.inference import process_batch
 from runners.eval_helpers import LossReporter, MetricReporter
 

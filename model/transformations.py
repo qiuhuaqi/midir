@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 from model.window_func import cubic_bspline_torch
-from model.submodules import spatial_transform
-
 
 class BSplineFFDTransform(object):
     def __init__(self,
@@ -44,8 +42,7 @@ class BSplineFFDTransform(object):
     def __call__(self, x):
         """
         Args:
-            x: (N, 2, Kh, Kw) network output used as control point parameters
-            source: (N, 1, H, W) source image
+            x: (N, 2, Kh, Kw) network output i.e. control point parameters
 
         Returns:
             dvf: (N, 2, H, W)
@@ -67,6 +64,41 @@ class DVFTransform(object):
         pass
 
     def __call__(self, x):
-        """Optical flow transformation"""
         return x
 
+
+
+
+
+def spatial_transform(x, dvf, mode="bilinear"):
+    """
+    Spatially transform an image by sampling at coordinates of the deformed mesh grid.
+
+    Args:
+        x: source image, Tensor of shape (N, Ch, H, W)
+        dvf: (Tensor, Nx2xHxW) displacement vector field from target to source, in [-1,1] coordinate
+        mode: (striis) method of interpolation
+
+    Returns:
+        source image deformed using the deformation flow field,
+        Tensor of the same shape as source image
+
+    """
+
+    # generate standard mesh grid
+    h, w = x.size()[-2:]
+    grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
+
+    grid_h = grid_h.requires_grad_(requires_grad=False).to(device=x.device)
+    grid_w = grid_w.requires_grad_(requires_grad=False).to(device=x.device)
+
+    # (H,W) + (N, H, W) add by broadcasting
+    new_grid_h = grid_h + dvf[:, 0, ...]
+    new_grid_w = grid_w + dvf[:, 1, ...]
+
+    # using x-y (column_num, row_num) order
+    deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
+    deformed_image = F.grid_sample(x.type_as(deformed_grid), deformed_grid,
+                                   mode=mode, padding_mode="border", align_corners=True)
+
+    return deformed_image

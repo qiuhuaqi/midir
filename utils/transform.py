@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import nibabel as nib
-from model.submodules import spatial_transform
+from model.transformations import spatial_transform
 
 
 def dvf_line_integral(op_flow):

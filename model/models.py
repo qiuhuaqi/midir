@@ -1,7 +1,7 @@
 import torch.nn as nn
 import numpy as np
 from model.networks import BaseNet, SiameseFCN, BaseNetFFD
-from model.transform_models import BSplineFFDTransform, DVFTransform
+from model.transformations import BSplineFFDTransform, DVFTransform
 
 class RegModel(nn.Module):
     def __init__(self, params):
@@ -9,13 +9,13 @@ class RegModel(nn.Module):
 
         self.params = params
 
-        self._set_network()
-        self._set_transform_model()
-
         self.epoch_num = 0
         self.iter_num = 0
         self.is_best = False
         self.best_metric_result = 0
+
+        self._set_network()
+        self._set_transform_model()
 
     def _set_network(self):
         if self.params.network == "BaseNet":

@@ -21,7 +21,7 @@ parser.add_argument('--model_dir',
                     help="Directory containing params.json")
 
 parser.add_argument('--ckpt_file',
-                    default="best.pth.tar",
+                    default=None,
                     help="Name of the checkpoint file in model_dir:"
                          " 'best.pth.tar' for best model, or 'last.pth.tar' for the last saved checkpoint")
 

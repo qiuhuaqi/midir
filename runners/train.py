@@ -24,7 +24,7 @@ def train_and_validate(model, loss_fn, data, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=model.params.learning_rate)
 
     # reload weights from a specified file to resume training
-    if args.restore_file is not None:
+    if args.ckpt_file is not None:
         model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
         assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
         logging.info(f"Loading model parameters from: {model_ckpt_path}")

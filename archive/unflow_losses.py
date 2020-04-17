@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.submodules import spatial_transform
+from model.transformations import spatial_transform
 
 from utils import image
 # Values for occlusion decision threshold
