@@ -2,6 +2,7 @@
     "version": "v0.2-dev",
     "run_no": 1,
     "run_note": "Try new per-dimension spatial normalisation of DVF",
+    "model": "DL",
     "network": "BaseNet",
     "modality": "multi",
     "transform_model": "dvf",

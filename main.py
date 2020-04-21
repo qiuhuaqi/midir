@@ -4,12 +4,13 @@ import logging
 import torch
 
 from data.datasets import Brain2dData
-from model.models import RegModel
+from model.models import DLRegModel, IdBaselineModel
 from model.losses import loss_fn
 import utils.misc as misc_utils
 
 from runners.train import train_and_validate
 from runners.eval import evaluate
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--run',
@@ -43,7 +44,7 @@ parser.add_argument('--num_workers',
 
 args = parser.parse_args()
 
-assert os.path.exists(args.model_dir), f"Model directory does not exist at \n\t {args.model_dir}."
+
 
 # set up device
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)  # select GPU
@@ -52,6 +53,8 @@ if args.cuda:
     args.device = torch.device('cuda')
 else:
     args.device = torch.device('cpu')
+
+assert os.path.exists(args.model_dir), f"Model directory does not exist at \n\t {args.model_dir}."
 
 # set up the logger
 misc_utils.set_logger(f"{args.model_dir}/{args.run}.log")
@@ -73,10 +76,18 @@ logging.info("- Done.")
 
 """Model"""
 logging.info("Setting up Model...")
-reg_model = RegModel(params)
-reg_model = reg_model.to(device=args.device)
+if params.model == "DL":
+    reg_model = DLRegModel(params)
+    reg_model = reg_model.to(device=args.device)
+
+elif params.model == "IdBaseline":
+    reg_model = IdBaselineModel(params)
+
+else:
+    raise ValueError("Registration model not recognised.")
 logging.info("- Done.")
 """"""
+
 
 """ Run """
 if args.run == "train":
@@ -85,10 +96,11 @@ if args.run == "train":
     logging.info("Training and validation complete.")
 
 elif args.run == "test":
-    model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
-    assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
-    logging.info(f"Loading model parameters from: {model_ckpt_path}")
-    misc_utils.load_checkpoint(model_ckpt_path, reg_model)
+    if params.model != "IdBaseline":
+        model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
+        assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
+        logging.info(f"Loading model parameters from: {model_ckpt_path}")
+        misc_utils.load_checkpoint(model_ckpt_path, reg_model)
 
     logging.info("Running testing...")
     evaluate(reg_model, loss_fn, brain2d_data.test_dataloader, args, val=False)

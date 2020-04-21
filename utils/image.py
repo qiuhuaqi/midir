@@ -181,7 +181,6 @@ def bbox_from_mask(mask, pad_ratio=0.2):
     bbox_j = (mask_indices[2].min(), mask_indices[2].max()+1)
     # bbox_k = (mask_indices[3].min(), mask_indices[3].max()+1)
 
-
     # pad 20% of minimum distance to the image boundaries (10% each side)
     if pad_ratio > 1:
         print("Invalid padding value (>1), set to 1")

@@ -72,6 +72,8 @@ for val_test in ["val", "test"]:
             - all cropped to crop_size
             """
 
+            # todo: change to data_dict workflow
+
             # to numpy array
             target = target.numpy().transpose(1, 2, 0)  # (HxWxN)
             source = source.numpy().transpose(1, 2, 0)  # (HxWxN)
@@ -86,6 +88,7 @@ for val_test in ["val", "test"]:
             if not path.exists(output_subj_dir):
                 os.makedirs(output_subj_dir)
 
+            # todo: use standarlised names for the images
             nim_target = nib.Nifti1Image(target, np.eye(4))
             nib.save(nim_target, output_subj_dir + f"/{subj_id}_t1_deformed.nii.gz")
 

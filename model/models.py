@@ -1,11 +1,14 @@
+import torch
 import torch.nn as nn
 import numpy as np
+
 from model.networks import BaseNet, SiameseFCN, BaseNetFFD
 from model.transformations import BSplineFFDTransform, DVFTransform
 
-class RegModel(nn.Module):
+
+class DLRegModel(nn.Module):
     def __init__(self, params):
-        super(RegModel, self).__init__()
+        super(DLRegModel, self).__init__()
 
         self.params = params
 
@@ -57,3 +60,32 @@ class RegModel(nn.Module):
         net_out = self.network(target, source)
         dvf = self.transform(net_out)
         return dvf
+
+
+"""
+Baseline Models
+"""
+class BaselineModel(object):
+    def __init__(self):
+        pass
+
+    def eval(self):
+        # dummy method for model.eval() call in evaluate()
+        pass
+
+    def __call__(self, target, source):
+        raise NotImplementedError
+
+
+class IdBaselineModel(BaselineModel):
+    """Identity transformation baseline, i.e. no registration"""
+    def __init__(self, params):
+        super(IdBaselineModel, self).__init__()
+        self.params = params
+
+    def __call__(self, target, source):
+        """Output dvf in shape (N, dim, *(dims))"""
+        dim = len(target.size())-2   # image dimension
+        dvf = torch.zeros_like(target).repeat(1, dim, *(1,)*dim)
+        return dvf
+

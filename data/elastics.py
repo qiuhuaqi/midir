@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 from model.transformations import spatial_transform
 from utils.image import bbox_from_mask
-from utils.transform import normalise_dvf, denormalise_dvf
+from utils.transformation import normalise_dvf, denormalise_dvf
 
 
 """Deformation synthesis using control point + Gaussian filter model"""
@@ -58,7 +58,7 @@ class GaussianFilter(object):
         # Repeat kernel for all input channels
         num_channel = x.size()[1]
         self.kernel = self.kernel.view(1, 1, *self.kernel.size())
-        self.kernel = self.kernel.repeat(num_channel, *[1] * (self.kernel.dim() - 1))  # (Ch, 1, *[1]*input.dim())
+        self.kernel = self.kernel.repeat(num_channel, *(1,) * (self.kernel.dim() - 1))  # (Ch, 1, *[1]*input.dim())
         self.kernel = self.kernel.type_as(x)
 
         with torch.no_grad():

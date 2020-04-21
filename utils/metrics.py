@@ -181,6 +181,7 @@ def calculate_image_metrics(metric_data):
         # crop out image within the roi mask bounding box
         img = bbox_crop(img, mask_bbox)
         img_pred = bbox_crop(img_pred, mask_bbox)
+
     return {'rmse': calculate_rmse(img, img_pred)}
 
 
@@ -196,8 +197,6 @@ def calculate_rmse(x, y):
 """
 Segmentation metrics
 """
-
-
 def contour_distances_2d(image1, image2, dx=1):
     """
     Calculate contour distances between binary masks.

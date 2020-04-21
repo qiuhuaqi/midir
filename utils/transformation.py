@@ -4,40 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import nibabel as nib
-from model.transformations import spatial_transform
-
-
-def dvf_line_integral(op_flow):
-    """
-    Perform approximated line integral of frame-to-frame optical flow
-    using Pytorch and GPU
-
-    Args:
-        op_flow: optical flow, Tensor, shape (N, 2, W, H)
-
-    Returns:
-        accum_flow: line integrated optical flow, same shape as input
-    """
-    # generate a standard grid
-    h, w = op_flow.size()[-2:]
-    std_grid_h, std_grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
-    std_grid = torch.stack([std_grid_h, std_grid_w])  # (2, H, W)
-    std_grid = std_grid.cuda().float()
-
-    # loop over frames
-    accum_flow = []
-    for fr in range(op_flow.size()[-1]):
-        if fr == 0:
-            new_grid = std_grid + op_flow[fr, ...]  # (2, H, W) + (2, H, W)
-        else:
-            # sample optical flow at current new_grid, then update new_grid by sampled offset
-            # this line is unnecessarily complicated thanks to pytorch
-            new_grid += F.grid_sample(op_flow[fr, ...].unsqueeze(0), new_grid.unsqueeze(0).permute(0, 2, 3, 1)).squeeze(0)  # (2, H, W)
-        accum_flow += [new_grid - std_grid]
-
-    accum_flow = torch.stack(accum_flow)  # (N, 2, H, W)
-    return accum_flow
-
 
 def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     """
@@ -90,39 +56,17 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     # calculate the DVF by substracting the initial mesh grid from it
     dvf_x = warp_meshx - mesh_x
     dvf_y = warp_meshy - mesh_y
-    dvf = np.array([dvf_y, dvf_x]).transpose(1, 2, 0)  # (H, W, 2), notice the x-y swap
+    dvf = np.array([dvf_y, dvf_x])  # (2, H, W), notice the x-y swap
 
     # save flow to nifti
     if dvfout is not None:
-        ndvf = nib.Nifti1Image(dvf, nim.affine)
+        ndvf = nib.Nifti1Image(dvf.transpose(1, 2, 0), nim.affine)
         nib.save(ndvf, '{0}/{1}.nii.gz'.format(output_dir, dvfout))
 
     # clean up: remove all the mesh files
     os.system('rm {0}/*mesh*'.format(output_dir))
 
     return dvf
-
-
-def spatial_transform_numpy(source_img, dvf):
-    """
-    Warp numpy array image using Pytorch's resample based function on CPU
-
-    Args:
-        source_img: (ndarry shape: H,W,N) source image, assume square image
-        dvf: (ndarray shape: H,W,N,1,2) dense displacement vector field, not normalised to [-1,1]
-
-    Returns:
-        warped_source_img: (ndarray shape: H,W,N) resample deformed source image
-    """
-
-    dvf_norm = 2 * dvf / source_img.shape[0]  # normalise to Pytorch coordinate system
-    dvf_tensor = torch.from_numpy(dvf_norm[:, :, :, 0, :].transpose(2, 3, 0, 1)).float()  # tensor (N, 2, H, W)
-    source_img_tensor = torch.from_numpy(source_img.transpose(2, 0, 1)).unsqueeze(1)  # tensor (N, 1, H, W)
-    warped_source_img_tensor = spatial_transform(source_img_tensor, dvf_tensor)
-    warped_source_img = warped_source_img_tensor.numpy().transpose(2, 3, 0, 1)[..., 0]  # (H, W, N)
-
-    return warped_source_img
-
 
 def normalise_dvf(dvf):
     """
@@ -172,3 +116,37 @@ def denormalise_dvf(dvf):
         raise RuntimeError("DVF normalisation: input data type not recognised. "
                            "Expect: numpy.ndarray or torch.Tensor")
     return dvf * factors
+
+
+def dvf_line_integral(op_flow):
+    """
+    Perform approximated line integral of frame-to-frame optical flow
+    using Pytorch and GPU
+
+    Args:
+        op_flow: optical flow, Tensor, shape (N, 2, W, H)
+
+    Returns:
+        accum_flow: line integrated optical flow, same shape as input
+    """
+    # generate a standard grid
+    h, w = op_flow.size()[-2:]
+    std_grid_h, std_grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
+    std_grid = torch.stack([std_grid_h, std_grid_w])  # (2, H, W)
+    std_grid = std_grid.cuda().float()
+
+    # loop over frames
+    accum_flow = []
+    for fr in range(op_flow.size()[-1]):
+        if fr == 0:
+            new_grid = std_grid + op_flow[fr, ...]  # (2, H, W) + (2, H, W)
+        else:
+            # sample optical flow at current new_grid, then update new_grid by sampled offset
+            # this line is unnecessarily complicated thanks to pytorch
+            new_grid += F.grid_sample(op_flow[fr, ...].unsqueeze(0), new_grid.unsqueeze(0).permute(0, 2, 3, 1)).squeeze(0)  # (2, H, W)
+        accum_flow += [new_grid - std_grid]
+
+    accum_flow = torch.stack(accum_flow)  # (N, 2, H, W)
+    return accum_flow
+
+

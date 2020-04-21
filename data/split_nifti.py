@@ -6,6 +6,7 @@ import os
 
 def split_volume(image_name, output_name):
     """ Split an image volume into a number of slices. """
+    # image saved in shape (H, W, N)
     nim = nib.load(image_name)
     Z = nim.header['dim'][3]
     affine = nim.affine

@@ -1,4 +1,10 @@
-"""Evaluate FFD on the task of cardiac motion estimation"""
+"""
+Traditional iterative Free-Form Deformation registration algorithm baseline
+D. Rueckert, L. I. Sonoda, C. Hayes, D. L. G. Hill, M. O. Leach, and D. J. Hawkes. IEEE Transactions on Medical Imaging, 18(8):712-721, 1999.
+
+Implemented using the MIRTK toolkit:
+https://mirtk.github.io/
+"""
 import os
 from os import path
 import nibabel as nib
@@ -6,17 +12,21 @@ import argparse
 import numpy as np
 import logging
 from tqdm import tqdm
-import pandas as pd
 
-from data.transforms import Normalise
+import sys
+# always run from one dir above ./src
+sys.path.insert(0, f'{os.getcwd()}/src')
+
+from runners.helpers import MetricReporter
 from data.split_nifti import split_volume_idmat
-from utils.metrics import detJac_stack, calculate_aee, calculate_rmse, calculate_rmse_dvf
+from utils.metrics import calculate_metrics
 from utils import misc
-from utils.transform import dof_to_dvf
-from utils.image import bbox_from_mask
+from utils.image_io import save_nifti
+from utils.transformation import dof_to_dvf
+
+import pdb
 
 parser = argparse.ArgumentParser()
-
 parser.add_argument('-modality',
                     default='multi',
                     help="mono-modal or multi-modal.")
@@ -61,9 +71,7 @@ parser.add_argument('--debug',
 args = parser.parse_args()
 
 # set up FFD model dir
-model_dir = path.join(args.run_dir, f"sim_{args.sim}_CPS_{args.CPS}_BE_{args.BE}")
-if not path.exists(model_dir):
-    os.makedirs(model_dir)
+model_dir = misc.setup_dir(f"{args.run_dir}/sim_{args.sim}_CPS_{args.CPS}_BE_{args.BE}")
 
 # save parameters passed to MIRTK via command arguments to a par.conf file
 parout = path.join(model_dir, "par.conf")
@@ -72,105 +80,85 @@ parout = path.join(model_dir, "par.conf")
 misc.set_logger(path.join(model_dir, 'ffd_eval.log'))
 logging.info('Starting FFD evaluation...')
 
-# metric result buffers
-AEE_buffer = []
-RMSE_DVF_buffer = []
-RMSE_buffer = []
-
-mean_mag_grad_detJ_buffer = []
-negative_detJ_buffer = []
-subj_id_buffer = []
-
-# image intensity normaliser
-normaliser_minmax = Normalise(mode="minmax")
+# instantiate metric result reporters
+metrics_reporter = MetricReporter()
+metrics_reporter.id_list = os.listdir(args.data_dir)
+metric_groups = ["dvf_metrics", "image_metrics"]  # todo: args or params?
 
 logging.info('Looping over subjects...')
 with tqdm(total=len(os.listdir(args.data_dir))) as t:
     for subj_id in sorted(os.listdir(args.data_dir)):
         subj_data_dir = path.join(args.data_dir, subj_id)
 
-        # subject output directory
-        subj_output_dir = path.join(model_dir, "output", subj_id)
-        if not path.exists(subj_output_dir):
-            os.makedirs(subj_output_dir)
-
-        # subject temporary working directory
-        subj_tmp_dir = path.join(subj_output_dir, "tmp")
-        if not path.exists(subj_tmp_dir):
-            os.makedirs(subj_tmp_dir)
-
-        # save a list of subject id for dataFrames
-        subj_id_buffer += [subj_id]
+        # subject output & temporary working directory
+        subj_output_dir = misc.setup_dir(f"{model_dir}/output/{subj_id}")
+        subj_tmp_dir = misc.setup_dir(f"{subj_output_dir}/tmp")
 
         # define target and source images
-        target_data_path = path.join(subj_data_dir, f'{subj_id}_t1_deformed.nii.gz')
-        target_original_data_path = path.join(subj_data_dir, f'{subj_id}_t1.nii.gz')
-        roi_mask_data_path = path.join(subj_data_dir, f'{subj_id}_brainmask.nii.gz')
-        dvf_gt_data_path = path.join(subj_data_dir, f'{subj_id}_dvf_t2_to_t1_deformed.nii.gz')  #(this direction is named wrong)
+        # todo: this can be more efficient after standarlising the image names in the generation process
+        data_path_dict = dict()
+        data_path_dict["target"] = f"{subj_data_dir}/{subj_id}_t1_deformed.nii.gz"
+        data_path_dict["target_original"] = f"{subj_data_dir}/{subj_id}_t1.nii.gz"
+        data_path_dict["roi_mask"] = f"{subj_data_dir}/{subj_id}_brainmask.nii.gz"
+        data_path_dict["dvf_gt"] = f"{subj_data_dir}/{subj_id}_dvf_t2_to_t1_deformed.nii.gz"
         if args.modality == "mono":
-            source_data_path = target_original_data_path
+            data_path_dict["source"] = data_path_dict["target_original"]
         else:  # multimodal
-            source_data_path = path.join(subj_data_dir, f'{subj_id}_t2.nii.gz')
+            data_path_dict["source"] = f"{subj_data_dir}/{subj_id}_t2.nii.gz"
 
         # create symlinks to original images
-        target_data_link = path.join(subj_output_dir, "target.nii.gz")
-        target_original_data_link = path.join(subj_output_dir, "target_original.nii.gz")
-        source_data_link = path.join(subj_output_dir, "source.nii.gz")
-        roi_mask_data_link = path.join(subj_output_dir, "roi_mask.nii.gz")
-        dvf_gt_data_link = path.join(subj_output_dir,  "dvf_gt.nii.gz")
+        data_link_dict = dict()
+        for name, p in data_path_dict.items():
+            data_link_dict[name] = f"{subj_output_dir}/{name}.nii.gz"
+            os.system(f"ln -sf {p} {data_link_dict[name]}")
 
-        os.symlink(target_data_path, target_data_link)
-        os.symlink(target_original_data_path, target_original_data_link)
-        os.symlink(source_data_path, source_data_link)
-        os.symlink(roi_mask_data_path, roi_mask_data_link)
-        os.symlink(dvf_gt_data_path, dvf_gt_data_link)
+        # load nibabel image objects via symlinks
+        nim_dict = dict()
+        for name, l in data_link_dict.items():
+            nim_dict[name] = nib.load(l)
 
-        # load in images via symlinks
-        nim_target = nib.load(target_data_link)
-        nim_target_original = nib.load(target_original_data_link)
-        nim_source = nib.load(source_data_link)
-        nim_roi_mask = nib.load(roi_mask_data_link)
-
-        # load data, shape (N, H, W)
-        target, target_original, source, roi_mask = [x.get_data().transpose(2, 0, 1)
-                                                     for x in
-                                                     [nim_target, nim_target_original, nim_source, nim_roi_mask]]
+        # load data and transpose to shape (N, H, W) or (N, 2, H, W)
+        data_dict = dict()
+        for name, nim in nim_dict.items():
+            if name == "dvf_gt":
+                data_dict[name] = nim.get_data().transpose(2, 3, 0, 1)
+            else:
+                data_dict[name] = nim.get_data().transpose(2, 0, 1)
 
         # split volume into 2D slices
-        split_volume_idmat(target_data_link, f'{subj_tmp_dir}/target_z')
-        split_volume_idmat(target_original_data_link, f'{subj_tmp_dir}/target_original_z')
-        split_volume_idmat(source_data_link, f'{subj_tmp_dir}/source_z')
+        for name in ["target", "target_original", "source"]:
+            split_volume_idmat(data_link_dict[name], f'{subj_tmp_dir}/{name}_z')
 
         # todo: segmentation
 
-        dvf_pred_buffer = []
-        target_pred_buffer = []
-        warped_source_buffer = []
+        # initialise for output data
+        for name in ["dvf_pred", "target_pred", "warped_source"]:
+            data_dict[name] = []
 
-        # loop over the slices
-        for z in range(target.shape[0]):
 
-            # todo: modularise inference for each subject for individual use
+        """Looping over slices"""
+        for z in range(data_dict["target"].shape[0]):
 
             # forward registration
-            target_img_z_path = f'{subj_tmp_dir}/target_z{z:02d}.nii.gz'
-            source_img_z_path = f'{subj_tmp_dir}/source_z{z:02d}.nii.gz'
+            target_z_path = f'{subj_tmp_dir}/target_z{z:02d}.nii.gz'
+            source_z_path = f'{subj_tmp_dir}/source_z{z:02d}.nii.gz'
             dof = f'{subj_tmp_dir}/target_to_source_z{z:02d}.dof.gz'
             os.system(f'mirtk register '
-                                  f'{target_img_z_path} {source_img_z_path}  '
-                                  f'-sim {args.sim} '
-                                  f'-ds {args.CPS} '
-                                  f'-be {args.BE} '
-                                  f'-model FFD '
-                                  f'-levels 3 '
-                                  f'-padding -1 '
-                                  f'-bins {args.BINS} '
-                                  f'-parout {parout} '
-                                  f'-dofout {dof} '
-                                  f'-verbose {args.verbose}')
+                      f'{target_z_path} {source_z_path}  '
+                      f'-sim {args.sim} '
+                      f'-ds {args.CPS} '
+                      f'-be {args.BE} '
+                      f'-model FFD '
+                      f'-levels 3 '
+                      f'-padding -1 '
+                      f'-bins {args.BINS} '
+                      f'-parout {parout} '
+                      f'-dofout {dof} '
+                      f'-verbose {args.verbose}')
 
             # convert the DOF file to dense DDF
-            dvf_pred_buffer += [dof_to_dvf(target_img_z_path, dof, f'dvf_z{z:02d}', subj_tmp_dir)]
+            dvf_z = dof_to_dvf(target_z_path, dof, f'dvf_z{z:02d}', subj_tmp_dir)  # (2, H, W)
+            data_dict["dvf_pred"].append(dvf_z)
 
             # MIRTK transform target original image
             target_original_z_path = f'{subj_tmp_dir}/target_original_z{z:02d}.nii.gz'
@@ -178,83 +166,47 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
             os.system(f'mirtk transform-image '
                                   f'{target_original_z_path} {target_pred_z_path} '
                                   f'-dofin {dof} '
-                                  f'-target {target_img_z_path}')
+                                  f'-target {target_z_path}')
 
             # read warped target original image back in and form numpy arrays
-            target_pred_buffer += [nib.load(target_pred_z_path).get_data()[:, :, 0]]  # (H, W) each
+            target_pred_z = nib.load(target_pred_z_path).get_data()[np.newaxis, :, :, 0]  # (1, H, W)
+            data_dict["target_pred"].append(target_pred_z)
 
             # MIRTK transform source image
             warped_source_z_path = f'{subj_tmp_dir}/warped_source_z{z:02d}.nii.gz'
             os.system(f'mirtk transform-image '
-                                  f'{source_img_z_path} {warped_source_z_path} '
+                                  f'{source_z_path} {warped_source_z_path} '
                                   f'-dofin {dof} '
-                                  f'-target {target_img_z_path}')
+                                  f'-target {target_z_path}')
 
             # read warped source image back in and form numpy arrays
-            warped_source_buffer += [nib.load(warped_source_z_path).get_data()[:, :, 0]]  # (H, W) each
+            warped_source_z = nib.load(warped_source_z_path).get_data()[np.newaxis, :, :, 0]  # (1, H, W)
+            data_dict["warped_source"].append(warped_source_z)
+        """"""
 
-        # slices to volume
-        dvf_pred = np.array(dvf_pred_buffer).transpose(0, -1, 1, 2)  # (N, 2, H, W)
-        target_pred = np.array(target_pred_buffer)  # (N, H, W)
-        warped_source = np.array(warped_source_buffer)  # (N, H, W)
+        # slices to stack arrays
+        for name in ["dvf_pred", "target_pred", "warped_source"]:
+            data_dict[name] = np.array(data_dict[name])  # (N, 1/2, H, W)
 
-        """Evaluate metrics"""
-        # find brian mask bbox mask
-        mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask)
+        # expand the extra dimension for metric calculation and saving -> (N, 1, H, W)
+        for name in ["target", "target_original", "source", "roi_mask"]:
+            data_dict[name] = data_dict[name][:, np.newaxis, ...]
 
-        ## DVF accuracy vs. ground truth
-        dvf_gt = nib.load(dvf_gt_data_link).get_data().transpose(2, 3, 0, 1)  # (N, 2, H, W)
+        """
+        Calculate metrics
+        """
+        metric_results = calculate_metrics(data_dict, metric_groups)
+        metrics_reporter.collect_value(metric_results)
+        """"""
 
-        # mask both prediction and ground truth DVF with roi mask
-        dvf_pred_roi_masked = dvf_pred * roi_mask[:, np.newaxis, ...]  # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
-        dvf_gt_roi_masked = dvf_gt * roi_mask[:, np.newaxis, ...]  # (N, 2, H, W) * (N, 1, H, W) = (N, 2, H, W)
-
-        # crop by roi mask bbox to reduce background
-        dvf_pred_roi_bbox_cropped = dvf_pred_roi_masked[:, :,
-                                    mask_bbox[0][0]:mask_bbox[0][1],
-                                    mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
-        dvf_gt_roi_bbox_cropped = dvf_gt_roi_masked[:, :,
-                                  mask_bbox[0][0]:mask_bbox[0][1],
-                                  mask_bbox[1][0]:mask_bbox[1][1]]  # (N, 2, H', W')
-
-        AEE = calculate_aee(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
-        print("AEE: ", AEE)
-        AEE_buffer += [AEE]
-        RMSE_dvf = calculate_rmse_dvf(dvf_pred_roi_bbox_cropped, dvf_gt_roi_bbox_cropped)
-        print("RMSE(DVF): ", RMSE_dvf)
-        RMSE_DVF_buffer += [RMSE_dvf]
-
-        ## RMSE(image)
-        target_roi_bbox_cropped = target[:,
-                                  mask_bbox[0][0]:mask_bbox[0][1],
-                                  mask_bbox[1][0]:mask_bbox[1][1],
-                                  ]  # (N, H', W')
-        target_pred_roi_bbox_cropped = target_pred[:,
-                                       mask_bbox[0][0]:mask_bbox[0][1],
-                                       mask_bbox[1][0]:mask_bbox[1][1]]  # (N, H', W')
-
-        RMSE = calculate_rmse(target_roi_bbox_cropped, target_pred_roi_bbox_cropped)
-        RMSE_buffer += [RMSE]
-
-        # Jacobian related metrics
-        mean_grad_detJ, mean_negative_detJ = detJac_stack(dvf_pred.transpose(0, 2, 3, 1),  # (N, H, W, 2)
-                                                          rescaleFlow=False)
-        mean_mag_grad_detJ_buffer += [mean_grad_detJ]
-        negative_detJ_buffer += [mean_negative_detJ]
-
-        """ Save predicted DVF and warped images """
+        """ 
+        Save predicted DVF and warped images 
+        """
         if args.save:
-            nim_dvf = nib.Nifti1Image(dvf_pred.transpose(2, 3, 0, 1),  # (H, W, N, 2) - shape used in NIFTI
-                                      nim_target.affine, nim_target.header)
-            nib.save(nim_dvf, f"{subj_output_dir}/dvf_pred.nii.gz")
-
-            nim_warped_target_original = nib.Nifti1Image(target_pred.transpose(1, 2, 0),
-                                                         nim_target.affine, nim_target.header)
-            nib.save(nim_warped_target_original, f"{subj_output_dir}/target_pred.nii.gz")
-
-            nim_warped_source = nib.Nifti1Image(warped_source.transpose(1, 2, 0),
-                                                         nim_target.affine, nim_target.header)
-            nib.save(nim_warped_source, f"{subj_output_dir}/warped_source.nii.gz")
+            for name in ["dvf_pred", "target_pred", "warped_source"]:
+                save_nifti(data_dict[name].transpose(2, 3, 0, 1),  # (H, W, N, 1/2)
+                           f"{subj_output_dir}/{name}.nii.gz",
+                           nim_dict["target"])
 
         # clean up intermediate outputs
         if not args.debug:
@@ -264,53 +216,11 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
 
 
 """ Save metrics results """
-## JSON file for mean and std
-# construct metrics dict
-results_dict = {}
+metrics_reporter.summarise()
 
-# RMSE (dvf) and RMSE (image)
-rmse_criteria = ["AEE", "RMSE_DVF", "RMSE"]
-for cr in rmse_criteria:
-    result_name = cr
-    the_buffer = locals()[f'{result_name}_buffer']
-    results_dict[f'{result_name}_mean'] = np.mean(the_buffer)
-    results_dict[f'{result_name}_std'] = np.std(the_buffer)
+# save metric results to JSON files
+metrics_reporter.save_mean_std(f"{model_dir}/test_results.json")
+metrics_reporter.save_df(f"{model_dir}/test_metrics_results.pkl")
 
-# regularity
-reg_criteria = ['mean_mag_grad_detJ', 'negative_detJ']
-for cr in reg_criteria:
-    result_name = cr
-    the_buffer = locals()[f'{result_name}_buffer']
-    results_dict[f'{result_name}_mean'] = np.mean(the_buffer)
-    results_dict[f'{result_name}_std'] = np.std(the_buffer)
+logging.info(f"Evaluation complete. Metric results saved at: \n\t{model_dir}")
 
-# sanity check: proportion of negative Jacobian points should be lower than 1
-assert results_dict['negative_detJ_mean'] <= 1, "Invalid det Jac: Ratio of folding points > 1"
-
-# save
-save_path = path.join(model_dir, "test_results.json")
-misc.save_dict_to_json(results_dict, save_path)
-
-
-## data frame with result for individual test subjects (for boxplots)
-df_buffer = []
-column_method = ['FFD'] * len(subj_id_buffer)
-
-# save RMSE and AEE
-rmse_data = {'Method': column_method,
-             'ID': subj_id_buffer,
-             'RMSE': RMSE_buffer,
-             'RMSE_DVF': RMSE_DVF_buffer,
-             'AEE': AEE_buffer}
-rmse_df = pd.DataFrame(data=rmse_data)
-rmse_df.to_pickle(f"{model_dir}/FFD_test_results_rmse.pkl")
-
-# save detJac metrics
-jac_data = {'Method': column_method,
-            'ID': subj_id_buffer,
-            'GradDetJac': mean_mag_grad_detJ_buffer,
-            'NegDetJac': negative_detJ_buffer}
-jac_df = pd.DataFrame(data=jac_data)
-jac_df.to_pickle(f"{model_dir}/FFD_test_results_Jacobian.pkl")
-
-logging.info("Evaluation complete. Metric results saved at: \n\t{}".format(model_dir))

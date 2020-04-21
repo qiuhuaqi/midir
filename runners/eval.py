@@ -4,11 +4,11 @@ from tqdm import tqdm
 import torch
 from model.transformations import spatial_transform
 from runners.inference import process_batch
-from runners.eval_helpers import LossReporter, MetricReporter
+from runners.helpers import LossReporter, MetricReporter
 
 import utils.metrics as metrics_utils
 import utils.misc as misc_utils
-import utils.transform as transform_utils
+import utils.transformation as transform_utils
 import utils.image_io as imageio_utils
 import utils.vis as vis_utils
 
@@ -81,10 +81,10 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
             if args.save:
                 output_dir = misc_utils.setup_dir(result_dir + "/output")
                 subj_id = dataloader.dataset.subject_list[idx]
-                subject_output_dir = misc_utils.setup_dir(path.join(output_dir, subj_id))
+                subj_output_dir = misc_utils.setup_dir(path.join(output_dir, subj_id))
 
                 for name, save_data in data_dict.items():
-                    imageio_utils.save_nifti(save_data.transpose(2, 3, 0, 1), f"{subject_output_dir}/{name}.nii.gz")
+                    imageio_utils.save_nifti(save_data.transpose(2, 3, 0, 1), f"{subj_output_dir}/{name}.nii.gz")
             """"""
 
             t.update()
@@ -114,3 +114,4 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
         # save mean-std and dataframe of metric results
         metrics_reporter.save_mean_std(result_dir + "/test_metrics_results.json")
         metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl")
+
