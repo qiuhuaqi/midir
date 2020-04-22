@@ -17,11 +17,16 @@ class BSplineFFDTransform(object):
         self.cps = cps
 
         # design the kernel
-        kernel_size = (2 * cps + 1) * 2 + 1  # each point is affected by 4x4 neighbouring control points
+        # kernel_size = (2 * cps + 1) * 2 + 1  # each point is affected by 4x4 neighbouring control points
+        # # control point distance from kernel centre
+        # cp_i = torch.arange(0, kernel_size) - cps * 2 - 1
+        # cp_j = torch.arange(0, kernel_size) - cps * 2 - 1
 
-        # control point distance from kernel centre
-        cp_i = torch.arange(0, kernel_size) - cps * 2 - 1
-        cp_j = torch.arange(0, kernel_size) - cps * 2 - 1
+        # or this?
+        kernel_size = 2 * cps + 1
+        cp_i = torch.arange(0, kernel_size) - cps - 1
+        cp_j = torch.arange(0, kernel_size) - cps - 1
+
         # expand to 2D image
         kernel_i = torch.ones((kernel_size, kernel_size)) * cp_i.unsqueeze(1)
         kernel_j = torch.ones((kernel_size, kernel_size)) * cp_j.unsqueeze(0)
@@ -30,11 +35,7 @@ class BSplineFFDTransform(object):
         bspline_kernel_i = cubic_bspline_torch(kernel_i / cps) * (1 / cps)
         bspline_kernel_j = cubic_bspline_torch(kernel_j / cps) * (1 / cps)
 
-        # proper scalling results in very small initial values
-        # bspline_kernel_i = cubic_bspline_torch(kernel_i / cps)
-        # bspline_kernel_j = cubic_bspline_torch(kernel_j / cps)
-
-        # product of filters of the 2 dimensions
+        # compute 2d filter from seperable 1d filters
         kernel = bspline_kernel_i * bspline_kernel_j
         self.kernel = kernel.unsqueeze(0).unsqueeze(0)  # (1, 1, kernel_size, kernel_size)
         self.kernel = self.kernel.repeat(2, 1, 1, 1).float()  # (2, 1, kernel_size, kernel_size)
@@ -52,7 +53,8 @@ class BSplineFFDTransform(object):
         self.kernel = self.kernel.to(device=x.device)
         dvf = F.conv_transpose2d(x, weight=self.kernel, stride=self.cps + 1, groups=2)
 
-        # todo: only works with symmetrical image now
+        # crop out image size DVF
+        # todo: only works with SiameseFCN,rasm symmetrical image now
         crop_start = dvf.size()[-1]//2 - self.crop_size//2
         crop_end =  crop_start + self.crop_size
         dvf = dvf[:, :, crop_start: crop_end, crop_start:crop_end]
