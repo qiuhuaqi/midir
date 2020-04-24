@@ -148,14 +148,15 @@ class Brain2dDataset(ptdata.Dataset):
 
         subject_id = self.subject_list[index]
 
-        # load in T1 &/ T2 image and brain mask, transpose to (N, *(dims))
-        t1_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
-        t2_path = f"{self.data_path}/{subject_id}/{subject_id}_t2.nii.gz"
-        brain_mask_path = f"{self.data_path}/{subject_id}/{subject_id}_brainmask.nii.gz"
+        # specify path to target, source and roi mask (only data-specific part in the pipeline)
+        target_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
+        source_path = f"{self.data_path}/{subject_id}/{subject_id}_t2.nii.gz"
+        roi_mask_path = f"{self.data_path}/{subject_id}/{subject_id}_brainmask.nii.gz"
 
-        data_dict["target_original"] = load_nifti(t1_path).transpose(2, 0, 1)
-        data_dict["source"] = load_nifti(t2_path).transpose(2, 0, 1)
-        data_dict["roi_mask"] = load_nifti(brain_mask_path).transpose(2, 0, 1)
+        # load in T1 &/ T2 image and brain mask, transpose to (N, *(dims))
+        data_dict["target_original"] = load_nifti(target_path).transpose(2, 0, 1)
+        data_dict["source"] = load_nifti(source_path).transpose(2, 0, 1)
+        data_dict["roi_mask"] = load_nifti(roi_mask_path).transpose(2, 0, 1)
 
         if self.run == "train":
             """
@@ -164,7 +165,7 @@ class Brain2dDataset(ptdata.Dataset):
             # taking a random slice each time
             z = random.randint(self.slice_range[0], self.slice_range[1])
             for name, data in data_dict.items():
-                data_dict[name] = data[np.newaxis, z, ...]  # (1xHxW)
+                data_dict[name] = data[np.newaxis, z, ...]  # (1, H, W)
 
             # intensity normalisation
             for name in ["target_original", "source"]:

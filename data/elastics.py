@@ -125,7 +125,7 @@ def synthesis_elastic_deformation(image,
     mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask, pad_ratio=bbox_pad_ratio)
     dvf *= mask_bbox_mask[:, np.newaxis, ...]  # (N, dim, (*dims)) * (N, 1, (*dims))
 
-    # (future work) define the active region of the control point grid
+    # (later) define the active region of the control point grid
     # active_region_i = (max(0, bbox_i[0] - 4*sigma + 1), min(image_shape[1], bbox_i[1] + 4*sigma - 1))
     # active_region_k = (max(0, bbox_k[0] - 4*sigma + 1), min(image_shape[3], bbox_k[1] + 4*sigma - 1))
     """"""

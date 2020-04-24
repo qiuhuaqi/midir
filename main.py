@@ -11,6 +11,10 @@ import utils.misc as misc_utils
 from runners.train import train_and_validate
 from runners.eval import evaluate
 
+# set random seed for workers generating random deformation
+import random
+random.seed(12)
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--run',

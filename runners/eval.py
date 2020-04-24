@@ -46,7 +46,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     with tqdm(total=len(dataloader)) as t:
         for idx, data_dict in enumerate(dataloader):
 
-            # reshaping
+            # reshaping (ch, N, *(dims)) to (N, ch, *(dims))
             for name in ["target", "source", "target_original", "roi_mask"]:
                 data_dict[name] = data_dict[name].transpose(0, 1)  # (N, 1, *(dims))
             data_dict["dvf_gt"] = data_dict["dvf_gt"][0, ...]  # (N, dim, *(dims))

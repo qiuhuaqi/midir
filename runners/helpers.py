@@ -37,8 +37,8 @@ class LossReporter(Reporter):
         super(LossReporter, self).__init__()
 
     def log_to_tensorboard(self, tb_writer, step):
-        for name in self.report:
-            tb_writer.add_scalar(name, self.report[name]['mean'], global_step=step)
+        for loss_name in self.report:
+            tb_writer.add_scalar(f'losses/{loss_name}', self.report[loss_name]['mean'], global_step=step)
 
 
 

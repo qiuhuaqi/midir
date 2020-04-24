@@ -9,7 +9,7 @@ import os
 import numpy as np
 from utils.image import upsample_image
 
-def load_nifti(path, data_type="float32", nim=False):
+def load_nifti(path, data_type="float", nim=False):
     xnim = nib.load(path)
     x = xnim.get_data().astype(data_type)
     if nim:

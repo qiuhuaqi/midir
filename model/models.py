@@ -22,9 +22,11 @@ class DLRegModel(nn.Module):
 
     def _set_network(self):
         if self.params.network == "BaseNet":
+            print("Using BaseNet")
             self.network = BaseNet()
 
         elif self.params.network == "BaseNetFFD":
+            print("Using BaseNetFFD")
             self.network = BaseNetFFD()
 
         else:
@@ -35,6 +37,7 @@ class DLRegModel(nn.Module):
             self.transform = DVFTransform()
 
         elif self.params.transform_model == "ffd":
+            print("Using FFD model")
             self.transform = BSplineFFDTransform(crop_size=self.params.crop_size,
                                                  cps=self.params.ffd_cps)
 

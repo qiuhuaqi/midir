@@ -7,9 +7,6 @@ from runners.inference import process_batch
 from runners.eval import evaluate
 import utils.misc as misc_utils
 
-# set random seed for workers generating random deformation
-# random.seed(12)
-
 
 def train_and_validate(model, loss_fn, data, args):
     """Train the model and evaluate every epoch.

@@ -47,19 +47,19 @@ def normalise_intensity(x,
             x = np.clip(x, clip_min, clip_max)
 
         # Normalise meanstd
-        if mode is "meanstd":
+        if mode == "meanstd":
             mean = np.mean(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
             std = np.std(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
             x = (x - mean) / std  # axis should match & broadcast
 
         # Normalise minmax
-        elif mode is "minmax":
+        elif mode == "minmax":
             min_in = np.amin(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
             max_in = np.amax(x, axis=image_axis, keepdims=True)  # (N, *range(dim)))
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
 
         # Fixed ratio
-        elif mode is "fixed":
+        elif mode == "fixed":
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
 
         else:
