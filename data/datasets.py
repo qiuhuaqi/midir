@@ -54,7 +54,7 @@ class Brain2dData(object):
 
         self.train_dataloader = ptdata.DataLoader(self.train_dataset,
                                                   batch_size=self.params.batch_size,
-                                                  shuffle=False,
+                                                  shuffle=True,
                                                   num_workers=self.args.num_workers,
                                                   pin_memory=self.args.cuda,
                                                   worker_init_fn=worker_init_fn  # todo: fix random seeding
@@ -147,6 +147,9 @@ class Brain2dDataset(ptdata.Dataset):
         data_dict = {}
 
         subject_id = self.subject_list[index]
+
+        ##debug
+        #print(subject_id)
 
         # specify path to target, source and roi mask (only data-specific part in the pipeline)
         target_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
@@ -241,31 +244,6 @@ class Brain2dDataset(ptdata.Dataset):
         # N = 1 for train, = num_slices for generate/val/test
         # shape of dvf_gt: (N, dim, (*dims,))
         return data_dict
-
-    def __len__(self):
-        return len(self.subject_list)
-
-
-
-class IXI2D(ptdata.Dataset):
-    """
-    Load IXI data for 2D registration
-    """
-
-    def __init__(self, data_path, num_slices=50, augment=False, transform=None):
-        super(IXI2D, self).__init__()
-
-        self.data_path = data_path
-        self.num_slices = num_slices
-        self.augment = augment
-        self.transform = transform
-
-        self.subject_list = None
-
-    def __getitem__(self, index):
-        target = None
-        source = None
-        return target, source
 
     def __len__(self):
         return len(self.subject_list)

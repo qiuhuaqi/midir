@@ -6,9 +6,12 @@ import torch
 
 def normalise_intensity(x,
                         mode="minmax",
-                        min_in=0.0, max_in=255.0,
-                        min_out=0.0, max_out=1.0,
-                        clip=False, clip_range_percentile=(0.05, 99.95),
+                        min_in=0.0,
+                        max_in=255.0,
+                        min_out=0.0,
+                        max_out=1.0,
+                        clip=False,
+                        clip_range_percentile=(0.05, 99.95),
                         ):
     """
     Intensity normalisation (& optional percentile clipping)
@@ -37,7 +40,7 @@ def normalise_intensity(x,
     dim = len(x.shape) - 1
     image_axis = tuple(range(1, 1 + dim))  # (1,2) for 2D; (1,2,3) for 3D
 
-    # Numpy Array version
+    # for numpy.ndarray
     if type(x) is np.ndarray:
 
         # Clipping
@@ -67,7 +70,7 @@ def normalise_intensity(x,
                              "Expect either one of: 'meanstd', 'minmax', 'fixed'")
 
 
-    # Pytorch Tensor version
+    # for torch.Tensor
     elif type(x) is torch.Tensor:
         # todo: clipping not supported at the moment (requires Pytorch version of the np.percentile()
 
@@ -79,6 +82,7 @@ def normalise_intensity(x,
 
         # Normalise minmax
         elif mode is "minmax":
+            # get min/max across dims by flattening first
             min_in = x.flatten(start_dim=1, end_dim=-1).min(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
             max_in = x.flatten(start_dim=1, end_dim=-1).max(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)

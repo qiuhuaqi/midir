@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from model.networks import BaseNet, BaseNetFFD
+from model.networks import SiameseNet, SiameseNetFFD
 from model.transformations import BSplineFFDTransform, DVFTransform
 
 
@@ -21,13 +21,11 @@ class DLRegModel(nn.Module):
         self._set_transform_model()
 
     def _set_network(self):
-        if self.params.network == "BaseNet":
-            print("Using BaseNet")
-            self.network = BaseNet()
+        if self.params.network == "SiameseNet":
+            self.network = SiameseNet()
 
-        elif self.params.network == "BaseNetFFD":
-            print("Using BaseNetFFD")
-            self.network = BaseNetFFD()
+        elif self.params.network == "SiameseNetFFD":
+            self.network = SiameseNetFFD()
 
         else:
             raise ValueError("Network not recognised.")

@@ -44,7 +44,9 @@ parser.add_argument('--gpu',
 
 parser.add_argument('--num_workers',
                     default=8,
+                    type=int,
                     help='Number of processes used by dataloader, 0 means use main process')
+
 
 args = parser.parse_args()
 

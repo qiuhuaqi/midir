@@ -142,16 +142,20 @@ class MILoss(nn.Module):
         self.bin_width_target = (target_max - target_min) / num_bins_target
         self.bin_width_source = (source_max - source_min) / num_bins_source
 
-        bins_target = torch.arange(num_bins_target, requires_grad=False) * self.bin_width_target + target_min
-        bins_source = torch.arange(num_bins_source, requires_grad=False) * self.bin_width_source + source_min
-        self.bins_target = bins_target.float().unsqueeze(1)  # (N, 1, #bins, H*W)
-        self.bins_source = bins_source.float().unsqueeze(1)  # (N, 1, #bins, H*W)
+        bins_target = torch.arange(num_bins_target) * self.bin_width_target + target_min
+        bins_source = torch.arange(num_bins_source) * self.bin_width_source + source_min
 
-        # window width parameter (eps)
+        self.bins_target = bins_target.unsqueeze(1).float()  # (N, 1, #bins, H*W)
+        self.bins_source = bins_source.unsqueeze(1).float()  # (N, 1, #bins, H*W)
+
+        self.bins_target.requires_grad_(False)
+        self.bins_source.requires_grad_(False)
+
+
+        # determine kernel width controlling parameter (eps)
         # to satisfy the partition of unity constraint, eps can be no larger than bin_width
         # and can only be reduced by integer factor to increase kernel support,
         # cubic B-spline function has support of 4*eps, hence maximum number of bins a sample can affect is 4c
-        # todo: what are c(s)? (Look at original Unser paper)
         self.eps_target = c_target * self.bin_width_target
         self.eps_source = c_source * self.bin_width_source
 
@@ -197,12 +201,13 @@ class MILoss(nn.Module):
         W_source = self._parzen_window_1d(D_source, window=self.window)  # (N, #bins, H*W)
 
         # calculate joint histogram (using batch matrix multiplication)
-        histogram_joint = W_target.bmm(W_source.transpose(1, 2))  # (N, #bins, #bins)
-        histogram_joint /= self.eps_target * self.eps_source
+        hist_joint = W_target.bmm(W_source.transpose(1, 2))  # (N, #bins, #bins)
+        hist_joint /= self.eps_target * self.eps_source
 
         """distributions"""
-        # normalise joint histogram to acquire joint distribution
-        p_joint = histogram_joint / histogram_joint.sum()
+        # normalise joint histogram to get joint distribution
+        hist_norm = hist_joint.flatten(start_dim=1, end_dim=-1).sum(dim=1)  # normalisation factor per-image,
+        p_joint = hist_joint / hist_norm.view(-1, 1, 1)  # (N, #bins, #bins) / (N, 1, 1)
 
         # marginalise the joint distribution to get marginal distributions
         # batch size in dim0, target bins in dim1, source bins in dim2
@@ -211,22 +216,22 @@ class MILoss(nn.Module):
 
         """entropy"""
         # calculate entropy
-        entropy_target = - torch.sum(p_target * torch.log(p_target + 1e-12), dim=1)  # (N,1)
-        entropy_source = - torch.sum(p_source * torch.log(p_source + 1e-12), dim=1)  # (N,1)
-        entropy_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-12), dim=(1, 2))  # (N,1)
+        ent_target = - torch.sum(p_target * torch.log(p_target + 1e-12), dim=1)  # (N,1)
+        ent_source = - torch.sum(p_source * torch.log(p_source + 1e-12), dim=1)  # (N,1)
+        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-12), dim=(1, 2))  # (N,1)
 
         """debug mode: store bins, histograms & distributions"""
         if self.debug:
-            self.histogram_joint = histogram_joint
+            self.histogram_joint = hist_joint
             self.p_joint = p_joint
             self.p_target = p_target
             self.p_source = p_source
 
         # return (unnormalised) mutual information or normalised mutual information (NMI)
         if self.nmi:
-            return -torch.mean((entropy_target + entropy_source) / entropy_joint)
+            return -torch.mean((ent_target + ent_source) / ent_joint)
         else:
-            return -torch.mean(entropy_target + entropy_source - entropy_joint)
+            return -torch.mean(ent_target + ent_source - ent_joint)
 
 
 

@@ -91,8 +91,8 @@ def spatial_transform(x, dvf, mode="bilinear"):
     h, w = x.size()[-2:]
     grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
 
-    grid_h = grid_h.requires_grad_(requires_grad=False).to(device=x.device)
-    grid_w = grid_w.requires_grad_(requires_grad=False).to(device=x.device)
+    grid_h = grid_h.requires_grad_(False).to(device=x.device)
+    grid_w = grid_w.requires_grad_(False).to(device=x.device)
 
     # (H,W) + (N, H, W) add by broadcasting
     new_grid_h = grid_h + dvf[:, 0, ...]
