@@ -1,9 +1,9 @@
 {
-    "version": "v0.2-dev",
+    "version": "v0.2",
     "run_no": 1,
-    "run_note": "Try new per-dimension spatial normalisation of DVF",
+    "run_note": "",
     "model": "DL",
-    "network": "BaseNet",
+    "network": "SiameseNet",
     "modality": "multi",
     "transform_model": "dvf",
     "metric_groups": ["dvf_metrics", "image_metrics"],
@@ -11,18 +11,18 @@
 
     "data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/miccai2020",
 
-    "sim_loss": "NMI",  
+    "sim_loss": "NMI",
     "sim_weight": 1.0,
-    "reg_loss": "diffusion", 
+    "reg_loss": "diffusion",
     "reg_weight": 1e4,
     "ffd_cps": 8,
 
-    "learning_rate": 1e-3,
+    "learning_rate": 1e-4,
     "num_epochs": 1000,
-    "val_epochs": 10,
-    "save_summary_steps": 5,
-    "batch_size": 20,
+    "val_epochs": 20,
+    "save_summary_steps": 1,
 
+    "batch_size": 15,
     "crop_size": 192,
     "sigma": 8,
     "elastic_cps": 10,
