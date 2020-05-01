@@ -22,7 +22,7 @@ class BSplineFFDTransform(object):
         # cp_i = torch.arange(0, kernel_size) - cps * 2 - 1
         # cp_j = torch.arange(0, kernel_size) - cps * 2 - 1
 
-        # or this?
+        # or 2x2 neighbouring control points as in Dirk Locxx's thesis?
         kernel_size = 2 * cps + 1
         cp_i = torch.arange(0, kernel_size) - cps - 1
         cp_j = torch.arange(0, kernel_size) - cps - 1
