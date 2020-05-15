@@ -28,7 +28,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     Returns:
 
     """
-    # put model in evaluation mode
+    # evaluation mode
     model.eval()
 
     # set up reporters

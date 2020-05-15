@@ -1,8 +1,8 @@
-import torch
 import torch.nn as nn
 import numpy as np
 
-from model.networks import SiameseNet, SiameseNetFFD
+from model.networks.dvf_nets import SiameseNet
+from model.networks.ffd_nets import SiameseFFDNet, NewSiameseFFDNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 
 
@@ -23,10 +23,9 @@ class DLRegModel(nn.Module):
     def _set_network(self):
         if self.params.network == "SiameseNet":
             self.network = SiameseNet()
-
         elif self.params.network == "SiameseNetFFD":
-            self.network = SiameseNetFFD()
-
+            # self.network = NewSiameseFFDNet()
+            self.network = SiameseFFDNet()
         else:
             raise ValueError("Network not recognised.")
 
@@ -35,10 +34,9 @@ class DLRegModel(nn.Module):
             self.transform = DVFTransform()
 
         elif self.params.transform_model == "ffd":
-            print("Using FFD model")
-            self.transform = BSplineFFDTransform(crop_size=self.params.crop_size,
-                                                 cps=self.params.ffd_cps)
-
+            self.transform = BSplineFFDTransform(dim=2,
+                                                 img_size=self.params.crop_size,
+                                                 cpt_spacing=self.params.ffd_cps)
         else:
             raise ValueError("Transformation model not recognised.")
 
@@ -56,33 +54,5 @@ class DLRegModel(nn.Module):
     def forward(self, target, source):
         net_out = self.network(target, source)
         dvf = self.transform(net_out)
-        return dvf
-
-
-"""
-Baseline Models
-"""
-class BaselineModel(object):
-    def __init__(self):
-        pass
-
-    def eval(self):
-        # dummy method for model.eval() call in evaluate()
-        pass
-
-    def __call__(self, target, source):
-        raise NotImplementedError
-
-
-class IdBaselineModel(BaselineModel):
-    """Identity transformation baseline, i.e. no registration"""
-    def __init__(self, params):
-        super(IdBaselineModel, self).__init__()
-        self.params = params
-
-    def __call__(self, target, source):
-        """Output dvf in shape (N, dim, *(dims))"""
-        dim = len(target.size())-2   # image dimension
-        dvf = torch.zeros_like(target).repeat(1, dim, *(1,)*dim)
         return dvf
 

@@ -3,6 +3,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+"""
+Rectangle window functions
+"""
 def rect_window_numpy(x):
     """
     Rectangle window function centred at 0 and of width 1
@@ -40,6 +43,10 @@ def rect_window_torch(x):
     x[x0mask] = 0
     return x
 
+
+"""
+Cubic B-spline window functions
+"""
 
 def cubic_bspline_numpy(x):
     """
@@ -98,7 +105,6 @@ def grad_cubic_bspline_numpy(x):
     # |x| >= 2, zeros as it is
 
     return grad_x
-
 
 
 def cubic_bspline_torch(x):

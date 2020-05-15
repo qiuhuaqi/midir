@@ -4,7 +4,8 @@ import logging
 import torch
 
 from data.datasets import Brain2dData
-from model.models import DLRegModel, IdBaselineModel
+from model.models import DLRegModel
+from baselines.baseline_models import IdBaselineModel
 from model.losses import loss_fn
 import utils.misc as misc_utils
 
