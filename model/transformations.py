@@ -5,6 +5,8 @@ from model.window_func import cubic_bspline_torch
 """ 
 Transformation models 
 """
+
+
 class BSplineFFDTransform(object):
     def __init__(self,
                  dim=2,
@@ -21,6 +23,7 @@ class BSplineFFDTransform(object):
         """
 
         self.dim = dim
+        # assume same size for all dimensions if one integer is given
         if isinstance(img_size, int):
             self.img_size = (img_size,) * dim
         else:
@@ -66,14 +69,12 @@ class BSplineFFDTransform(object):
         self.kernel = self.kernel.to(device=x.device)
 
         # compute the DVF of the FFD transformation by transposed convolution 2D/3D
-        if self.dim == 2:
-            dvf = F.conv_transpose2d(x, weight=self.kernel, stride=self.strides, groups=self.dim,
-                                     padding=self.cpt_spacing)
-        elif self.dim == 3:
-            dvf = F.conv_transpose3d(x, weight=self.kernel, stride=self.strides, groups=self.dim,
-                                     padding=self.cpt_spacing)
-        else:
-            raise ValueError("FFD transformation model dimension unknown.")
+        conv_transposeNd = getattr(F, f"conv_transpose{self.dim}d")
+        dvf = conv_transposeNd(x,
+                               weight=self.kernel,
+                               stride=self.strides,
+                               groups=self.dim,
+                               padding=self.cpt_spacing)
 
         # crop DVF to image size (centres aligned)
         for i in range(self.dim):
@@ -97,12 +98,15 @@ class DVFTransform(object):
 
     def __call__(self, x):
         return x
-""""""
 
+
+""""""
 
 """
 Spatial Transformer
 """
+
+
 def spatial_transform(x, dvf, mode="bilinear"):
     """
     Spatially transform an image by sampling at coordinates of the deformed mesh grid.

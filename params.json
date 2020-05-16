@@ -1,21 +1,22 @@
 {
-    "version": "v0.2",
+    "version": "v0.2.1-dev",
     "run_no": 1,
     "run_note": "",
-    "model": "DL",
-    "network": "SiameseNet",
-    "modality": "multi",
-    "transform_model": "dvf",
-    "metric_groups": ["dvf_metrics", "image_metrics"],
-    "best_metrics": ["rmse_dvf", "aee", "rmse"],
 
     "data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/miccai2020",
+
+    "model": "DL",
+    "dim": 2,
+    "modality": "multi",
+
+    "network": "FFDNet",
+    "transformation": "FFD",
+    "ffd_cps": 8,
 
     "sim_loss": "NMI",
     "sim_weight": 1.0,
     "reg_loss": "diffusion",
     "reg_weight": 1e4,
-    "ffd_cps": 8,
 
     "learning_rate": 1e-4,
     "num_epochs": 1000,
@@ -24,10 +25,14 @@
 
     "batch_size": 15,
     "crop_size": 192,
+
     "sigma": 8,
     "elastic_cps": 10,
     "slice_start": 70,
     "slice_end": 90,
     "disp_min": 1.5,
-    "disp_max": 2.5
+    "disp_max": 2.5,
+
+    "metric_groups": ["dvf_metrics", "image_metrics"],
+    "best_metrics": ["rmse_dvf", "aee", "rmse"]
 }

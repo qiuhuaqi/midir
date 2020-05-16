@@ -2,7 +2,7 @@ import torch.nn as nn
 import numpy as np
 
 from model.networks.dvf_nets import SiameseNet
-from model.networks.ffd_nets import SiameseFFDNet
+from model.networks.ffd_nets import SiameseFFDNet, FFDNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 
 
@@ -18,26 +18,31 @@ class DLRegModel(nn.Module):
         self.best_metric_result = 0
 
         self._set_network()
-        self._set_transform_model()
+        self._set_transformation()
 
     def _set_network(self):
         if self.params.network == "SiameseNet":
             self.network = SiameseNet()
+
         elif self.params.network == "SiameseFFD":
             self.network = SiameseFFDNet()
+        elif self.params.network == "FFDNet":
+            self.network = FFDNet(self.params.dim,
+                                  self.params.crop_size,
+                                  self.params.ffd_cps)
         else:
-            raise ValueError("Network not recognised.")
+            raise ValueError("Model: Network not recognised")
 
-    def _set_transform_model(self):
-        if self.params.transform_model == "dvf":
+    def _set_transformation(self):
+        if self.params.transformation == "DVF":
             self.transform = DVFTransform()
 
-        elif self.params.transform_model == "ffd":
-            self.transform = BSplineFFDTransform(dim=2,
+        elif self.params.transformation == "FFD":
+            self.transform = BSplineFFDTransform(dim=self.params.dim,
                                                  img_size=self.params.crop_size,
                                                  cpt_spacing=self.params.ffd_cps)
         else:
-            raise ValueError("Transformation model not recognised.")
+            raise ValueError("Model: Transformation model not recognised")
 
     def update_best_model(self, metric_results):
         metric_results_mean = np.mean([metric_results[metric] for metric in self.params.best_metrics])
