@@ -2,11 +2,9 @@ import torch
 import torch.nn.functional as F
 from model.window_func import cubic_bspline_torch
 
+""" 
+Transformation models 
 """
-Transformation models
-"""
-
-
 class BSplineFFDTransform(object):
     def __init__(self,
                  dim=2,
@@ -18,23 +16,23 @@ class BSplineFFDTransform(object):
 
         Args:
             dim: (int) image dimension
-            img_sizes: sizes of the image of all dimensions
-            cpt_spacings: control point spacings (number of points between adjacent control points)
+            img_size: (int or tuple) size of the image, if int assume same size on all dimensions
+            cpt_spacing: (int or tuple) number of points between adjacent control points
         """
 
         self.dim = dim
-        if len(cpt_spacing) == dim:
-            self.cpt_spacing = cpt_spacing
-        else:
-            self.cpt_spacing = (cpt_spacing,) * dim
-
-        if len(img_size) == dim:
-            self.img_size = img_size
-        else:
+        if isinstance(img_size, int):
             self.img_size = (img_size,) * dim
+        else:
+            self.img_size = img_size
 
-        self._set_kernel()
+        if isinstance(cpt_spacing, int):
+            self.cpt_spacing = (cpt_spacing,) * dim
+        else:
+            self.cpt_spacing = cpt_spacing
+
         self.strides = ([s + 1 for s in self.cpt_spacing])
+        self._set_kernel()
 
     def _set_kernel(self):
         # initialise the 1-d b-spline kernels
@@ -81,73 +79,14 @@ class BSplineFFDTransform(object):
         for i in range(self.dim):
             assert dvf.size()[i + 2] >= self.img_size[i], \
                 f"FFD DVF size is smaller than image at dimension {i}"
+
         crop_starts = [dvf.size()[i + 2] // 2 - self.img_size[i] // 2
                        for i in range(self.dim)]
         crop_ends = [crop_starts[i] + self.img_size[i]
                      for i in range(self.dim)]
         for i in range(self.dim):
-            dvf = dvf.index_select(i + 2, torch.arange(crop_starts[i], crop_ends[i]))
-
+            dvf = dvf.index_select(i + 2, torch.arange(crop_starts[i], crop_ends[i], device=x.device))
         return dvf
-
-
-# class BSplineFFDTransform(object):
-#     def __init__(self,
-#                  crop_size=192,
-#                  cps=8):
-#         """
-#         (i,j) refer to points on spatially on each DVF dimensions,
-#         where (x, y) refer to the dimensions of DVF
-#
-#         Args:
-#             cps: control point spacing
-#         """
-#         self.crop_size = crop_size
-#         self.cps = cps
-#
-#         # design the kernel
-#         # kernel_size = (2 * cps + 1) * 2 + 1  # each point is affected by 4x4 neighbouring control points
-#         # # control point distance from kernel centre
-#         # cp_i = torch.arange(0, kernel_size) - cps * 2 - 1
-#         # cp_j = torch.arange(0, kernel_size) - cps * 2 - 1
-#
-#         # or 2x2 neighbouring control points as in Dirk Locxx's thesis?
-#         kernel_size = 2 * cps + 1
-#         cp_i = torch.arange(0, kernel_size) - cps - 1
-#         cp_j = torch.arange(0, kernel_size) - cps - 1
-#
-#         # expand to 2D image
-#         kernel_i = torch.ones((kernel_size, kernel_size)) * cp_i.unsqueeze(1)
-#         kernel_j = torch.ones((kernel_size, kernel_size)) * cp_j.unsqueeze(0)
-#
-#         # pass through B-spline kernel
-#         bspline_kernel_i = cubic_bspline_torch(kernel_i / cps) * (1 / cps)
-#         bspline_kernel_j = cubic_bspline_torch(kernel_j / cps) * (1 / cps)
-#
-#         # compute 2d filter from seperable 1d filters
-#         kernel = bspline_kernel_i * bspline_kernel_j
-#         self.kernel = kernel.unsqueeze(0).unsqueeze(0)  # (1, 1, kernel_size, kernel_size)
-#         self.kernel = self.kernel.repeat(2, 1, 1, 1).float()  # (2, 1, kernel_size, kernel_size)
-#
-#     def __call__(self, x):
-#         """
-#         Args:
-#             x: (N, 2, Kh, Kw) network output i.e. control point parameters
-#
-#         Returns:
-#             dvf: (N, 2, H, W)
-#             warped_source: (N, 1, H, W)
-#         """
-#         # compute DVF from B-spline control point parameters
-#         self.kernel = self.kernel.to(device=x.device)
-#         dvf = F.conv_transpose2d(x, weight=self.kernel, stride=self.cps + 1, groups=2)
-#
-#         # crop out image size DVF
-#         # todo: only works with SiameseFCN,rasm symmetrical image now
-#         crop_start = dvf.size()[-1]//2 - self.crop_size//2
-#         crop_end =  crop_start + self.crop_size
-#         dvf = dvf[:, :, crop_start: crop_end, crop_start:crop_end]
-#         return dvf
 
 
 class DVFTransform(object):
@@ -158,8 +97,12 @@ class DVFTransform(object):
 
     def __call__(self, x):
         return x
+""""""
 
 
+"""
+Spatial Transformer
+"""
 def spatial_transform(x, dvf, mode="bilinear"):
     """
     Spatially transform an image by sampling at coordinates of the deformed mesh grid.

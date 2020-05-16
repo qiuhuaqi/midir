@@ -2,7 +2,7 @@ import torch.nn as nn
 import numpy as np
 
 from model.networks.dvf_nets import SiameseNet
-from model.networks.ffd_nets import SiameseFFDNet, NewSiameseFFDNet
+from model.networks.ffd_nets import SiameseFFDNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 
 
@@ -23,8 +23,7 @@ class DLRegModel(nn.Module):
     def _set_network(self):
         if self.params.network == "SiameseNet":
             self.network = SiameseNet()
-        elif self.params.network == "SiameseNetFFD":
-            # self.network = NewSiameseFFDNet()
+        elif self.params.network == "SiameseFFD":
             self.network = SiameseFFDNet()
         else:
             raise ValueError("Network not recognised.")
