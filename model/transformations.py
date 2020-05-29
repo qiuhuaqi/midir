@@ -1,11 +1,11 @@
 import torch
 import torch.nn.functional as F
 from model.window_func import cubic_bspline_torch
+from utils.transformation import normalise_dvf
 
 """ 
 Transformation models 
 """
-
 
 class BSplineFFDTransform(object):
     def __init__(self,
@@ -99,43 +99,43 @@ class DVFTransform(object):
     def __call__(self, x):
         return x
 
-
 """"""
+
+
+
 
 """
 Spatial Transformer
 """
 
-
-def spatial_transform(x, dvf, mode="bilinear"):
+def spatial_transform(x, dvf, interp_mode="bilinear"):
     """
-    Spatially transform an image by sampling at coordinates of the deformed mesh grid.
+    Spatially transform an image by sampling at transformed locations
+    # todo: add affine mode
 
     Args:
-        x: source image, Tensor of shape (N, Ch, H, W)
-        dvf: (Tensor, Nx2xHxW) displacement vector field from target to source, in [-1,1] coordinate
-        mode: (striis) method of interpolation
+        x: (Tensor float, shape (N, Ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
+        dvf: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
+        interp_mode: (string) mode of interpolation in grid_sample()
 
     Returns:
-        source image deformed using the deformation flow field,
-        Tensor of the same shape as source image
-
+        deformed x, Tensor of the same shape as input
     """
+    dim = x.ndim - 2
+    size = x.size()[2:]
+
+    # normalise DVF to [-1, 1]
+    dvf = normalise_dvf(dvf)
 
     # generate standard mesh grid
-    h, w = x.size()[-2:]
-    grid_h, grid_w = torch.meshgrid([torch.linspace(-1, 1, h), torch.linspace(-1, 1, w)])
+    mesh_grid = torch.meshgrid([torch.linspace(-1, 1, size[i], dtype=dvf.dtype) for i in range(dim)])
+    mesh_grid = [mesh_grid[i].requires_grad_(False).to(device=dvf.device) for i in range(dim)]
 
-    grid_h = grid_h.requires_grad_(False).to(device=x.device)
-    grid_w = grid_w.requires_grad_(False).to(device=x.device)
+    # apply displacements to each direction (N, *size)
+    deformed_meshgrid = [mesh_grid[i] + dvf[:, i, ...] for i in range(dim)]
 
-    # (H,W) + (N, H, W) add by broadcasting
-    new_grid_h = grid_h + dvf[:, 0, ...]
-    new_grid_w = grid_w + dvf[:, 1, ...]
+    # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
+    deformed_meshgrid = [deformed_meshgrid[dim-1-i] for i in range(dim)]
+    deformed_meshgrid = torch.stack(deformed_meshgrid, -1)  # (N, *size, dim)
 
-    # using x-y (column_num, row_num) order
-    deformed_grid = torch.stack((new_grid_w, new_grid_h), 3)  # shape (N, H, W, 2)
-    deformed_image = F.grid_sample(x.type_as(deformed_grid), deformed_grid,
-                                   mode=mode, padding_mode="border", align_corners=True)
-
-    return deformed_image
+    return F.grid_sample(x, deformed_meshgrid, mode=interp_mode)

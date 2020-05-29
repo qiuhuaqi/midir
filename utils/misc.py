@@ -152,3 +152,31 @@ def setup_dir(dir_path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     return dir_path
+
+
+def param_dim_setup(param, dim):
+    """
+    Check dimensions of paramters and extend dimension if needed.
+
+    Args:
+        param: (int/float, tuple or list) check dimension match if tuple or list is given,
+                expand to `dim` by repeating if a single integer/float number is given.
+        dim: (int) data/model dimension
+
+    Returns:
+        param: (tuple)
+    """
+
+    if isinstance(param, int) or isinstance(param, float):
+        param = (param,) * dim
+    elif isinstance(param, tuple):
+        assert len(param) == dim, \
+            f"Dimension mismatch with data ({dim})"
+    elif isinstance(param, list):
+        assert len(param) == dim, \
+            f"Dimension mismatch with data ({dim})"
+        param = tuple(param)
+    else:
+        raise TypeError("Parameter type not int, tuple or list")
+    return param
+

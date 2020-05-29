@@ -7,6 +7,7 @@ import nibabel as nib
 
 def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     """
+    (Legacy 2D only)
     Convert MIRTK format DOF file to dense Deformation Vector Field (DVF)
     by warping meshgrid using MIRTK transform-image
 
@@ -68,33 +69,32 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
 
     return dvf
 
+
 def normalise_dvf(dvf):
     """
     Spatially normalise DVF to [-1, 1] coordinate system used by Pytorch `grid_sample()`
     Assumes dvf size is the same as the corresponding image.
 
     Args:
-        dvf: (numpy.ndarray or torch.Tensor, size (N, dim, *sizes) Displacement Vector Field
+        dvf: (numpy.ndarray or torch.Tensor, shape (N, dim, *size)) Displacement Vector Field
 
     Returns:
-        dvf (normalised)
+        dvf: (normalised DVF)
     """
 
-    dim = len(dvf.shape) - 2
+    dim = dvf.ndim - 2
 
     if type(dvf) is np.ndarray:
-        factors = 2. / np.array(dvf.shape[2:])
-        factors = factors.reshape(1, dim, *(1,) * dim)
+        norm_factors = 2. / np.array(dvf.shape[2:])
+        norm_factors = norm_factors.reshape(1, dim, *(1,) * dim)
 
     elif type(dvf) is torch.Tensor:
-        factors = 2. / torch.tensor(tuple(dvf.size()[2:]), dtype=dvf.dtype, device=dvf.device)
-        factors = factors.view(1, dim, *(1,) * dim)
+        norm_factors = torch.tensor(2.) / torch.tensor(dvf.size()[2:], dtype=dvf.dtype, device=dvf.device)
+        norm_factors = norm_factors.view(1, dim, *(1,)*dim)
 
     else:
-        raise RuntimeError("DVF normalisation: input data type not recognised. "
-                           "Expect: numpy.ndarray or torch.Tensor")
-    return dvf * factors
-
+        raise RuntimeError("Input data type not recognised, expect numpy.ndarray or torch.Tensor")
+    return dvf * norm_factors
 
 
 def denormalise_dvf(dvf):
@@ -102,24 +102,24 @@ def denormalise_dvf(dvf):
     Invert of `normalise_dvf()`
     Output DVF is in number of pixels/voxels
     """
-    dim = len(dvf.shape) - 2
+    dim = dvf.ndim - 2
 
     if type(dvf) is np.ndarray:
-        factors = np.array(dvf.shape[2:]) / 2.
-        factors = factors.reshape(1, dim, *(1,) * dim)  # (1, dim, *(1,)*dim)
+        denorm_factors = np.array(dvf.shape[2:]) / 2.
+        denorm_factors = denorm_factors.reshape(1, dim, *(1,) * dim)
 
     elif type(dvf) is torch.Tensor:
-        factors = torch.tensor(tuple(dvf.size()[2:]), dtype=dvf.dtype, device=dvf.device) / 2.
-        factors = factors.view(1, dim, *(1,) * dim)  # (1, dim, *(1,)*dim)
+        denorm_factors = torch.tensor(tuple(dvf.size()[2:]), dtype=dvf.dtype, device=dvf.device) / torch.tensor(2.)
+        denorm_factors = denorm_factors.view(1, dim, *(1,) * dim)
 
     else:
-        raise RuntimeError("DVF normalisation: input data type not recognised. "
-                           "Expect: numpy.ndarray or torch.Tensor")
-    return dvf * factors
+        raise RuntimeError("Input data type not recognised, expect numpy.ndarray or torch.Tensor")
+    return dvf * denorm_factors
 
 
 def dvf_line_integral(op_flow):
     """
+    (Legacy)
     Perform approximated line integral of frame-to-frame optical flow
     using Pytorch and GPU
 

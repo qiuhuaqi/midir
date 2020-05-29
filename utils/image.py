@@ -1,7 +1,42 @@
 """Image/Array utils"""
+import torch
 import numpy as np
 from PIL import Image
-import torch
+from utils.misc import param_dim_setup
+
+def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
+    """
+    Crop and/or pad input to new size.
+    (Adapted from DLTK: https://github.com/DLTK/DLTK/blob/master/dltk/io/preprocessing.py)
+
+    Args:
+        x: (np.ndarray) input array, shape (N, H, W) or (N, H, W, D)
+        new_size: (int or tuple/list) new size excluding the first dimension
+        mode: (string) padding value filling mode for numpy.pad() (default in Numpy v1.18, remove this if upgrade)
+        kwargs: additional arguments to be passed to np.pad
+
+    Returns:
+        (np.ndarray) cropped and/or padded input array
+    """
+    assert isinstance(x, (np.ndarray, np.generic))
+    new_size = param_dim_setup(new_size, dim=x.ndim-1)
+
+    # Create placeholders for the new shape
+    to_padding = [[0, 0] for i in range(x.ndim)]
+    slicer = [slice(0, x.shape[i]) for i in range(x.ndim)]
+
+    # For each dimensions except the dim 0, set crop slicers or paddings
+    for i in range(x.ndim-1):
+        if x.shape[i+1] < new_size[i]:
+            to_padding[i+1][0] = (new_size[i] - x.shape[i+1]) // 2
+            to_padding[i+1][1] = new_size[i] - x.shape[i+1] - to_padding[i+1][0]
+        else:
+            # Create slicer object to crop each dimension
+            crop_start = int(np.floor((x.shape[i+1] - new_size[i]) / 2.))
+            crop_end = crop_start + new_size[i]
+            slicer[i+1] = slice(crop_start, crop_end)
+
+    return np.pad(x[tuple(slicer)], to_padding, mode=mode, **kwargs)
 
 
 def normalise_intensity(x,
@@ -23,7 +58,7 @@ def normalise_intensity(x,
     3) "fixed": normalise with a fixed ratio
 
     Args:
-        x: (ndarray / Tensor, shape (N, *dims))
+        x: (ndarray / Tensor, shape (N, *size))
         mode: (str) indicate normalisation mode
         min_in: (float) minimum value of the input (assumed value for fixed mode)
         max_in: (float) maximum value of the input (assumed value for fixed mode)
@@ -37,8 +72,8 @@ def normalise_intensity(x,
     """
 
     # determine data dimension
-    dim = len(x.shape) - 1
-    image_axis = tuple(range(1, 1 + dim))  # (1,2) for 2D; (1,2,3) for 3D
+    dim = x.ndim - 1
+    image_axes = tuple(range(1, 1 + dim))  # (1,2) for 2D; (1,2,3) for 3D
 
     # for numpy.ndarray
     if type(x) is np.ndarray:
@@ -46,19 +81,19 @@ def normalise_intensity(x,
         # Clipping
         if clip:
             # intensity clipping
-            clip_min, clip_max = np.percentile(x, clip_range_percentile, axis=image_axis, keepdims=True)
+            clip_min, clip_max = np.percentile(x, clip_range_percentile, axis=image_axes, keepdims=True)
             x = np.clip(x, clip_min, clip_max)
 
         # Normalise meanstd
         if mode == "meanstd":
-            mean = np.mean(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
-            std = np.std(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
+            mean = np.mean(x, axis=image_axes, keepdims=True)  # (N, *range(dim))
+            std = np.std(x, axis=image_axes, keepdims=True)  # (N, *range(dim))
             x = (x - mean) / std  # axis should match & broadcast
 
         # Normalise minmax
         elif mode == "minmax":
-            min_in = np.amin(x, axis=image_axis, keepdims=True)  # (N, *range(dim))
-            max_in = np.amax(x, axis=image_axis, keepdims=True)  # (N, *range(dim)))
+            min_in = np.amin(x, axis=image_axes, keepdims=True)  # (N, *range(dim))
+            max_in = np.amax(x, axis=image_axes, keepdims=True)  # (N, *range(dim)))
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
 
         # Fixed ratio
@@ -69,6 +104,9 @@ def normalise_intensity(x,
             raise ValueError("Intensity normalisation mode not understood."
                              "Expect either one of: 'meanstd', 'minmax', 'fixed'")
 
+        # cast to float 32
+        x = x.astype(np.float32)
+
 
     # for torch.Tensor
     elif type(x) is torch.Tensor:
@@ -76,8 +114,8 @@ def normalise_intensity(x,
 
         # Normalise meanstd
         if mode is "meanstd":
-            mean = torch.mean(x, dim=image_axis, keepdim=True)  # (N, *range(dim))
-            std = torch.std(x, dim=image_axis, keepdim=True)  # (N, *range(dim))
+            mean = torch.mean(x, dim=image_axes, keepdim=True)  # (N, *range(dim))
+            std = torch.std(x, dim=image_axes, keepdim=True)  # (N, *range(dim))
             x = (x - mean) / std  # axis should match & broadcast
 
         # Normalise minmax
@@ -95,9 +133,14 @@ def normalise_intensity(x,
             raise ValueError("Intensity normalisation mode not recognised."
                              "Expect: 'meanstd', 'minmax', 'fixed'")
 
+        # cast to float32
+        x = x.float()
+
     else:
         raise RuntimeError("Intensity normalisation: input data type not recognised. "
                            "Expect: numpy.ndarray or torch.Tensor")
+
+
     return x
 
 
@@ -151,58 +194,81 @@ def mask_and_crop(x, roi_mask):
 
 def bbox_crop(x, bbox):
     """
-    Crop image by slicing uisng bounding box indices
+    Crop image by slicing using bounding box indices
 
     Args:
         x: (numpy.ndarray, shape (N, ch, *dims))
-        bbox: (tuple of tuples) ((bbox_min_dim1, bbox_max_dim1), (bbox_min_dim2, bbox_max_dim2), ...)
+        bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
 
     Returns:
-        cropped x
+        input cropped by according to bounding box
     """
     return x[:, :, bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+
+def bbox_crop_v2(x, bbox):
+    """
+    ## todo: not tested
+    Crop image by slicing using bounding box indices
+
+    Args:
+        x: (numpy.ndarray, shape (N, ch, *dims))
+        bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
+
+    Returns:
+        input cropped by according to bounding box
+    """
+    # slice all of batch and channel
+    slicer = [slice(0, x.shape[0]), slice(0, x.shape[1])]
+
+    dim = x.ndim - 2
+    for i in range(dim):
+        slicer.append(slice(*bbox[i]))
+    return x[tuple(slicer)]
+
 
 
 def bbox_from_mask(mask, pad_ratio=0.2):
     """
     Find a bounding box indices of a mask (with positive > 0)
-    (largest bounding box of N masks)
-    The indices follows Python indexing rule and can be directly used for slicing
+    The output indices can be directly used for slicing
+    - for 2D, find the largest bounding box out of the N masks
+    - for 3D, find the bounding box of the volume mask
 
     Args:
-        mask: (ndarray, shape (N, H, W))
-        pad_ratio: ratio of distance between the edge of mask bounding box to image boundary to pad
+        mask: (ndarray, shape (N, H, W) or (N, H, W, D)
+        pad_ratio: (int or tuple) the ratio of between the mask bounding box to image boundary to pad
 
     Return:
-        None: if structure in mask is too small
-
-        bbox: list [[dim_i_min, dim_i_max], [dim_j_min, dim_j_max], ...] otherwise
-        bbox_mask: (ndarray, shape (N, H, W)) binary mask which is 1 inside the bbox, 0 outside
-
+        bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
+        bbox_mask: (numpy.ndarray shape (N, mH, mW) or (N, mH, mW, mD)) binary mask of the bounding box
     """
-    mask_indices = np.nonzero(mask > 0)
-    bbox_i = (mask_indices[1].min(), mask_indices[1].max()+1)
-    bbox_j = (mask_indices[2].min(), mask_indices[2].max()+1)
-    # bbox_k = (mask_indices[3].min(), mask_indices[3].max()+1)
+    dim = mask.ndim - 1
+    mask_shape = mask.shape[1:]
+    pad_ratio = param_dim_setup(pad_ratio, dim)
 
-    # pad 20% of minimum distance to the image boundaries (10% each side)
-    if pad_ratio > 1:
-        print("Invalid padding value (>1), set to 1")
-        pad_ratio = 1
+    # find non-zero locations in the mask
+    nonzero_indices = np.nonzero(mask > 0)
+    bbox = [(nonzero_indices[i+1].min(), nonzero_indices[i+1].max())
+                    for i in range(dim)]
 
-    bbox_pad_i = pad_ratio * min(bbox_i[0], mask.shape[1] - bbox_i[1])
-    bbox_pad_j = pad_ratio * min(bbox_j[0], mask.shape[2] - bbox_j[1])
-    # bbox_pad_k = 0.2 * min(bbox_k[0], image.shape[3] - bbox_k[1])
-
-    bbox_i = (bbox_i[0] - int(bbox_pad_i/2), bbox_i[1] + int(bbox_pad_i/2))
-    bbox_j = (bbox_j[0] - int(bbox_pad_j/2), bbox_j[1] + int(bbox_pad_j/2))
-    # bbox_k = (bbox_k[0] - int(bbox_pad_k/2), bbox_k[1] + int(bbox_pad_k/2))
-    bbox = [bbox_i, bbox_j]
+    # pad pad_ratio of the minimum distance
+    #  from mask bounding box to the image boundaries (half each side)
+    for i in range(dim):
+        if pad_ratio[i] > 1:
+            print(f"Invalid padding value (>1) on dimension {dim}, set to 1")
+            pad_ratio[i] = 1
+    bbox_padding = [pad_ratio[i] * min(bbox[i][0], mask_shape[i] - bbox[i][1])
+                    for i in range(dim)]
+    # "padding" by modifying the bounding box indices
+    bbox = [(bbox[i][0] - int(bbox_padding[i]/2), bbox[i][1] + int(bbox_padding[i]/2))
+                    for i in range(dim)]
 
     # bbox mask
     bbox_mask = np.zeros(mask.shape, dtype=np.float32)
-    bbox_mask[:, bbox_i[0]:bbox_i[1], bbox_j[0]:bbox_j[1]] = 1.0
-
+    slicer = [slice(0, mask.shape[0])]  # all slices/batch
+    for i in range(dim):
+        slicer.append(slice(*bbox[i]))
+    bbox_mask[tuple(slicer)] = 1.0
     return bbox, bbox_mask
 
 
@@ -210,4 +276,46 @@ def upsample_image(image, size):
     return np.array(Image.fromarray(image).resize((size, size)))
 
 
-
+""" Legacy 2D-only version of the functions """
+# def bbox_from_mask(mask, pad_ratio=0.2):
+#     """
+#     Find a bounding box indices of a mask (with positive > 0)
+#     The output indices can be directly used for slicing
+#     - for 2D, find the largest bounding box out of the N masks
+#     - for 3D, find the bounding box of the volume mask
+#
+#     Args:
+#         mask: (ndarray, shape (N, H, W) or (N, H, W, D)
+#         pad_ratio: ratio of distance between the edge of mask bounding box to image boundary to pad
+#
+#     Return:
+#         None: if structure in mask is too small
+#
+#         bbox: list [[dim_i_min, dim_i_max], [dim_j_min, dim_j_max], ...] otherwise
+#         bbox_mask: (ndarray, shape (N, H, W)) binary mask which is 1 inside the bbox, 0 outside
+#
+#     """
+#     mask_indices = np.nonzero(mask > 0)
+#     bbox_i = (mask_indices[1].min(), mask_indices[1].max()+1)
+#     bbox_j = (mask_indices[2].min(), mask_indices[2].max()+1)
+#     # bbox_k = (mask_indices[3].min(), mask_indices[3].max()+1)
+#
+#     # pad 20% of minimum distance to the image boundaries (10% each side)
+#     if pad_ratio > 1:
+#         print("Invalid padding value (>1), set to 1")
+#         pad_ratio = 1
+#
+#     bbox_pad_i = pad_ratio * min(bbox_i[0], mask.shape[1] - bbox_i[1])
+#     bbox_pad_j = pad_ratio * min(bbox_j[0], mask.shape[2] - bbox_j[1])
+#     # bbox_pad_k = 0.2 * min(bbox_k[0], image.shape[3] - bbox_k[1])
+#
+#     bbox_i = (bbox_i[0] - int(bbox_pad_i/2), bbox_i[1] + int(bbox_pad_i/2))
+#     bbox_j = (bbox_j[0] - int(bbox_pad_j/2), bbox_j[1] + int(bbox_pad_j/2))
+#     # bbox_k = (bbox_k[0] - int(bbox_pad_k/2), bbox_k[1] + int(bbox_pad_k/2))
+#     bbox = [bbox_i, bbox_j]
+#
+#     # bbox mask
+#     bbox_mask = np.zeros(mask.shape, dtype=np.float32)
+#     bbox_mask[:, bbox_i[0]:bbox_i[1], bbox_j[0]:bbox_j[1]] = 1.0
+#
+#     return bbox, bbox_mask

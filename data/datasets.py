@@ -1,16 +1,13 @@
-"""Datasets written in compliance with Pytorch DataLoader interface"""
 import os
 import os.path as path
 import random
-from glob import glob
 
 import numpy as np
 import torch
 import torch.utils.data as ptdata
 
-from data.transforms import CenterCrop
-from data.elastics import synthesis_elastic_deformation
-from utils.image import normalise_intensity
+from data.synthesis import synthesis_elastic_deformation, GaussianFilter
+from utils.image import normalise_intensity, crop_and_pad
 from utils.image_io import load_nifti
 
 """
@@ -31,26 +28,23 @@ def worker_init_fn(worker_id):
     np.random.seed(random_seed)
 
 
-
-class Brain2dData(object):
+class BrainData(object):
     def __init__(self, args, params):
-
         self.args = args
         self.params = params
 
-        # parse tuple JSON params
-        self.params.slice_range = (self.params.slice_start, self.params.slice_end)
-        self.params.disp_range = (self.params.disp_min, self.params.disp_max)
+        # training data
+        train_data_path = self.params.train_data_path
+        assert path.exists(train_data_path), f"Training data path does not exist: \n{train_data_path}"
 
-        # training
-        self.train_dataset = Brain2dDataset(self.params.data_path,
-                                            run="train",
-                                            slice_range=self.params.slice_range,
-                                            sigma=self.params.sigma,
-                                            cps=self.params.elastic_cps,
-                                            disp_range=self.params.disp_range,
-                                            crop_size=self.params.crop_size
-                                            )
+        self.train_dataset = BratsDataset(train_data_path,
+                                          run="train",
+                                          dim=self.params.dim,
+                                          sigma=self.params.sigma,
+                                          cps=self.params.elastic_cps,
+                                          disp_max=self.params.disp_max,
+                                          crop_size=self.params.crop_size,
+                                          slice_range=tuple(self.params.slice_range))
 
         self.train_dataloader = ptdata.DataLoader(self.train_dataset,
                                                   batch_size=self.params.batch_size,
@@ -61,15 +55,12 @@ class Brain2dData(object):
                                                   )
 
 
-        # validation
-        self.val_dataset = Brain2dDataset(self.params.data_path,
-                                          run="val",
-                                          slice_range=self.params.slice_range,
-                                          sigma=self.params.sigma,
-                                          cps=self.params.elastic_cps,
-                                          disp_range=self.params.disp_range,
-                                          crop_size=self.params.crop_size
-                                          )
+        # validation data
+        val_data_path = self.params.val_data_path
+        assert path.exists(val_data_path), f"Validation data path does not exist: \n{val_data_path}, not generated?"
+
+        self.val_dataset = BratsEvalDataset(val_data_path,
+                                            dim=self.params.dim)
 
         self.val_dataloader = ptdata.DataLoader(self.val_dataset,
                                                 batch_size=1,
@@ -79,15 +70,12 @@ class Brain2dData(object):
                                                 )
 
 
-        # testing
-        self.test_dataset = Brain2dDataset(self.params.data_path,
-                                           run="test",
-                                           slice_range=self.params.slice_range,
-                                           sigma=self.params.sigma,
-                                           cps=self.params.elastic_cps,
-                                           disp_range=self.params.disp_range,
-                                           crop_size=self.params.crop_size
-                                           )
+        # testing data
+        test_data_path = self.params.test_data_path
+        assert path.exists(test_data_path), f"Testing data path does not exist: \n{test_data_path}, not generated?"
+
+        self.test_dataset = BratsEvalDataset(test_data_path,
+                                             dim=self.params.dim)
 
         self.test_dataloader = ptdata.DataLoader(self.test_dataset,
                                                  batch_size=1,
@@ -97,152 +85,147 @@ class Brain2dData(object):
                                                  )
 
 
+
 """
 Datasets
 """
-class Brain2dDataset(ptdata.Dataset):
+
+class BratsDataset(ptdata.Dataset):
+    """
+    Loading, processing and synthesising transformation
+    for training and generating val/test data
+    """
     def __init__(self,
                  data_path,
                  run=None,
-                 slice_range=(70, 90),
+                 dim=2,
                  sigma=8,
                  cps=10,
-                 disp_range=(0, 3),
-                 crop_size=192
+                 disp_max=1.,
+                 crop_size=192,
+                 slice_range=(70, 90)
                  ):
-        super().__init__()
+        super(BratsDataset, self).__init__()
 
-        # set up train/val/test data path
         self.run = run
-        if self.run == "train":
-            self.data_path = data_path + "/train"
 
-        elif self.run == "generate":
-            self.data_path = data_path
-
-        elif self.run == "val" or self.run == "test":
-            self.data_path = data_path + \
-                             f"/{run}" \
-                             f"_crop{crop_size}" \
-                             f"_sigma{sigma}" \
-                             f"_cps{cps}" \
-                             f"_dispRange{disp_range[0]}-{disp_range[1]}" \
-                             f"_sliceRange{slice_range[0]}-{slice_range[1]}"
-        else:
-            raise ValueError("Dataset run state not specified.")
-        assert path.exists(self.data_path), f"Data path does not exist: \n{self.data_path}"
-
+        self.data_path = data_path
         self.subject_list = sorted(os.listdir(self.data_path))
+
+        self.dim = dim
+        self.crop_size = crop_size
+        self.slice_range = slice_range
 
         # elastic parameters
         self.sigma = sigma
         self.cps = cps
-        self.disp_range = disp_range
-        self.slice_range = slice_range
+        self.disp_max = disp_max
 
-        # cropper
-        self.cropper = CenterCrop(crop_size)
+        # Gaussian smoothing filter for random transformation generation
+        self.smooth_filter = GaussianFilter(dim=self.dim, sigma=self.sigma)
 
     def __getitem__(self, index):
         data_dict = {}
-
         subject_id = self.subject_list[index]
 
-        ##debug
-        #print(subject_id)
-
         # specify path to target, source and roi mask (only data-specific part in the pipeline)
-        target_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
+        target_original_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
         source_path = f"{self.data_path}/{subject_id}/{subject_id}_t2.nii.gz"
         roi_mask_path = f"{self.data_path}/{subject_id}/{subject_id}_brainmask.nii.gz"
 
-        # load in T1 &/ T2 image and brain mask, transpose to (N, *(dims))
-        data_dict["target_original"] = load_nifti(target_path).transpose(2, 0, 1)
-        data_dict["source"] = load_nifti(source_path).transpose(2, 0, 1)
-        data_dict["roi_mask"] = load_nifti(roi_mask_path).transpose(2, 0, 1)
+        """ 
+        Load T1 &/ T2 image and brain ROI mask, shape (N, *sizes) 
+        """
+        # 2D axial slices, data shape (N=#slices, H, W)
+        if self.dim == 2:
+            data_dict["target_original"] = load_nifti(target_original_path).transpose(2, 0, 1)
+            data_dict["source"] = load_nifti(source_path).transpose(2, 0, 1)
+            data_dict["roi_mask"] = load_nifti(roi_mask_path).transpose(2, 0, 1)
 
-        if self.run == "train":
-            """
-            Training data
-            """
-            # taking a random slice each time
-            z = random.randint(self.slice_range[0], self.slice_range[1])
+            # slice selection
+            if self.run == "train":
+                # randomly select a slice within range
+                z = random.randint(self.slice_range[0], self.slice_range[1])
+                slicer = slice(z, z+1)  # keep dim
+            else: # generate
+                # take all slices within range
+                slicer = slice(self.slice_range[0], self.slice_range[1])
+
             for name, data in data_dict.items():
-                data_dict[name] = data[np.newaxis, z, ...]  # (1, H, W)
+                data_dict[name] = data[slicer, ...]  # (N/1, H, W)
 
-            # intensity normalisation
-            for name in ["target_original", "source"]:
-                data_dict[name] = normalise_intensity(data_dict[name], mode="minmax", clip=True)  # (1, H, W)
-
-            # generate synthesised DVF and deformed T1 image
-            # image and mask shape: (1, H, W)
-            # dvf_gt shape: (1, 2, H, W), in number of pixels
-            data_dict["target"], data_dict["dvf_gt"] = synthesis_elastic_deformation(data_dict["target_original"],
-                                                                                     data_dict["roi_mask"],
-                                                                                     sigma=self.sigma,
-                                                                                     cps=self.cps,
-                                                                                     disp_range=self.disp_range
-                                                                                     )
-            # cropping
-            for name in ["target", "source", "target_original", "roi_mask"]:
-                data_dict[name] = self.cropper(data_dict[name])
-
-            dvf_crop = []
-            for d in range(data_dict["dvf_gt"].shape[1]):
-                dvf_crop += [self.cropper(data_dict["dvf_gt"][:, d , :, :])]  # (N, H, W)
-            data_dict["dvf_gt"] = np.swapaxes(np.array(dvf_crop), 0, 1) # (N, dim, H, W)
-
-        elif self.run == "generate":
-            """
-            Generate val/test data
-            """
-            # take a range of slices
-            for name, data in data_dict.items():
-                data_dict[name] = data[self.slice_range[0]: self.slice_range[1], ...]  # (N, H, W)
-
-            # intensity normalisation
-            for name in ["target_original", "source"]:
-                data_dict[name] = normalise_intensity(data_dict[name], mode="minmax", clip=True)  # (1, H, W)
-
-            # generate synthesised DVF and deformed T1 image
-            # image shape: (N, H, W)
-            # dvf_gt shape: (N, 2, H, W), in number of pixels
-            data_dict["target"], data_dict["dvf_gt"] = synthesis_elastic_deformation(data_dict["target_original"],
-                                                                                     data_dict["roi_mask"],
-                                                                                     sigma=self.sigma,
-                                                                                     cps=self.cps,
-                                                                                     disp_range=self.disp_range
-                                                                                     )
-            # cropping
-            for name in ["target", "source", "target_original", "brain_mask"]:
-                data_dict[name] = self.cropper(data_dict[name])
-
-            dvf_crop = []
-            for d in range(data_dict["dvf_gt"].shape[1]):
-                dvf_crop += [self.cropper(data_dict["dvf_gt"][:, d , :, :])]  # [(N, H, W)]
-            data_dict["dvf_gt"] = np.swapaxes(np.array(dvf_crop), 0, 1) # (N, dim, H, W)
-
-
-        elif self.run == "val" or self.run == "test":
-            """
-            Load saved val/test data
-            """
-            t1_deformed_path = f"{self.data_path}/{subject_id}/{subject_id}_t1_deformed.nii.gz"
-            data_dict["target"] = load_nifti(t1_deformed_path).transpose(2, 0, 1)  # (N, H, W)
-
-            dvf_path = glob(f"{self.data_path}/{subject_id}/*dvf*.nii.gz")[0]
-            data_dict["dvf_gt"] = load_nifti(dvf_path).transpose(2, 3, 0, 1)  # (N, 2, H, W)
+        # 3D volumes, data shape (N=1, H, W, D)
         else:
-            raise ValueError("Dataset run state not specified.")
+            data_dict["target_original"] = load_nifti(target_original_path)[np.newaxis, ...]
+            data_dict["source"] = load_nifti(source_path)[np.newaxis, ...]
+            data_dict["roi_mask"] = load_nifti(roi_mask_path)[np.newaxis, ...]
         """"""
 
-        # Cast to Pytorch Tensor
+        # intensity normalisation to [0, 1]
+        for name in ["target_original", "source"]:
+            data_dict[name] = normalise_intensity(data_dict[name],
+                                                  min_out=0., max_out=1.,
+                                                  mode="minmax", clip=True)
+
+        # cropping
+        for name in ["target_original", "source", "roi_mask"]:
+            data_dict[name] = crop_and_pad(data_dict[name], new_size=self.crop_size)
+
+        # generate synthesised DVF and deformed T1 image
+        data_dict["target"], data_dict["dvf_gt"] = synthesis_elastic_deformation(data_dict["target_original"],
+                                                                                 data_dict["roi_mask"],
+                                                                                 smooth_filter=self.smooth_filter,
+                                                                                 cps=self.cps,
+                                                                                 disp_max=self.disp_max )
+
+        # cast to Pytorch Tensor
+        for name, data in data_dict.items():
+            data_dict[name] = torch.from_numpy(data).float()
+        return data_dict
+
+    def __len__(self):
+        return len(self.subject_list)
+
+
+
+class BratsEvalDataset(ptdata.Dataset):
+    """
+    Evaluation dataset (val/test) loads in generated & saved data (normalised & cropped)
+    """
+    def __init__(self, data_path, dim=2):
+        """data_path should contain the subject directories"""
+        super(BratsEvalDataset, self).__init__()
+        self.data_path = data_path
+        self.subject_list = sorted(os.listdir(self.data_path))
+        self.dim = dim
+
+    def __getitem__(self, index):
+        """Shape of output data in data_dict : images (N, *size), DVF (N, dim, *size)"""
+        data_dict = {}
+        subject_id = self.subject_list[index]
+
+        for name in ["target", "source", "target_original", "roi_mask", "dvf_gt"]:
+            data_path = f"{self.data_path}/{subject_id}/{name}.nii.gz"
+            if name == "dvf_gt":
+                if self.dim == 2:  # 2D
+                    # dvf is saved in shape (H, W, N, 2) -> (N, 2, H, W)
+                    data_dict[name] = load_nifti(data_path).transpose(2, 3, 0, 1)
+                else:  # 3D
+                    # dvf is saved in shape (H, W, D, 3) -> (N=1, 3, H, W, D)
+                    data_dict[name] = load_nifti(data_path).transpose(3, 0, 1, 2)[np.newaxis, ...]
+
+            else:
+                if self.dim == 2:  # 2D
+                    # image is saved in shape (H, W, N) ->  (N, H, W)
+                    data_dict[name] = load_nifti(data_path).transpose(2, 0, 1)
+                else:  # 3D
+                    # image is saved in shape (H, W, D) -> (N=1, H, W, D)
+                    data_dict[name] = load_nifti(data_path)[np.newaxis, ...]
+
+        # cast to Pytorch Tensor
         for name, data in data_dict.items():
             data_dict[name] = torch.from_numpy(data).float()
 
-        # shape of images & mask: (N, *(dims,)),
-        # N = 1 for train, = num_slices for generate/val/test
-        # shape of dvf_gt: (N, dim, (*dims,))
         return data_dict
 
     def __len__(self):

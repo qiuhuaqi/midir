@@ -6,7 +6,7 @@ from model.transformations import spatial_transform
 from runners.inference import process_batch
 from runners.helpers import LossReporter, MetricReporter
 
-import utils.metrics as metrics_utils
+import utils.metric as metrics_utils
 import utils.misc as misc_utils
 import utils.transformation as transform_utils
 import utils.image_io as imageio_utils
@@ -83,6 +83,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 subj_id = dataloader.dataset.subject_list[idx]
                 subj_output_dir = misc_utils.setup_dir(path.join(output_dir, subj_id))
 
+                # todo: not compatible with 3D
                 for name, save_data in data_dict.items():
                     imageio_utils.save_nifti(save_data.transpose(2, 3, 0, 1), f"{subj_output_dir}/{name}.nii.gz")
             """"""

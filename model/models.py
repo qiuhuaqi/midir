@@ -18,7 +18,7 @@ class DLRegModel(nn.Module):
         self.best_metric_result = 0
 
         self._set_network()
-        self._set_transformation()
+        self._set_transformation_model()
 
     def _set_network(self):
         if self.params.network == "SiameseNet":
@@ -33,7 +33,7 @@ class DLRegModel(nn.Module):
         else:
             raise ValueError("Model: Network not recognised")
 
-    def _set_transformation(self):
+    def _set_transformation_model(self):
         if self.params.transformation == "DVF":
             self.transform = DVFTransform()
 
@@ -59,4 +59,3 @@ class DLRegModel(nn.Module):
         net_out = self.network(target, source)
         dvf = self.transform(net_out)
         return dvf
-

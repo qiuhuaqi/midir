@@ -8,7 +8,7 @@ import random
 from matplotlib import pyplot as plt
 
 from utils.image_io import save_gif, save_png
-from utils.metrics import computeJacobianDeterminant2D
+from utils.metric import computeJacobianDeterminant2D
 
 
 def flow_to_hsv(opt_flow, max_mag=0.1, white_bg=False):

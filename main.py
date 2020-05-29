@@ -3,7 +3,7 @@ import argparse
 import logging
 import torch
 
-from data.datasets import Brain2dData
+from data.datasets import BrainData
 from model.models import DLRegModel
 from baselines.baseline_models import IdBaselineModel
 from model.losses import loss_fn
@@ -77,7 +77,7 @@ logging.info("- Done.")
 
 """Data"""
 logging.info("Setting up Dataloader...")
-brain2d_data = Brain2dData(args, params)
+brain2d_data = BrainData(args, params)
 logging.info("- Done.")
 """"""
 
