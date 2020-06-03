@@ -69,8 +69,8 @@ class BSplineFFDTransform(object):
         self.kernel = self.kernel.to(device=x.device)
 
         # compute the DVF of the FFD transformation by transposed convolution 2D/3D
-        conv_transposeNd = getattr(F, f"conv_transpose{self.dim}d")
-        dvf = conv_transposeNd(x,
+        conv_transposeNd_fn = getattr(F, f"conv_transpose{self.dim}d")
+        dvf = conv_transposeNd_fn(x,
                                weight=self.kernel,
                                stride=self.strides,
                                groups=self.dim,
@@ -91,8 +91,7 @@ class BSplineFFDTransform(object):
 
 
 class DVFTransform(object):
-    """ Dummy Displacement Vector Field model """
-
+    """ (Dummy) Displacement Vector Field model """
     def __init__(self):
         pass
 

@@ -21,18 +21,21 @@ def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
     assert isinstance(x, (np.ndarray, np.generic))
     new_size = param_dim_setup(new_size, dim=x.ndim-1)
 
-    # Create placeholders for the new shape
+    dim = x.ndim - 1
+    sizes = x.shape[1:]
+
+    # Initialise padding and slicers
     to_padding = [[0, 0] for i in range(x.ndim)]
     slicer = [slice(0, x.shape[i]) for i in range(x.ndim)]
 
     # For each dimensions except the dim 0, set crop slicers or paddings
-    for i in range(x.ndim-1):
-        if x.shape[i+1] < new_size[i]:
-            to_padding[i+1][0] = (new_size[i] - x.shape[i+1]) // 2
-            to_padding[i+1][1] = new_size[i] - x.shape[i+1] - to_padding[i+1][0]
+    for i in range(dim):
+        if sizes[i] < new_size[i]:
+            to_padding[i+1][0] = (new_size[i] - sizes[i]) // 2
+            to_padding[i+1][1] = new_size[i] - sizes[i] - to_padding[i+1][0]
         else:
             # Create slicer object to crop each dimension
-            crop_start = int(np.floor((x.shape[i+1] - new_size[i]) / 2.))
+            crop_start = int(np.floor((sizes[i] - new_size[i]) / 2.))
             crop_end = crop_start + new_size[i]
             slicer[i+1] = slice(crop_start, crop_end)
 
@@ -137,8 +140,7 @@ def normalise_intensity(x,
         x = x.float()
 
     else:
-        raise RuntimeError("Intensity normalisation: input data type not recognised. "
-                           "Expect: numpy.ndarray or torch.Tensor")
+        raise TypeError("Input data type not recognised, support numpy.ndarray or torch.Tensor")
 
 
     return x
@@ -179,13 +181,13 @@ def mask_and_crop(x, roi_mask):
         roi_mask: (numpy.nadarry, shape (N, ch, *dims))
 
     Returns:
-
+        mask and cropped x
     """
     # find brian mask bbox mask
     mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
     # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
-    x *= roi_mask[:, np.newaxis, ...]
+    x *= roi_mask
 
     # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
     x = bbox_crop(x, mask_bbox)
@@ -194,21 +196,7 @@ def mask_and_crop(x, roi_mask):
 
 def bbox_crop(x, bbox):
     """
-    Crop image by slicing using bounding box indices
-
-    Args:
-        x: (numpy.ndarray, shape (N, ch, *dims))
-        bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
-
-    Returns:
-        input cropped by according to bounding box
-    """
-    return x[:, :, bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
-
-def bbox_crop_v2(x, bbox):
-    """
-    ## todo: not tested
-    Crop image by slicing using bounding box indices
+    Crop image by slicing using bounding box indices (2D/3D)
 
     Args:
         x: (numpy.ndarray, shape (N, ch, *dims))
@@ -220,11 +208,10 @@ def bbox_crop_v2(x, bbox):
     # slice all of batch and channel
     slicer = [slice(0, x.shape[0]), slice(0, x.shape[1])]
 
-    dim = x.ndim - 2
-    for i in range(dim):
-        slicer.append(slice(*bbox[i]))
+    # slice image dimensions
+    for bb in bbox:
+        slicer.append(slice(*bb))
     return x[tuple(slicer)]
-
 
 
 def bbox_from_mask(mask, pad_ratio=0.2):
@@ -235,7 +222,7 @@ def bbox_from_mask(mask, pad_ratio=0.2):
     - for 3D, find the bounding box of the volume mask
 
     Args:
-        mask: (ndarray, shape (N, H, W) or (N, H, W, D)
+        mask: (numpy.ndarray, shape (N, H, W) or (N, H, W, D)
         pad_ratio: (int or tuple) the ratio of between the mask bounding box to image boundary to pad
 
     Return:
@@ -319,3 +306,18 @@ def upsample_image(image, size):
 #     bbox_mask[:, bbox_i[0]:bbox_i[1], bbox_j[0]:bbox_j[1]] = 1.0
 #
 #     return bbox, bbox_mask
+
+#
+# def bbox_crop(x, bbox):
+#     """
+#     Crop image by slicing using bounding box indices
+#
+#     Args:
+#         x: (numpy.ndarray, shape (N, ch, *dims))
+#         bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
+#
+#     Returns:
+#         input cropped by according to bounding box
+#     """
+#     return x[:, :, bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1]]
+#

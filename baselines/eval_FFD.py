@@ -19,7 +19,7 @@ sys.path.insert(0, f'{os.getcwd()}/src')
 
 from runners.helpers import MetricReporter
 from data.split_nifti import split_volume_idmat
-from utils.metric import calculate_metrics
+from utils.metric import metrics_fn
 from utils import misc
 from utils.image_io import save_nifti
 from utils.transformation import dof_to_dvf
@@ -195,7 +195,7 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
         """
         Calculate metrics
         """
-        metric_results = calculate_metrics(data_dict, metric_groups)
+        metric_results = metrics_fn(data_dict, metric_groups)
         metrics_reporter.collect_value(metric_results)
         """"""
 

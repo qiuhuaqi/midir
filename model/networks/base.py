@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
 
+"""2D/3D network modules"""
 def conv_Nd(dim,
             in_channels,
             out_channels,
@@ -30,12 +31,13 @@ def conv_Nd(dim,
                    stride=stride,
                    padding=padding)
 
-
 def avg_pool(dim, kernel_size=2):
     _AvgPoolNd = getattr(nn, f"AvgPool{dim}d")
     return _AvgPoolNd(kernel_size)
 
 
+
+"""2D only network modules"""
 def conv_block_1(in_channels,
                  out_channels,
                  kernel_size=3,

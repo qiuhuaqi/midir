@@ -11,6 +11,9 @@
     "modality": "multi",
 
     "network": "FFDNet",
+    "enc_channels": [64, 128, 256],
+    "out_channels": [128, 64],
+
     "transformation": "FFD",
     "ffd_cps": 8,
 

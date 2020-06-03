@@ -10,7 +10,7 @@ import utils.metric as metrics_utils
 import utils.misc as misc_utils
 import utils.transformation as transform_utils
 import utils.image_io as imageio_utils
-import utils.vis as vis_utils
+import utils.visualise as vis_utils
 
 
 def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
@@ -57,6 +57,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 loss_reporter.collect_value(eval_losses)
 
                 # warp original target image using the predicted dvf
+                # (comment this out if images are not synthesised)
                 data_dict["target_pred"] = spatial_transform(data_dict["target_original"].to(device=args.device),
                                                              data_dict["dvf_pred"])
 
@@ -64,14 +65,15 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
             for name, one_data in data_dict.items():
                 data_dict[name] = one_data.cpu().numpy()
 
-            # reverse DVF normalisation
-            data_dict["dvf_pred"] = transform_utils.denormalise_dvf(data_dict["dvf_pred"])
+            # todo: to-test v0.3-dev remove denormalisation as the network should predict image space DVF
+            # # reverse DVF normalisation
+            # data_dict["dvf_pred"] = transform_utils.denormalise_dvf(data_dict["dvf_pred"])
             """"""
 
             """
             Calculate metrics
             """
-            metric_results = metrics_utils.calculate_metrics(data_dict, model.params.metric_groups)
+            metric_results = metrics_utils.metrics_fn(data_dict, model.params.metric_groups)
             metrics_reporter.collect_value(metric_results)
             """"""
 

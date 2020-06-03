@@ -465,3 +465,6 @@ def save_val_visual_results(data_dict, save_result_dir, epoch, dpi=50):
 
     fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_slice_{z}.png')
     plot_results_t1t2(vis_data_dict, save_path=fig_save_path, dpi=dpi)
+
+
+

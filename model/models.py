@@ -26,10 +26,14 @@ class DLRegModel(nn.Module):
 
         elif self.params.network == "SiameseFFD":
             self.network = SiameseFFDNet()
+
         elif self.params.network == "FFDNet":
-            self.network = FFDNet(self.params.dim,
-                                  self.params.crop_size,
-                                  self.params.ffd_cps)
+            self.network = FFDNet(dim=self.params.dim,
+                                  img_size=self.params.crop_size,
+                                  cpt_spacing=self.params.ffd_cps,
+                                  enc_channels=self.params.enc_channels,
+                                  out_channels=self.params.out_channels
+                                  )
         else:
             raise ValueError("Model: Network not recognised")
 

@@ -51,7 +51,7 @@ class GaussianFilter(object):
         self.padding = [int(kernel_size[i]//2) for i in range(dim)]
 
         # get the convolution function of the right dimension
-        self.conv_fn = getattr(F, f"conv{dim}d")
+        self.conv_Nd_fn = getattr(F, f"conv{dim}d")
 
     def __call__(self, x):
         """
@@ -65,7 +65,7 @@ class GaussianFilter(object):
         x = torch.from_numpy(x)
         self.kernel = self.kernel.type_as(x)
 
-        output = self.conv_fn(x, self.kernel, padding=self.padding, groups=self.dim)
+        output = self.conv_Nd_fn(x, self.kernel, padding=self.padding, groups=self.dim)
         return output.numpy()
 
 

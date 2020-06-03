@@ -8,10 +8,47 @@ import torch.nn.functional as F
 
 from utils.image import normalise_intensity
 
-##############################################################################################
-# --- Regularisation loss --- #
-##############################################################################################
+"""
+Construct the loss function (similarity + regularisation)
+"""
+def loss_fn(data_dict, params):
+    """
+    Unsupervised loss function
 
+    Args:
+        data_dict: (dict) dictionary containing data
+            {
+                "target": (Tensor, shape (N, ch, *dims)) target image
+                "warped_source": (Tensor, shape (N, ch, *dims)) deformed source image
+                "dvf_pred": (Tensor, shape (N, dim, *dims)) DVF predicted
+                ...
+            }
+        params: (object) parameters from params.json
+
+    Returns:
+        loss: (scalar) loss value
+        losses: (dict) dictionary of individual losses (weighted)
+    """
+    # todo: allow extra parameters to be passed to loss functions
+    #  (e.g. NMI number of bins) via MILoss(*args, **kwargs)
+    sim_losses = {"MSE": nn.MSELoss(),
+                  "NMI": MILoss()}
+    reg_losses = {"huber_spt": huber_loss_spatial,
+                  "huber_temp": huber_loss_temporal,
+                  "diffusion": diffusion_loss,
+                  "be": bending_energy_loss}
+
+    sim_loss = sim_losses[params.sim_loss](data_dict["target"], data_dict["warped_source"]) * params.sim_weight
+    reg_loss = reg_losses[params.reg_loss](data_dict["dvf_pred"]) * params.reg_weight
+
+    return {"loss": sim_loss + reg_loss,
+            params.sim_loss: sim_loss,
+            params.reg_loss: reg_loss}
+
+
+
+
+""" Regularisation loss """
 def diffusion_loss(dvf):
     """
     Compute diffusion regularisation on DVF
@@ -112,14 +149,39 @@ def huber_loss_temporal(dvf):
     dvf_norm_dt = dvf_norm[1:, :, :] - dvf_norm[:-1, :, :]
     loss = (dvf_norm_dt.pow(2) + 1e-4).sum().sqrt()
     return loss
+""""""
 
 
-##############################################################################################
-# --- Similarity loss --- #
-##############################################################################################
 
+
+""" Regularity loss based on Jacobian """
+# def compute_jacobian(x):
+#     """ reference code from Chen"""
+#     bsize, csize, height, width = x.size()
+#     # padding
+#     v = torch.cat((torch.zeros(bsize, csize, height, 1).cuda(), x, torch.zeros(bsize, csize, height, 1).cuda()),
+#                   3)
+#     u = torch.cat((torch.zeros(bsize, csize, 1, width).cuda(), x, torch.zeros(bsize, csize, 1, width).cuda()),
+#                   2)
+#
+#     d_x = (torch.index_select(v, 3, torch.arange(2, width + 2).cuda())
+#            - torch.index_select(v, 3, torch.arange(width).cuda())) / 2
+#     d_y = (torch.index_select(u, 2, torch.arange(2, height + 2).cuda()) - torch.index_select(u, 2, torch.arange(
+#         height).cuda())) / 2
+#
+#     J = (torch.index_select(d_x, 1, torch.tensor([0]).cuda())+1)*(torch.index_select(d_y, 1, torch.tensor([1]).cuda())+1) \
+#         -torch.index_select(d_x, 1, torch.tensor([1]).cuda())*torch.index_select(d_y, 1, torch.tensor([0]).cuda())
+#     return J
+#
+
+
+
+
+
+
+
+""" Similarity loss """
 from model import window_func
-
 
 class MILoss(nn.Module):
     def __init__(self,
@@ -184,15 +246,25 @@ class MILoss(nn.Module):
     def forward(self,
                 target,
                 source):
+        """
+        Calculate (Normalised) Mutual Information Loss.
+
+        Args:
+            target: (torch.Tensor, size (N, dim, *size)
+            source: (torch.Tensor, size (N, dim, *size)
+
+        Returns:
+            (N)MI: (scalar)
+        """
 
         """pre-processing"""
-        # normalise intensity range of both images to [0, 1] (using Pytorch version of the norm function)
+        # normalise intensity for histogram calculation
         target = normalise_intensity(target[:, 0, ...],
                                      mode='minmax', min_out=self.target_min, max_out=self.target_max).unsqueeze(1)
         source = normalise_intensity(source[:, 0, ...],
                                      mode='minmax', min_out=self.source_min, max_out=self.source_max).unsqueeze(1)
 
-        # flatten images to (N, 1, H*W)
+        # flatten images to (N, 1, prod(*size))
         target = target.view(target.size()[0], target.size()[1], -1)
         source = source.view(source.size()[0], source.size()[1], -1)
 
@@ -240,41 +312,5 @@ class MILoss(nn.Module):
         else:
             return -torch.mean(ent_target + ent_source - ent_joint)
 
+""""""
 
-
-"""
-Construct the loss function (similarity + regularisation)
-"""
-def loss_fn(data_dict, params):
-    """
-    Unsupervised loss function
-
-    Args:
-        data_dict: (dict) dictionary containing data
-            {
-                "target": (Tensor, shape (N, ch, *dims)) target image
-                "warped_source": (Tensor, shape (N, ch, *dims)) deformed source image
-                "dvf_pred": (Tensor, shape (N, dim, *dims)) DVF predicted
-                ...
-            }
-        params: (object) parameters from params.json
-
-    Returns:
-        loss: (scalar) loss value
-        losses: (dict) dictionary of individual losses (weighted)
-    """
-    # todo: allow extra parameters to be passed to loss functions
-    #  (e.g. NMI number of bins) via MILoss(*args, **kwargs)
-    sim_losses = {"MSE": nn.MSELoss(),
-                  "NMI": MILoss()}
-    reg_losses = {"huber_spt": huber_loss_spatial,
-                  "huber_temp": huber_loss_temporal,
-                  "diffusion": diffusion_loss,
-                  "be": bending_energy_loss}
-
-    sim_loss = sim_losses[params.sim_loss](data_dict["target"], data_dict["warped_source"]) * params.sim_weight
-    reg_loss = reg_losses[params.reg_loss](data_dict["dvf_pred"]) * params.reg_weight
-
-    return {"loss": sim_loss + reg_loss,
-            params.sim_loss: sim_loss,
-            params.reg_loss: reg_loss}

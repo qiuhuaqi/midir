@@ -9,8 +9,14 @@ import torch.nn.functional as F
 from model.networks.base import conv_block_1, conv_blocks_2, conv_blocks_3
 from model.networks.base import conv_Nd, avg_pool
 
+from utils.misc import param_dim_setup
+
 
 class FFDNet(nn.Module):
+    """
+    Encoder/downsample only network specifically for FFD module.
+    Work with both 2D and 3D
+    """
     def __init__(self,
                  dim=2,
                  img_size=(192, 192),
@@ -22,52 +28,35 @@ class FFDNet(nn.Module):
 
         self.dim = dim
 
-        # if one integer is given, assume same size for all dimensions
-        if isinstance(img_size, int):
-            self.img_size = (img_size,) * dim
-        else:
-            self.img_size = img_size
-
-        if isinstance(cpt_spacing, int):
-            self.cpt_spacing = (cpt_spacing,) * dim
-        else:
-            self.cpt_spacing = cpt_spacing
+        # parameter dimension check
+        self.img_size = param_dim_setup(img_size, dim)
+        self.cpt_spacing = param_dim_setup(cpt_spacing, dim)
 
         # encoder layers
         self.enc = nn.ModuleList()
-        self.enc.append(
-            nn.Sequential(conv_Nd(self.dim, 2, enc_channels[0]),
-                          nn.LeakyReLU(0.2),
-                          avg_pool(self.dim),
-                          )
-        )
-        for l in range(len(enc_channels) - 1):
-            in_ch = enc_channels[l]
-            out_ch = enc_channels[l + 1]
-            self.enc.append(
-                nn.Sequential(conv_Nd(self.dim, in_ch, out_ch),
-                              nn.LeakyReLU(0.2),
-                              avg_pool(self.dim))
-            )
+        for i in range(len(enc_channels)):
+            in_ch = 2 if i == 0 else enc_channels[i-1]
+            out_ch = enc_channels[i]
+            self.enc.append(nn.Sequential(conv_Nd(dim, in_ch, out_ch, stride=2),
+                                          nn.LeakyReLU(0.2),
+                                          avg_pool(self.dim)
+                                          )
+                            )
 
-        # 1x1(x1) convolutions
-        self.convs_out = nn.ModuleList()
-        self.convs_out.append(
-            nn.Sequential(conv_Nd(self.dim, enc_channels[-1], out_channels[0], kernel_size=1, padding=0),
-                          nn.LeakyReLU(0.2))
-        )
-        for l in range(len(out_channels) - 1):
-            in_ch = out_channels[l]
-            out_ch = out_channels[l + 1]
-            self.convs_out.append(
-                nn.Sequential(conv_Nd(self.dim, in_ch, out_ch, kernel_size=1, padding=0),
-                              nn.LeakyReLU(0.2))
-            )
+        # 1x1(x1) conv layers before prediction
+        self.out_layers = nn.ModuleList()
+        for i in range(len(out_channels)):
+            in_ch = enc_channels[-1] if i == 0 else out_channels[i-1]
+            out_ch = out_channels[i]
+            self.out_layers.append(nn.Sequential(conv_Nd(self.dim, in_ch, out_ch, kernel_size=1, padding=0),
+                                                 nn.LeakyReLU(0.2))
+                                   )
 
-        # final output layer
-        self.convs_out.append(
+        # final prediction layer
+        self.out_layers.append(
             conv_Nd(self.dim, out_channels[-1], self.dim, kernel_size=1, padding=0)
         )
+
 
     def _interpolate(self, x):
         # determine output size from image size and control point spacing
@@ -75,8 +64,9 @@ class FFDNet(nn.Module):
                              for isz, cps in zip(self.img_size, self.cpt_spacing)])
         inter_mode = "bilinear"
         if self.dim == 3:
-            inter_mode = "bicubic"
+            inter_mode = "trilinear"
         return F.interpolate(x, self.output_size, mode=inter_mode)
+
 
     def forward(self, tar, src):
         x = torch.cat((tar, src), dim=1)
@@ -85,16 +75,18 @@ class FFDNet(nn.Module):
         for enc in self.enc:
             x = enc(x)
 
-        # re-sample to resize the feature map to output size
-        x = self._interpolate(x)
+        # resize the feature map to match output size
+        y = self._interpolate(x)
 
-        # 1x1(x1) conv and output
-        for conv_out in self.convs_out:
-            x = conv_out(x)
-        return x
+        # 1x1(x1) conv and prediction
+        for out_layer in self.out_layers:
+            y = out_layer(y)
+        return y
+
 
 
 class SiameseFFDNet(nn.Module):
+    """Modification of the Siamese network, 2D only"""
     def __init__(self,
                  dim=2,
                  ffd_cps=8,
@@ -127,31 +119,30 @@ class SiameseFFDNet(nn.Module):
             self.convs_reduce.append(conv_block_1(ch * 2, reduce_channel))
 
         # conv layers on concatenated feature maps
-        self.convs_out = nn.ModuleList()
-        self.convs_out.append(
+        self.out_layers = nn.ModuleList()
+        self.out_layers.append(
             nn.Conv2d(reduce_channel * (len(self.convs_reduce)), out_channels[0], 1))
         for l in range(len(out_channels) - 1):
             in_ch = out_channels[l]
             out_ch = out_channels[l + 1]
-            self.convs_out.append(conv_blocks_2(in_ch, out_ch))
+            self.out_layers.append(conv_blocks_2(in_ch, out_ch))
 
         # final output layer
-        self.convs_out.append(nn.Conv2d(out_channels[-1], dim, 1))
+        self.out_layers.append(nn.Conv2d(out_channels[-1], dim, 1))
 
-    def forward(self, target, source):
+    def forward(self, tar, src):
         """
         Forward pass function.
 
         Args:
-            target: target image input to the network, Tensor shape (T-1, 1, H, W)
-            source: source image input to the network, Tensor shape (T-1, 1, H, W)
-
+            tar: (Tensor shape (N, 1, H, W)) target image input to the network
+            src: (Tensor shape (N, 1, H, W)) source image input to the network
         Returns:
-            net['out']: (Tensor, shape (N, 2, H, W)) output of the network
+            y: (Tensor shape (N, 2, cH, cW)) control point parameters
         """
         # compute encoder feature maps
-        fm_tar = [target]
-        fm_src = [source]
+        fm_tar = [tar]
+        fm_src = [src]
         for (enc_t, enc_s) in zip(self.enc_tar, self.enc_src):
             fm_tar.append(enc_t(fm_tar[-1]))
             fm_src.append(enc_s(fm_src[-1]))
@@ -172,7 +163,7 @@ class SiameseFFDNet(nn.Module):
         fm_concat = torch.cat(fm_upsampled, dim=1)
 
         # output conv layers
-        output = fm_concat
-        for conv_out in self.convs_out:
-            output = conv_out(output)
-        return output
+        y = fm_concat
+        for out_layer in self.out_layers:
+            y = out_layer(y)
+        return y
