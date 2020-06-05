@@ -1,6 +1,8 @@
 from os import path
 from tqdm import tqdm
 
+import numpy as np
+
 import torch
 from model.transformations import spatial_transform
 from runners.inference import process_batch
@@ -8,7 +10,6 @@ from runners.helpers import LossReporter, MetricReporter
 
 import utils.metric as metrics_utils
 import utils.misc as misc_utils
-import utils.transformation as transform_utils
 import utils.image_io as imageio_utils
 import utils.visualise as vis_utils
 
@@ -36,7 +37,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     metrics_reporter = MetricReporter()
     metrics_reporter.id_list = dataloader.dataset.subject_list
 
-    # set up output dirs
+    # set up output dir
     if val:
         result_dir = misc_utils.setup_dir(args.model_dir + "/val_results")
     else:
@@ -61,13 +62,9 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 data_dict["target_pred"] = spatial_transform(data_dict["target_original"].to(device=args.device),
                                                              data_dict["dvf_pred"])
 
-            # cast to numpy array on cpu
+            # cast to numpy array
             for name, one_data in data_dict.items():
                 data_dict[name] = one_data.cpu().numpy()
-
-            # todo: to-test v0.3-dev remove denormalisation as the network should predict image space DVF
-            # # reverse DVF normalisation
-            # data_dict["dvf_pred"] = transform_utils.denormalise_dvf(data_dict["dvf_pred"])
             """"""
 
             """
@@ -85,9 +82,11 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 subj_id = dataloader.dataset.subject_list[idx]
                 subj_output_dir = misc_utils.setup_dir(path.join(output_dir, subj_id))
 
-                # todo: not compatible with 3D
                 for name, save_data in data_dict.items():
-                    imageio_utils.save_nifti(save_data.transpose(2, 3, 0, 1), f"{subj_output_dir}/{name}.nii.gz")
+                    # data_dict data shape (N, (1/dim), *size)
+                    # save in shape: (*sizes, N, (dim)) for 2D, or (*sizes, (dim)) for 3D
+                    imageio_utils.save_nifti(np.moveaxis(save_data, [0, 1], [-2, -1]).squeeze(),
+                                             f"{subj_output_dir}/{name}.nii.gz")
             """"""
 
             t.update()

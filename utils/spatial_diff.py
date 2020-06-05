@@ -72,7 +72,7 @@ def finite_diff_oneside(x, direction="forward", boundary="Neumann"):
             # Pytorch uses last -> first dimension order
             paddings.reverse()
             # join sublists into a flat list
-            paddings = tuple([p for ppair in paddings for p in ppair])
+            paddings = [p for ppair in paddings for p in ppair]
 
             # padding
             if boundary == "Neumann":

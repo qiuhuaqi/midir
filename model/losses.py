@@ -4,23 +4,20 @@ Loss functions
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from utils.image import normalise_intensity
 
-"""
-Construct the loss function (similarity + regularisation)
-"""
+
 def loss_fn(data_dict, params):
     """
-    Unsupervised loss function
+    Construct loss function
 
     Args:
         data_dict: (dict) dictionary containing data
             {
-                "target": (Tensor, shape (N, ch, *dims)) target image
-                "warped_source": (Tensor, shape (N, ch, *dims)) deformed source image
-                "dvf_pred": (Tensor, shape (N, dim, *dims)) DVF predicted
+                "target": (Tensor, shape (N, 1, *sizes)) target image
+                "warped_source": (Tensor, shape (N, 1, *sizes)) deformed source image
+                "dvf_pred": (Tensor, shape (N, dim, *sizes)) DVF predicted
                 ...
             }
         params: (object) parameters from params.json
@@ -29,13 +26,9 @@ def loss_fn(data_dict, params):
         loss: (scalar) loss value
         losses: (dict) dictionary of individual losses (weighted)
     """
-    # todo: allow extra parameters to be passed to loss functions
-    #  (e.g. NMI number of bins) via MILoss(*args, **kwargs)
     sim_losses = {"MSE": nn.MSELoss(),
                   "NMI": MILoss()}
-    reg_losses = {"huber_spt": huber_loss_spatial,
-                  "huber_temp": huber_loss_temporal,
-                  "diffusion": diffusion_loss,
+    reg_losses = {"diffusion": diffusion_loss,
                   "be": bending_energy_loss}
 
     sim_loss = sim_losses[params.sim_loss](data_dict["target"], data_dict["warped_source"]) * params.sim_weight
@@ -47,111 +40,41 @@ def loss_fn(data_dict, params):
 
 
 
-
 """ Regularisation loss """
+from utils.spatial_diff import finite_diff
+
 def diffusion_loss(dvf):
     """
-    Compute diffusion regularisation on DVF
+    Compute diffusion (L2) regularisation loss
 
     Args:
-        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field
+        dvf: (torch.Tensor, size (N, dim, *sizes)) Dense displacement vector field
 
     Returns:
-        diffusion_loss_2d: (Scalar) diffusion regularisation loss
+        diffusion loss: (scalar) Diffusion (L2) regularisation loss
     """
-
-    # boundary handling with padding to ensure all points are regularised
-    # consideration of forward differences dx[i] = x[i+1] - x[i]
-    # Neumann boundary conditions
-    dvf_padx = F.pad(dvf, (0, 0, 0, 1), mode='replicate')  # pad H by 1 after, (N, 2, H+1, W)
-    dvf_pady = F.pad(dvf, (0, 1, 0, 0), mode='replicate')  # pad W by 1 after, (N, 2, H, W+1)
-
-    dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
-    dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
-
-    return (dvf_dx.pow(2) + dvf_dy.pow(2)).mean()
+    dvf_dxyz = finite_diff(dvf, mode="forward")
+    return torch.cat(dvf_dxyz, dim=1).pow(2).sum(dim=1).mean()
 
 
 def bending_energy_loss(dvf):
     """
-    Bending Energy regularisation (Rueckert et al., 1999)
+    Compute the Bending Energy regularisation loss (Rueckert et al., 1999)
 
     Args:
-        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field
+        dvf: (torch.Tensor, size (N, dim, *sizes)) Dense displacement vector field
 
     Returns:
-        BE: (Scalar)
+        BE: (scalar) Bending Energy loss
     """
-
     # 1st order derivatives
-    # boundary handling with padding to ensure all points are regularised
-    # consideration of forward differences dx[i] = x[i+1] - x[i]
-    # Neumann boundary conditions
-    dvf_padx = F.pad(dvf, (0, 0, 0, 1), mode='replicate')  # pad H by 1 before, (N, 2, H+1, W)
-    dvf_pady = F.pad(dvf, (0, 1, 0, 0), mode='replicate')  # pad W by 1 before, (N, 2, H, W+1)
-
-    dvf_dx = dvf_padx[:, :, 1:, :] - dvf_padx[:, :, :-1, :]  # (N, 2, H, W)
-    dvf_dy = dvf_pady[:, :, :, 1:] - dvf_pady[:, :, :, :-1]  # (N, 2, H, W)
-
+    dvf_d1 = finite_diff(dvf, mode="forward")
 
     # 2nd order derivatives
-    # consideration of backward differences dxx[i] = dx[i] - dx[i-1]
-    # Dirichlet boundary conditions
-    dvf_dx_padx = F.pad(dvf_dx, (0, 0, 1, 0), mode='replicate')  # (N, 2, H+1, W)
-    dvf_dx_pady = F.pad(dvf_dx, (1, 0, 0, 0), mode='replicate')  # (N, 2, H, W+1)
-    dvf_dy_padx = F.pad(dvf_dy, (0, 0, 1, 0), mode='replicate')  # (N, 2, H+1, W)
-    dvf_dy_pady = F.pad(dvf_dy, (1, 0, 0, 0), mode='replicate')  # (N, 2, H, W+1)
-
-    dvf_dxdx = dvf_dx_padx[:, :, 1:, :] - dvf_dx_padx[:, :, :-1, :]  # (N, 2, H, W)
-    dvf_dxdy = dvf_dx_pady[:, :, :, 1:] - dvf_dx_pady[:, :, :, :-1]  # (N, 2, H, W)
-    dvf_dydx = dvf_dy_padx[:, :, 1:, :] - dvf_dy_padx[:, :, :-1, :]  # (N, 2, H, W)
-    dvf_dydy = dvf_dy_pady[:, :, :, 1:] - dvf_dy_pady[:, :, :, :-1]  # (N, 2, H, W)
-
-    # print(dvf_dxdx.size(), dvf_dxdy.size(), dvf_dydx.size(), dvf_dydy.size())
-    return (dvf_dxdx.pow(2).sum(dim=1) + dvf_dxdy.pow(2).sum(dim=1) + dvf_dydx.pow(2).sum(dim=1) + dvf_dydy.pow(2).sum(dim=1)).mean()
-
-
-def huber_loss_spatial(dvf):
-    """
-    Calculate approximated spatial Huber loss
-    Args:
-        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
-
-    Returns:
-        loss: (Scalar) Huber loss spatial
-
-    """
-    eps = 0.0001 # numerical stability
-
-    # finite difference as derivative
-    # (note the 1st column of dx and the first row of dy are not regularised)
-    dvf_dx = dvf[:, :, 1:, 1:] - dvf[:, :, :-1, 1:]  # (N, 2, H-1, W-1)
-    dvf_dy = dvf[:, :, 1:, 1:] - dvf[:, :, 1:, :-1]  # (N, 2, H-1, W-1)
-    return ((dvf_dx.pow(2) + dvf_dy.pow(2)).sum(dim=1) + eps).sqrt().mean()
-
-
-def huber_loss_temporal(dvf):
-    """
-    Calculate approximated temporal Huber loss
-
-    Args:
-        dvf: (Tensor of shape (N, 2, H, W)) displacement vector field estimated
-
-    Returns:
-        loss: (Scalar) huber loss temporal
-
-    """
-    # todo: temporally regularise dx and dy not only the L2norm
-    # magnitude of the flow
-    dvf_norm = torch.norm(dvf, dim=1)  # (N, H, W)
-
-    # temporal finite derivatives, 1st order
-    dvf_norm_dt = dvf_norm[1:, :, :] - dvf_norm[:-1, :, :]
-    loss = (dvf_norm_dt.pow(2) + 1e-4).sum().sqrt()
-    return loss
-""""""
-
-
+    dvf_d2 = []
+    for dvf_d in dvf_d1:
+        dvf_d2 += finite_diff(dvf_d, mode="forward")
+    return torch.cat(dvf_d2, dim=1).pow(2).sum(dim=1).mean()
 
 
 """ Regularity loss based on Jacobian """
@@ -173,9 +96,6 @@ def huber_loss_temporal(dvf):
 #         -torch.index_select(d_x, 1, torch.tensor([1]).cuda())*torch.index_select(d_y, 1, torch.tensor([0]).cuda())
 #     return J
 #
-
-
-
 
 
 

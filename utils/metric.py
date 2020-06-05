@@ -18,6 +18,7 @@ def metrics_fn(metric_data, metric_groups):
     metric_results = {}
 
     # keys must match those in metric_groups and params.metric_groups
+    # (using groups to share common pre-processings)
     metric_group_fns = {'dvf_metrics': dvf_metrics_fn,
                         'image_metrics': image_metrics_fn}
 
