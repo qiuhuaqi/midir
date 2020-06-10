@@ -18,7 +18,7 @@ class UNet(nn.Module):
     def __init__(self,
                  dim=2,
                  enc_channels=(16, 32, 32, 32, 32),
-                 dec_channels=(32, 32, 32, 32, 16),
+                 dec_channels=(32, 32, 32, 16),
                  out_channels=(16, 16)
                  ):
         super(UNet, self).__init__()
@@ -29,9 +29,10 @@ class UNet(nn.Module):
         self.enc = nn.ModuleList()
         for i in range(len(enc_channels)):
             in_ch = 2 if i == 0 else enc_channels[i - 1]
+            stride = 1 if i == 0 else 2
             self.enc.append(
                 nn.Sequential(
-                    conv_Nd(dim, in_ch, enc_channels[i], stride=2),
+                    conv_Nd(dim, in_ch, enc_channels[i], stride=stride),
                     nn.LeakyReLU(0.2)
                 )
             )
@@ -63,7 +64,7 @@ class UNet(nn.Module):
 
         # final prediction layer
         self.out_layers.append(
-            conv_Nd(out_channels[-1], dim)
+            conv_Nd(dim, out_channels[-1], dim)
         )
 
 
@@ -84,7 +85,7 @@ class UNet(nn.Module):
             fm_dec = torch.cat([fm_dec, fm_enc[-2-i]], dim=1)
 
         # further convs and prediction
-        y = fm_dec[-1]
+        y = fm_dec
         for out_layer in self.out_layers:
             y = out_layer(y)
         return y
@@ -160,7 +161,7 @@ class SiameseNet(nn.Module):
         for l, fm_red in enumerate(fm_reduce[1:]):
             up_factor = 2 ** (l + 1)
             fm_upsampled.append(
-                F.interpolate(fm_red, scale_factor=up_factor, mode="bilinear", align_corners=True))
+                F.interpolate(fm_red, scale_factor=up_factor, mode="bilinear", align_corners=False))
         fm_concat = torch.cat(fm_upsampled, 1)
 
         # output conv layers

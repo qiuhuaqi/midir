@@ -112,12 +112,12 @@ def synthesis_elastic_deformation(image,
 
 
     # compute dense DVF by interpolate to image size (dim, *size)
-    if dim == 2:
-        inter_mode = "bilinear"
-    else:
-        inter_mode = "trilinear"
+    inter_mode = "bilinear" if dim == 2 else "trilinear"
     dvf = F.interpolate(torch.from_numpy(cp_params),
-                        size=image_shape, mode=inter_mode).numpy()
+                        size=image_shape,
+                        mode=inter_mode,
+                        align_corners=False
+                        ).numpy()
 
     # apply smoothing filter if given
     if smooth_filter is not None:

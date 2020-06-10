@@ -137,4 +137,4 @@ def spatial_transform(x, dvf, interp_mode="bilinear"):
     deformed_meshgrid = [deformed_meshgrid[dim-1-i] for i in range(dim)]
     deformed_meshgrid = torch.stack(deformed_meshgrid, -1)  # (N, *size, dim)
 
-    return F.grid_sample(x, deformed_meshgrid, mode=interp_mode)
+    return F.grid_sample(x, deformed_meshgrid, mode=interp_mode, align_corners=False)

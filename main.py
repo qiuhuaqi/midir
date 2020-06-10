@@ -39,12 +39,12 @@ parser.add_argument('--cpu',
                     action='store_true',
                     help='Use CPU if given')
 
-parser.add_argument('--gpu',
+parser.add_argument('--gpu_num',
                     default=0,
                     help='Choose GPU to run on')
 
 parser.add_argument('--num_workers',
-                    default=8,
+                    default=0,
                     type=int,
                     help='Number of processes used by dataloader, 0 means use main process')
 
@@ -54,7 +54,7 @@ args = parser.parse_args()
 
 
 # set up device
-os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)  # select GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_num)  # select GPU
 args.cuda = not args.cpu and torch.cuda.is_available()
 if args.cuda:
     args.device = torch.device('cuda')

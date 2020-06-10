@@ -1,8 +1,8 @@
 import torch.nn as nn
 import numpy as np
 
-from model.networks.dvf_nets import SiameseNet
-from model.networks.ffd_nets import SiameseFFDNet, FFDNet
+from model.networks.dvf_nets import SiameseNet, UNet
+from model.networks.ffd_nets import SiameseNetFFD, FFDNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 
 
@@ -12,6 +12,7 @@ class DLRegModel(nn.Module):
 
         self.params = params
 
+        # initialise recording variables
         self.epoch_num = 0
         self.iter_num = 0
         self.is_best = False
@@ -20,12 +21,20 @@ class DLRegModel(nn.Module):
         self._set_network()
         self._set_transformation_model()
 
+
     def _set_network(self):
-        if self.params.network == "SiameseNet":
+        if self.params.network == "SiameseNetDVF":
             self.network = SiameseNet()
 
-        elif self.params.network == "SiameseFFD":
-            self.network = SiameseFFDNet()
+        elif self.params.network == "UNetDVF":
+            self.network = UNet(dim=self.params.dim,
+                                   enc_channels=self.params.enc_channels,
+                                   dec_channels=self.params.dec_channels,
+                                   out_channels=self.params.out_channels
+                                   )
+
+        elif self.params.network == "SiameseNetFFD":
+            self.network = SiameseNetFFD()
 
         elif self.params.network == "FFDNet":
             self.network = FFDNet(dim=self.params.dim,
@@ -36,6 +45,7 @@ class DLRegModel(nn.Module):
                                   )
         else:
             raise ValueError("Model: Network not recognised")
+
 
     def _set_transformation_model(self):
         if self.params.transformation == "DVF":
@@ -48,6 +58,7 @@ class DLRegModel(nn.Module):
         else:
             raise ValueError("Model: Transformation model not recognised")
 
+
     def update_best_model(self, metric_results):
         metric_results_mean = np.mean([metric_results[metric] for metric in self.params.best_metrics])
 
@@ -58,6 +69,7 @@ class DLRegModel(nn.Module):
             if metric_results_mean < self.best_metric_result:
                 self.is_best = True
                 self.best_metric_result = metric_results_mean
+
 
     def forward(self, target, source):
         net_out = self.network(target, source)

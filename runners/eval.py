@@ -110,7 +110,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
 
         # save validation visual results for training
         val_vis_dir = misc_utils.setup_dir(result_dir + "/val_visual_results")
-        vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50)
+        vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=2)
 
     else:  # Testing
         # save mean-std and dataframe of metric results

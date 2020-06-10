@@ -85,8 +85,8 @@ def finite_diff_oneside(x, direction="forward", boundary="Neumann"):
                 raise ValueError("Boundary condition not recognised.")
 
             # slice and subtract
-            x_diff += [x_pad.index_select(i+2, torch.arange(1, sizes[i]+1))
-                       - x_pad.index_select(i+2, torch.arange(0, sizes[i]))]
+            x_diff += [x_pad.index_select(i+2, torch.arange(1, sizes[i]+1).to(device=x.device))
+                       - x_pad.index_select(i+2, torch.arange(0, sizes[i]).to(device=x.device))]
 
         else:
             raise TypeError("Input data type not recognised, support numpy.ndarray or torch.Tensor")

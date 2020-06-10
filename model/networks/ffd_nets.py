@@ -37,7 +37,9 @@ class FFDNet(nn.Module):
         for i in range(len(enc_channels)):
             in_ch = 2 if i == 0 else enc_channels[i-1]
             out_ch = enc_channels[i]
-            self.enc.append(nn.Sequential(conv_Nd(dim, in_ch, out_ch, stride=2),
+            self.enc.append(nn.Sequential(conv_Nd(dim, in_ch, out_ch),
+                                          nn.LeakyReLU(0.2),
+                                          conv_Nd(dim, out_ch, out_ch),
                                           nn.LeakyReLU(0.2),
                                           avg_pool(self.dim)
                                           )
@@ -65,7 +67,7 @@ class FFDNet(nn.Module):
         inter_mode = "bilinear"
         if self.dim == 3:
             inter_mode = "trilinear"
-        return F.interpolate(x, self.output_size, mode=inter_mode)
+        return F.interpolate(x, self.output_size, mode=inter_mode, align_corners=False)
 
 
     def forward(self, tar, src):
@@ -85,8 +87,10 @@ class FFDNet(nn.Module):
 
 
 
-class SiameseFFDNet(nn.Module):
-    """Modification of the Siamese network, 2D only"""
+class SiameseNetFFD(nn.Module):
+    """Modification of the Siamese network,
+    3D enabled code but memory consuming.
+    """
     def __init__(self,
                  dim=2,
                  ffd_cps=8,
@@ -94,7 +98,7 @@ class SiameseFFDNet(nn.Module):
                  reduce_channel=512,
                  out_channels=(512 * 2, 512, 256, 64)
                  ):
-        super(SiameseFFDNet, self).__init__()
+        super(SiameseNetFFD, self).__init__()
 
         # dual-stream encoders
         self.enc_tar = nn.ModuleList()

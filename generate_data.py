@@ -10,7 +10,7 @@ from utils.image_io import save_nifti
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir",
-                    default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/miccai2020")
+                    default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/3d")
 
 parser.add_argument("-dim",
                     default=None,
@@ -38,7 +38,7 @@ parser.add_argument("-disp_max",
 parser.add_argument("-crop_size",
                     nargs='*',
                     type=int,
-                    default=[192, 192, 155],
+                    default=[192, 192, 160],
                     help="Central crop size")
 
 parser.add_argument("-slice_range",
