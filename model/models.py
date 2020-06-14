@@ -3,7 +3,7 @@ import numpy as np
 
 from model.networks.dvf_nets import SiameseNet, UNet
 from model.networks.ffd_nets import SiameseNetFFD, FFDNet
-from model.transformations import BSplineFFDTransform, DVFTransform
+from model.transformations import BSplineFFDTransform, BSplineFFDTransformPoly, DVFTransform
 
 
 class DLRegModel(nn.Module):
