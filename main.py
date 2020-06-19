@@ -33,15 +33,15 @@ parser.add_argument('--ckpt_file',
 
 parser.add_argument('--save',
                     action='store_true',
-                    help="Save deformed images and predicted DVFs in evaluation if True.")
+                    help="Save deformed images and predicted DVFs in evaluation if True")
 
 parser.add_argument('--cpu',
                     action='store_true',
-                    help='Use CPU if given')
+                    help='Use CPU')
 
 parser.add_argument('--gpu_num',
                     default=0,
-                    help='Choose GPU to run on')
+                    help='Choose GPU')
 
 parser.add_argument('--num_workers',
                     default=0,

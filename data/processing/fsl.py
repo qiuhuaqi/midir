@@ -2,8 +2,6 @@
 import os
 from os import path
 import subprocess
-import numpy as np
-import nibabel as nib
 from tqdm import tqdm
 from glob import glob
 
@@ -11,8 +9,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--root_dir", default="/vol/vipdata/ixi/ixi-db")
-parser.add_argument("--output_dir", default=None)
+parser.add_argument("--data_dir",
+                    default="/vol/vipdata/ixi/ixi-db/images")
+
+parser.add_argument("--output_dir",
+                    default=None)
 
 parser.add_argument("--process_bet",
                     action="store_true",
@@ -27,15 +28,10 @@ args = parser.parse_args()
 
 if __name__ == '__main__':
 
-    data_dir = path.join(args.root_dir, "images")
+    assert os.path.exists(args.data_dir), "Source data dir does not exist."
 
-    if args.output_dir is None:
-        args.output_dir = path.join(args.root_dir, "processed", "processed_data")
-    if not path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-
-    t1_list = glob(data_dir + "/*T1*")
-    t2_list = glob(data_dir + "/*T2*")
+    t1_list = glob(args.data_dir + "/*T1*")
+    t2_list = glob(args.data_dir + "/*T2*")
 
     # # Sanity check if all subjects has both T1 and T2
     # for t1, t2 in zip(sorted(t1_list), sorted(t2_list)):
@@ -46,6 +42,7 @@ if __name__ == '__main__':
 
     with tqdm(total=len(t1_list)) as t:
         for t1 in sorted(t1_list):
+
             subject_path_prefix = "-".join(t1.split("-")[:-1])  # $PATH_TO_DATA/$subject_prefix
             subject_prefix = subject_path_prefix.split("/")[-1]
 
@@ -64,11 +61,12 @@ if __name__ == '__main__':
 
             # set output image paths
             t1_brain_path = subject_output_dir + "/T1-brain.nii.gz"
-            t1_brain_resampled_path = subject_output_dir + "/T1-brain-resampled.nii.gz"
             t2_brain_path = subject_output_dir + "/T2-brain.nii.gz"
 
 
-            """run brain extraction"""
+            """
+            Run brain extraction / skull stripping
+            """
             if args.process_bet:
 
                 # create symbolic links to original images
@@ -76,34 +74,34 @@ if __name__ == '__main__':
                 os.system(f"ln -s {t2_img_path} {subject_output_dir + '/T2.nii.gz'}")
 
                 # run FSL bet to extract the brain and get the mask
-                cmd = f"bet {t1_img_path} {t1_brain_path} -m"
-                subprocess.run(cmd, check=True, shell=True)
+                cmd_bet = f"bet {t1_img_path} {t1_brain_path} -m -R"
+                subprocess.run(cmd_bet, check=True, shell=True)
 
                 # check if t1 mask and extracted brain has been generated
-                t1_mask_path = subject_output_dir + "/T1-brain_mask.nii.gz"  # added _mask by fsl bet
+                t1_mask_path = subject_output_dir + "/T1-brain_mask.nii.gz"  # _mask added by fsl bet
                 assert path.exists(t1_mask_path), f"T1 mask has not been generated for subject {subject_prefix}"
                 assert path.exists(t1_brain_path), f"T1 brain has not been extracted for subject {subject_prefix}"
 
-                # use MIRTK to generate T2 mask by sampling T2 grid in T1 space
-                t2_mask_path = subject_output_dir + "/T2-brain_mask.nii.gz"
-                cmd_resample_t2_mask = f"mirtk transform-image " \
-                                       f"{t1_mask_path} {t2_mask_path} -target {t2_img_path} " \
-                                       f"-interpolation NN"
-                subprocess.run(cmd_resample_t2_mask, check=True, shell=True)
 
-                # use MIRTK to apply T2 mask to T2 image
-                cmd_apply_t2_mask = f"mirtk calculate {t2_img_path} -mask {t2_mask_path} -pad 0 -output {t2_brain_path}"
-                subprocess.run(cmd_apply_t2_mask, check=True, shell=True)
+                # register T2 image to T1 image
+                t2_img_registered_path = subject_output_dir + "/T2-registered.nii.gz"
+                cmd_register_t2 = f"mirtk transform-image " \
+                                  f"{t2_img_path} {t2_img_registered_path} -target {t1_img_path}"
+                subprocess.run(cmd_register_t2, check=True, shell=True)
 
-                # use MIRTK to resample T1 brain extracted image to match T2 space
-                cmd_resample_t1 = f"mirtk transform-image " \
-                                  f"{t1_brain_path} {t1_brain_resampled_path} -target {t2_brain_path}"
-                subprocess.run(cmd_resample_t1, check=True, shell=True)
+                # apply T1 mask to registered T2 image to extract T2 brain
+                cmd_extract_t2 = f"mirtk calculate " \
+                                 f"{t2_img_registered_path} -mask {t1_mask_path} -pad 0 " \
+                                 f"-output {t2_brain_path}"
+                subprocess.run(cmd_extract_t2, check=True, shell=True)
 
-            """run segmentation"""
+
+            """
+            Run segmentation
+            """
             if args.process_first:
                 t1_brain_resampled_label_path = subject_output_dir + "/T1-brain-resampled_subcor_label.nii.gz"
-                assert path.exists(t1_brain_resampled_path), \
+                assert path.exists(t1_brain_path), \
                     "T1 brain resampled does not exist, check brain extraction?"
 
                 # skip the subject is segmentation already exists
@@ -117,7 +115,7 @@ if __name__ == '__main__':
 
                 # run segmentation using FSL FIRST
                 cmd_segment_t1_resampled = f"run_first_all -b -m auto " \
-                                           f"-i {t1_brain_resampled_path} -o {t1_brain_resampled_label_path} "
+                                           f"-i {t1_brain_path} -o {t1_brain_resampled_label_path} "
                 subprocess.run(cmd_segment_t1_resampled, check=True, shell=True)
 
                 # # clean up the additional FSL FIRST output

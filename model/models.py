@@ -39,7 +39,7 @@ class DLRegModel(nn.Module):
         elif self.params.network == "FFDNet":
             self.network = FFDNet(dim=self.params.dim,
                                   img_size=self.params.crop_size,
-                                  cpt_spacing=self.params.ffd_cps,
+                                  cpt_spacing=self.params.ffd_sigma,
                                   enc_channels=self.params.enc_channels,
                                   out_channels=self.params.out_channels
                                   )
@@ -54,7 +54,7 @@ class DLRegModel(nn.Module):
         elif self.params.transformation == "FFD":
             self.transform = BSplineFFDTransform(dim=self.params.dim,
                                                  img_size=self.params.crop_size,
-                                                 cpt_spacing=self.params.ffd_cps)
+                                                 sigma=self.params.ffd_sigma)
         else:
             raise ValueError("Model: Transformation model not recognised")
 

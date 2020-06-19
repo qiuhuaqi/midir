@@ -5,15 +5,35 @@ from tqdm import tqdm
 import argparse
 import numpy as np
 
-from data.datasets import BratsDataset
+import torch
+from data.datasets import BratsSynthDataset
 from utils.image_io import save_nifti
 
 parser = argparse.ArgumentParser()
+
+parser.add_argument("--runs",
+                    nargs='*',
+                    type=str,
+                    help="train, val, test")
+
 parser.add_argument("--data_dir",
                     default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/3d")
 
+parser.add_argument('--cpu',
+                    action='store_true',
+                    help='Use CPU if given')
+
+parser.add_argument('--gpu_num',
+                    default=0,
+                    help='Choose GPU to run on')
+
+parser.add_argument("--debug",
+                    action="store_true",
+                    help="Debug mode.")
+
+
 parser.add_argument("-dim",
-                    default=None,
+                    default=3,
                     type=int,
                     help="Data dimension, 2/3")
 
@@ -47,12 +67,16 @@ parser.add_argument("-slice_range",
                     default=[70, 90],
                     help="Range of slice numbers (axial plane), 2D only")
 
-parser.add_argument("--debug", action="store_true", help="Debug mode.")
 
 args = parser.parse_args()
 
-
-
+# set up device
+os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_num)  # select GPU
+args.cuda = not args.cpu and torch.cuda.is_available()
+if args.cuda:
+    args.device = torch.device('cuda')
+else:
+    args.device = torch.device('cpu')
 
 
 # set random seed
@@ -61,7 +85,8 @@ args = parser.parse_args()
 # todo: fix random seeding in dataset
 np.random.seed(12)
 
-for run in ["val", "test"]:
+
+for run in args.runs:
     print(f"Generating: {run} dataset...")
 
     data_original_dir = f"{args.data_dir}/{run}_original"
@@ -70,15 +95,16 @@ for run in ["val", "test"]:
         os.makedirs(output_dir)
 
     # construct the dataset
-    brats_dataset = BratsDataset(data_original_dir,
-                                 run=run,
-                                 dim=args.dim,
-                                 sigma=args.sigma,
-                                 cps=args.cps,
-                                 disp_max=args.disp_max,
-                                 crop_size=args.crop_size,
-                                 slice_range=args.slice_range
-                                 )
+    brats_dataset = BratsSynthDataset(data_original_dir,
+                                      run=run,
+                                      dim=args.dim,
+                                      sigma=args.sigma,
+                                      cps=args.cps,
+                                      disp_max=args.disp_max,
+                                      crop_size=args.crop_size,
+                                      slice_range=args.slice_range,
+                                      device=args.device
+                                      )
 
     if args.debug:
         print(data_original_dir)
@@ -102,6 +128,10 @@ for run in ["val", "test"]:
 
             for name, data in data_dict.items():
                 if name == "dvf_gt":
+                    # skip saving ground truth DVF for training data
+                    if run == "train":
+                        continue
+
                     if args.dim == 2:  # 2D
                         # (N, 2, H, W) -> (H, W, N, 2)
                         _data = data.numpy().transpose(2, 3, 0, 1)  # (H, W, N, 2)

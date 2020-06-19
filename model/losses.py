@@ -1,6 +1,7 @@
 """
 Loss functions
 """
+import math
 
 import torch
 import torch.nn as nn
@@ -27,7 +28,7 @@ def loss_fn(data_dict, params):
         losses: (dict) dictionary of individual losses (weighted)
     """
     sim_losses = {"MSE": nn.MSELoss(),
-                  "NMI": MILoss()}
+                  "NMI": MILossGaussian()}
     reg_losses = {"diffusion": diffusion_loss,
                   "be": bending_energy_loss}
 
@@ -103,23 +104,23 @@ def bending_energy_loss(dvf):
 """ Similarity loss """
 from model import window_func
 
-class MILoss(nn.Module):
+class MILossBSpline(nn.Module):
     def __init__(self,
                  target_min=0.0,
                  target_max=1.0,
                  source_min=0.0,
                  source_max=1.0,
-                 num_bins_target=64,
-                 num_bins_source=64,
+                 num_bins_target=32,
+                 num_bins_source=32,
                  c_target=1.0,
                  c_source=1.0,
-                 nmi=True,
+                 normalised=True,
                  window="cubic_bspline",
                  debug=False):
 
         super().__init__()
         self.debug = debug
-        self.nmi = nmi
+        self.normalised = normalised
         self.window = window
 
         self.target_min = target_min
@@ -174,7 +175,7 @@ class MILoss(nn.Module):
             source: (torch.Tensor, size (N, dim, *size)
 
         Returns:
-            (N)MI: (scalar)
+            (Normalise)MI: (scalar)
         """
 
         """pre-processing"""
@@ -227,10 +228,103 @@ class MILoss(nn.Module):
             self.p_source = p_source
 
         # return (unnormalised) mutual information or normalised mutual information (NMI)
-        if self.nmi:
+        if self.normalised:
             return -torch.mean((ent_target + ent_source) / ent_joint)
         else:
             return -torch.mean(ent_target + ent_source - ent_joint)
 
-""""""
 
+
+class MILossGaussian(nn.Module):
+    """
+    Mutual information loss using Gaussian kernel in KDE
+    Adapting AirLab implementation to handle batches (& changing input):
+    https://github.com/airlab-unibas/airlab/blob/80c9d487c012892c395d63c6d937a67303c321d1/airlab/loss/pairwise.py#L275
+    """
+    def __init__(self,
+                 tar_min=0.0, tar_max=1.0,
+                 src_min=0.0, src_max=1.0,
+                 num_bins_tar=32,
+                 num_bins_src=32,
+                 sigma_tar=0.5,
+                 sigma_src=0.5,
+                 normalised=True,
+                 debug=False):
+        super(MILossGaussian, self).__init__()
+        self.normalised = normalised
+
+        self.tar_min = tar_min
+        self.tar_max = tar_max
+        self.src_min = src_min
+        self.src_max = src_max
+
+        self.sigma_tar = sigma_tar * (tar_max - tar_min) / num_bins_tar
+        self.sigma_src = sigma_src * (src_max - src_min) / num_bins_src
+
+        # set bin edges
+        self.bins_tar = torch.linspace(self.tar_min, self.tar_max, num_bins_tar, requires_grad=False).unsqueeze(1)
+        self.bins_src = torch.linspace(self.src_min, self.src_max, num_bins_src, requires_grad=False).unsqueeze(1)
+
+        self.debug = debug
+
+
+    def _compute_joint_stat(self, tar, src):
+        """Compute joint distribution and entropy"""
+        # flatten images to (N, 1, prod(*size))
+        tar = tar.view(tar.size()[0], tar.size()[1], -1)
+        src = src.view(src.size()[0], src.size()[1], -1)
+
+        # cast bins
+        self.bins_tar = self.bins_tar.to(device=tar.device, dtype=tar.dtype)
+        self.bins_src = self.bins_src.to(device=src.device, dtype=src.dtype)
+
+        # calculate Parzen window function response (N, #bins, H*W)
+        windowed_tar = torch.exp(-(tar - self.bins_tar)**2 / (2 * self.sigma_tar**2)) \
+                       / (math.sqrt(2*math.pi) * self.sigma_tar)
+        windowed_src = torch.exp(-(src - self.bins_src)**2 / (2 * self.sigma_src**2)) \
+                       / (math.sqrt(2*math.pi) * self.sigma_src)
+
+        # calculate joint histogram batch
+        hist_joint = windowed_tar.bmm(windowed_src.transpose(1, 2))  # (N, #bins, #bins)
+
+        # normalise joint histogram to get joint distribution
+        hist_norm = hist_joint.flatten(start_dim=1, end_dim=-1).sum(dim=1)  # normalisation per-image
+        p_joint = hist_joint / hist_norm.view(-1, 1, 1)  # (N, #bins, #bins) / (N, 1, 1)
+
+        return p_joint
+
+
+    def forward(self, tar, src):
+        """
+        Calculate (Normalised) Mutual Information Loss.
+
+        Args:
+            tar: (torch.Tensor, size (N, dim, *size)
+            src: (torch.Tensor, size (N, dim, *size)
+
+        Returns:
+            (Normalise)MI: (scalar)
+        """
+        # normalise intensity for histogram calculation
+        tar = normalise_intensity(tar[:, 0, ...],
+                                  mode='minmax', min_out=self.tar_min, max_out=self.tar_max).unsqueeze(1)
+        src = normalise_intensity(src[:, 0, ...],
+                                  mode='minmax', min_out=self.src_min, max_out=self.src_max).unsqueeze(1)
+
+        # compute joint distribution
+        p_joint = self._compute_joint_stat(tar, src)
+
+        # marginalise the joint distribution to get marginal distributions
+        # batch size in dim0, target bins in dim1, source bins in dim2
+        p_target = torch.sum(p_joint, dim=2)
+        p_source = torch.sum(p_joint, dim=1)
+
+        # calculate entropy
+        ent_target = - torch.sum(p_target * torch.log(p_target + 1e-12), dim=1)  # (N,1)
+        ent_source = - torch.sum(p_source * torch.log(p_source + 1e-12), dim=1)  # (N,1)
+        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-12), dim=(1, 2))  # (N,1)
+
+        if self.normalised:
+            return -torch.mean((ent_target + ent_source) / ent_joint)
+        else:
+            return -torch.mean(ent_target + ent_source - ent_joint)

@@ -203,7 +203,7 @@ def bbox_crop(x, bbox):
         bbox: (list of tuples) [*(bbox_min_index, bbox_max_index)]
 
     Returns:
-        input cropped by according to bounding box
+        x cropped using bounding box
     """
     # slice all of batch and channel
     slicer = [slice(0, x.shape[0]), slice(0, x.shape[1])]

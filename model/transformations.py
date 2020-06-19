@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from model.window_func import cubic_bspline_torch
 from utils.transformation import normalise_dvf
+from utils.misc import param_dim_setup
 
 """ 
 Transformation models 
@@ -10,9 +11,10 @@ Transformation models
 
 class BSplineFFDTransform(object):
     def __init__(self,
-                 dim=2,
+                 dim,
                  img_size=(192, 192),
-                 cpt_spacing=(8, 8)
+                 sigma=(5, 5),
+                 order=3
                  ):
         """
         Compute dense Displacement Vector Field (DVF) of B-spline FFD transformation model
@@ -26,21 +28,18 @@ class BSplineFFDTransform(object):
         """
 
         self.dim = dim
-        # assume same size for all dimensions if one integer is given
-        if isinstance(img_size, int):
-            self.img_size = (img_size,) * dim
-        else:
-            self.img_size = img_size
 
-        if isinstance(cpt_spacing, int):
-            self.cpt_spacing = (cpt_spacing,) * dim
-        else:
-            self.cpt_spacing = cpt_spacing
+        # assume same for all dimensions if one integer is given
+        self.img_size = param_dim_setup(img_size, self.dim)
+        # self.cpt_spacing = param_dim_setup(cpt_spacing, self.dim)
+        self.sigma = param_dim_setup(sigma, self.dim)
 
-        self.strides = ([s + 1 for s in self.cpt_spacing])
         self.conv_transposeNd_fn = getattr(F, f"conv_transpose{self.dim}d")
 
-        self._set_kernel()
+        self._set_kernel(order=order)
+
+        self.stride = self.sigma
+        self.padding = [int((ks-1)/2) for ks in self.kernel.size()[2:]]
 
 
     def _set_kernel(self, order=3):
@@ -53,17 +52,14 @@ class BSplineFFDTransform(object):
         which determines the size of the n-th order B-spline kernel.
         Here, sigma is set using the convention that each control point controls +/- 1 cpt_spacing
         """
-        sigma = [int(2 * cps / (order + 1)) + 1
-                 for cps in self.cpt_spacing]
-
-        kernel_ones = torch.ones(1, 1, *sigma)
+        kernel_ones = torch.ones(1, 1, *self.sigma)
         kernel = kernel_ones
-        padding = np.array(sigma) - 1
+        padding = np.array(self.sigma) - 1
 
         convNd_fn = getattr(F, f"conv{self.dim}d")
 
         for i in range(order):
-            kernel = convNd_fn(kernel, kernel_ones, padding=(padding).tolist()) / np.prod(sigma)
+            kernel = convNd_fn(kernel, kernel_ones, padding=(padding).tolist()) / np.prod(self.sigma)
 
         self.kernel = kernel.repeat(self.dim, 1, *(1,) * self.dim)  # (dim, 1, *(kernel_sizes))
         self.kernel = self.kernel
@@ -81,10 +77,11 @@ class BSplineFFDTransform(object):
 
         # compute the DVF of the FFD transformation by transposed convolution 2D/3D
         dvf = self.conv_transposeNd_fn(x,
-                                  weight=self.kernel,
-                                  stride=self.strides,
-                                  groups=self.dim,
-                                  padding=self.cpt_spacing)
+                                       weight=self.kernel,
+                                       stride=self.stride,
+                                       padding=self.padding,
+                                       groups=self.dim
+                                       )
 
         # crop DVF to image size (centres aligned)
         for i in range(self.dim):
@@ -103,7 +100,7 @@ class BSplineFFDTransform(object):
 
 class BSplineFFDTransformPoly(BSplineFFDTransform):
     def __init__(self,
-                 dim=2,
+                 dim,
                  img_size=(192, 192),
                  cpt_spacing=(8, 8)
                  ):
@@ -115,6 +112,8 @@ class BSplineFFDTransformPoly(BSplineFFDTransform):
                                                       img_size=img_size,
                                                       cpt_spacing=cpt_spacing)
         self._set_kernel()
+        self.strides = ([cps + 1 for cps in self.cpt_spacing])
+        self.padding = [int((ks-1)/2) for ks in self.kernel.size()[2:]]
 
     def _set_kernel(self, order=3):
         # initialise the 1-d b-spline kernels (specific for cubic B-spline)

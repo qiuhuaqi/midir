@@ -15,9 +15,11 @@ class GaussianFilter(object):
     def __init__(self,
                  dim,
                  sigma,
-                 kernel_size=None
+                 kernel_size=None,
+                 device=torch.device('cpu')
                  ):
         self.dim = dim
+        self.device = device
 
         # configure Gaussian kernel standard deviation (sigma) and kernel size
         sigmas = param_dim_setup(sigma, dim)
@@ -58,15 +60,13 @@ class GaussianFilter(object):
         Apply Gaussian smoothing using image convolution
 
         Args:
-            x: (numpy.ndarray) shape (N, ch, H, W) or (N, ch, H, W, D)
+            x: (torch.Tensor) shape (N, ch, H, W) or (N, ch, H, W, D)
         Returns:
-            output: (numpy.ndarray) same shape as input, Gaussian filter smoothed
+            output: (torch.Tensor) same shape as input, Gaussian filter smoothed
         """
-        x = torch.from_numpy(x)
-        self.kernel = self.kernel.type_as(x)
-
+        self.kernel = self.kernel.to(device=x.device, dtype=x.dtype)
         output = self.conv_Nd_fn(x, self.kernel, padding=self.padding, groups=self.dim)
-        return output.numpy()
+        return output
 
 
 def synthesis_elastic_deformation(image,
@@ -74,7 +74,8 @@ def synthesis_elastic_deformation(image,
                                   smooth_filter=None,
                                   cps=10,
                                   disp_max=1.,
-                                  bbox_pad_ratio=0.2):
+                                  bbox_pad_ratio=0.2,
+                                  device=torch.device('cpu')):
     """
     Synthesis elastic deformation in 2D and 3D.
     Randomly generate control points -> interpolation ->  Gaussian filter smoothing
@@ -86,6 +87,7 @@ def synthesis_elastic_deformation(image,
         cps: (int or tuple/list) control point spacing
         disp_max: (float or tuple/list) maximum displacement
         bbox_pad_ratio: (float or tuple/list) ratio of padding of bounding box cropping (see utils.image.bbox_from_mask)
+        device: (torch.device)
 
     Returns:
         image_deformed: (numpy.ndarray, shape same as input image)
@@ -110,28 +112,27 @@ def synthesis_elastic_deformation(image,
     # repeat along batch size dimension
     cp_params = np.tile(cp_params, (batch_size, *(1, ) * cp_params.ndim))
 
-
     # compute dense DVF by interpolate to image size (dim, *size)
+    cp_params = torch.from_numpy(cp_params).to(device=device)
+
     inter_mode = "bilinear" if dim == 2 else "trilinear"
-    dvf = F.interpolate(torch.from_numpy(cp_params),
+    dvf = F.interpolate(cp_params,
                         size=image_shape,
                         mode=inter_mode,
                         align_corners=False
-                        ).numpy()
-
+                        )
     # apply smoothing filter if given
     if smooth_filter is not None:
         dvf = smooth_filter(dvf)  # (N, dim, *size)
     """"""
 
     # mask the DVF with ROI bounding box
-    # todo: masking out with ROI mask bounding box is not necessary in synthesis...
+    # todo: masking out with ROI mask bounding box is not necessary in synthesis
     mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask, pad_ratio=bbox_pad_ratio)
-    dvf *= mask_bbox_mask[:, np.newaxis, ...]  # (N, dim, *size) * (N, 1, *size)
+    dvf *= torch.from_numpy(mask_bbox_mask[:, np.newaxis, ...]).to(device=device)  # (N, dim, *size) * (N, 1, *size)
 
     # Deform image
-    image_deformed = spatial_transform(torch.from_numpy(image).unsqueeze(1),
-                                       torch.from_numpy(dvf)  # (N, dim, *size)
-                                       )  # (N, 1, *size)
-    image_deformed = image_deformed.squeeze(1).numpy()  # (N, *size)
-    return image_deformed, dvf
+    image = torch.from_numpy(image).unsqueeze(1).to(device=device)
+    image_deformed = spatial_transform(image, dvf)  # (N, 1, *size)
+
+    return image_deformed.squeeze(1).cpu().numpy(), dvf.cpu().numpy()

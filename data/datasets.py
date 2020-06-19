@@ -35,16 +35,23 @@ class BrainData(object):
 
         # training data
         train_data_path = self.params.train_data_path
-        assert path.exists(train_data_path), f"Training data path does not exist: \n{train_data_path}"
+        assert path.exists(train_data_path), f"Training data path does not exist: \n{train_data_path}, not generated?"
 
-        self.train_dataset = BratsDataset(train_data_path,
-                                          run="train",
-                                          dim=self.params.dim,
-                                          sigma=self.params.sigma,
-                                          cps=self.params.elastic_cps,
-                                          disp_max=self.params.disp_max,
-                                          crop_size=self.params.crop_size,
-                                          slice_range=tuple(self.params.slice_range))
+        if self.params.dim == 3:
+            # pre-generated training data
+            self.train_dataset = BratsDataset(train_data_path,
+                                            run="train",
+                                            dim=self.params.dim)
+        else:
+            # synthesis on-the-fly training data
+            self.train_dataset = BratsSynthDataset(train_data_path,
+                                                   dim=self.params.dim,
+                                                   run="train",
+                                                   cps=self.params.synthesis_cps,
+                                                   sigma=self.params.synthesis_sigma,
+                                                   disp_max=self.params.disp_max,
+                                                   crop_size=self.params.crop_size,
+                                                   slice_range=tuple(self.params.slice_range))
 
         self.train_dataloader = ptdata.DataLoader(self.train_dataset,
                                                   batch_size=self.params.batch_size,
@@ -59,8 +66,9 @@ class BrainData(object):
         val_data_path = self.params.val_data_path
         assert path.exists(val_data_path), f"Validation data path does not exist: \n{val_data_path}, not generated?"
 
-        self.val_dataset = BratsEvalDataset(val_data_path,
-                                            dim=self.params.dim)
+        self.val_dataset = BratsDataset(val_data_path,
+                                        run="val",
+                                        dim=self.params.dim)
 
         self.val_dataloader = ptdata.DataLoader(self.val_dataset,
                                                 batch_size=1,
@@ -74,8 +82,9 @@ class BrainData(object):
         test_data_path = self.params.test_data_path
         assert path.exists(test_data_path), f"Testing data path does not exist: \n{test_data_path}, not generated?"
 
-        self.test_dataset = BratsEvalDataset(test_data_path,
-                                             dim=self.params.dim)
+        self.test_dataset = BratsDataset(test_data_path,
+                                         run="test",
+                                         dim=self.params.dim)
 
         self.test_dataloader = ptdata.DataLoader(self.test_dataset,
                                                  batch_size=1,
@@ -90,24 +99,26 @@ class BrainData(object):
 Datasets
 """
 
-class BratsDataset(ptdata.Dataset):
+class BratsSynthDataset(ptdata.Dataset):
     """
     Loading, processing and synthesising transformation
-    for training and generating val/test data
+    for training (on-the-fly) and for generating val/test data
     """
     def __init__(self,
                  data_path,
-                 run=None,
-                 dim=2,
+                 run,
+                 dim,
                  sigma=8,
                  cps=10,
                  disp_max=1.,
                  crop_size=192,
-                 slice_range=(70, 90)
+                 slice_range=(70, 90),
+                 device=torch.device('cpu')
                  ):
-        super(BratsDataset, self).__init__()
+        super(BratsSynthDataset, self).__init__()
 
         self.run = run
+        self.device = device
 
         self.data_path = data_path
         self.subject_list = sorted(os.listdir(self.data_path))
@@ -176,7 +187,8 @@ class BratsDataset(ptdata.Dataset):
                                                                                  data_dict["roi_mask"],
                                                                                  smooth_filter=self.smooth_filter,
                                                                                  cps=self.cps,
-                                                                                 disp_max=self.disp_max )
+                                                                                 disp_max=self.disp_max,
+                                                                                 device=self.device)
 
         # cast to Pytorch Tensor
         for name, data in data_dict.items():
@@ -188,15 +200,18 @@ class BratsDataset(ptdata.Dataset):
 
 
 
-class BratsEvalDataset(ptdata.Dataset):
+class BratsDataset(ptdata.Dataset):
     """
-    Evaluation dataset (val/test) loads in generated & saved data (normalised & cropped)
+    Loading pre-generated synthesised training data
+    or validation and testing data
+    (normalised & cropped)
     """
-    def __init__(self, data_path, dim=2):
+    def __init__(self, data_path, run, dim):
         """data_path should contain the subject directories"""
-        super(BratsEvalDataset, self).__init__()
+        super(BratsDataset, self).__init__()
         self.data_path = data_path
         self.subject_list = sorted(os.listdir(self.data_path))
+        self.run = run  # "train" or else ("val"/"test")
         self.dim = dim
 
     def __getitem__(self, index):
@@ -207,6 +222,10 @@ class BratsEvalDataset(ptdata.Dataset):
         for name in ["target", "source", "target_original", "roi_mask", "dvf_gt"]:
             data_path = f"{self.data_path}/{subject_id}/{name}.nii.gz"
             if name == "dvf_gt":
+                # skip loading ground truth DVF for training data
+                if self.run == "train":
+                    continue
+
                 if self.dim == 2:  # 2D
                     # dvf is saved in shape (H, W, N, 2) -> (N, 2, H, W)
                     data_dict[name] = load_nifti(data_path).transpose(2, 3, 0, 1)

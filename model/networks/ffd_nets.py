@@ -59,11 +59,11 @@ class FFDNet(nn.Module):
             conv_Nd(self.dim, out_channels[-1], self.dim, kernel_size=1, padding=0)
         )
 
-
-    def _interpolate(self, x):
         # determine output size from image size and control point spacing
-        self.output_size = tuple([int(isz // (cps + 1)) + 2
-                             for isz, cps in zip(self.img_size, self.cpt_spacing)])
+        self.output_size = tuple([int(isz // cps) + 2
+                                  for isz, cps in zip(self.img_size, self.cpt_spacing)])
+
+    def _resize(self, x):
         inter_mode = "bilinear"
         if self.dim == 3:
             inter_mode = "trilinear"
@@ -78,7 +78,7 @@ class FFDNet(nn.Module):
             x = enc(x)
 
         # resize the feature map to match output size
-        y = self._interpolate(x)
+        y = self._resize(x)
 
         # 1x1(x1) conv and prediction
         for out_layer in self.out_layers:
