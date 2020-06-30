@@ -18,10 +18,9 @@ import sys
 sys.path.insert(0, f'{os.getcwd()}/src')
 
 from runners.helpers import MetricReporter
-from data.split_nifti import split_volume_idmat
 from utils.metric import metrics_fn
 from utils import misc
-from utils.image_io import save_nifti
+from utils.image_io import save_nifti, split_volume_idmat
 from utils.transformation import dof_to_dvf
 
 import pdb

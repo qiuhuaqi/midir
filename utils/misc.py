@@ -166,15 +166,11 @@ def param_dim_setup(param, dim):
     Returns:
         param: (tuple)
     """
-
     if isinstance(param, int) or isinstance(param, float):
         param = (param,) * dim
-    elif isinstance(param, tuple):
+    elif isinstance(param, tuple) or isinstance(param, list):
         assert len(param) == dim, \
-            f"Dimension mismatch with data ({dim})"
-    elif isinstance(param, list):
-        assert len(param) == dim, \
-            f"Dimension mismatch with data ({dim})"
+            f"Dimension ({dim}) mismatch with data"
         param = tuple(param)
     else:
         raise TypeError("Parameter type not int, tuple or list")
