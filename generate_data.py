@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 
 import torch
-from data.datasets import BratsSynthDataset
+from data.datasets import BrainSynthDataset
 from utils.image_io import save_nifti
 
 parser = argparse.ArgumentParser()
@@ -52,13 +52,13 @@ parser.add_argument("-sigma",
 parser.add_argument("-disp_max",
                     nargs='*',
                     type=float,
-                    default=[4., 4., 4.],
+                    default=(4., 4., 4.),
                     help="Maximum displacements in each direction in voxel space")
 
 parser.add_argument("-crop_size",
                     nargs='*',
                     type=int,
-                    default=[192, 192, 160],
+                    default=(192, 192, 192),
                     help="Central crop size")
 
 parser.add_argument("-slice_range",
@@ -85,7 +85,6 @@ else:
 # todo: fix random seeding in dataset
 np.random.seed(12)
 
-
 for run in args.runs:
     print(f"Generating: {run} dataset...")
 
@@ -95,7 +94,8 @@ for run in args.runs:
         os.makedirs(output_dir)
 
     # construct the dataset
-    brats_dataset = BratsSynthDataset(data_original_dir,
+    brats_dataset = BrainSynthDataset("IXI",
+                                      data_original_dir,
                                       run=run,
                                       dim=args.dim,
                                       sigma=args.sigma,

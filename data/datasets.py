@@ -7,7 +7,7 @@ import torch
 import torch.utils.data as ptdata
 
 from data.synthesis import synthesis_elastic_deformation, GaussianFilter
-from utils.image import normalise_intensity, crop_and_pad
+from utils.image import normalise_intensity, crop_and_pad, bbox_from_mask, bbox_crop
 from utils.image_io import load_nifti
 
 """
@@ -39,12 +39,13 @@ class BrainData(object):
 
         if self.params.dim == 3:
             # pre-generated training data
-            self.train_dataset = BratsDataset(train_data_path,
-                                            run="train",
-                                            dim=self.params.dim)
+            self.train_dataset = BrainDataset(train_data_path,
+                                              run="train",
+                                              dim=self.params.dim)
         else:
             # synthesis on-the-fly training data
-            self.train_dataset = BratsSynthDataset(train_data_path,
+            self.train_dataset = BrainSynthDataset(self.params.dataset_name,
+                                                   train_data_path,
                                                    dim=self.params.dim,
                                                    run="train",
                                                    cps=self.params.synthesis_cps,
@@ -66,7 +67,7 @@ class BrainData(object):
         val_data_path = self.params.val_data_path
         assert path.exists(val_data_path), f"Validation data path does not exist: \n{val_data_path}, not generated?"
 
-        self.val_dataset = BratsDataset(val_data_path,
+        self.val_dataset = BrainDataset(val_data_path,
                                         run="val",
                                         dim=self.params.dim)
 
@@ -82,7 +83,7 @@ class BrainData(object):
         test_data_path = self.params.test_data_path
         assert path.exists(test_data_path), f"Testing data path does not exist: \n{test_data_path}, not generated?"
 
-        self.test_dataset = BratsDataset(test_data_path,
+        self.test_dataset = BrainDataset(test_data_path,
                                          run="test",
                                          dim=self.params.dim)
 
@@ -99,12 +100,13 @@ class BrainData(object):
 Datasets
 """
 
-class BratsSynthDataset(ptdata.Dataset):
+class BrainSynthDataset(ptdata.Dataset):
     """
     Loading, processing and synthesising transformation
     for training (on-the-fly) and for generating val/test data
     """
     def __init__(self,
+                 dataset_name,
                  data_path,
                  run,
                  dim,
@@ -115,17 +117,17 @@ class BratsSynthDataset(ptdata.Dataset):
                  slice_range=(70, 90),
                  device=torch.device('cpu')
                  ):
-        super(BratsSynthDataset, self).__init__()
+        super(BrainSynthDataset, self).__init__()
 
-        self.run = run
-        self.device = device
-
+        self.dataset_name = dataset_name
         self.data_path = data_path
         self.subject_list = sorted(os.listdir(self.data_path))
 
+        self.run = run
         self.dim = dim
         self.crop_size = crop_size
         self.slice_range = slice_range
+        self.device = device
 
         # elastic parameters
         self.sigma = sigma
@@ -140,9 +142,19 @@ class BratsSynthDataset(ptdata.Dataset):
         subject_id = self.subject_list[index]
 
         # specify path to target, source and roi mask (only data-specific part in the pipeline)
-        target_original_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
-        source_path = f"{self.data_path}/{subject_id}/{subject_id}_t2.nii.gz"
-        roi_mask_path = f"{self.data_path}/{subject_id}/{subject_id}_brainmask.nii.gz"
+        if self.dataset_name == "Brats17":
+            target_original_path = f"{self.data_path}/{subject_id}/{subject_id}_t1.nii.gz"
+            source_path = f"{self.data_path}/{subject_id}/{subject_id}_t2.nii.gz"
+            roi_mask_path = f"{self.data_path}/{subject_id}/{subject_id}_brainmask.nii.gz"
+
+        elif self.dataset_name == "IXI":
+            target_original_path = f"{self.data_path}/{subject_id}/T1-brain.nii.gz"
+            source_path = f"{self.data_path}/{subject_id}/T2-brain.nii.gz"
+            roi_mask_path = f"{self.data_path}/{subject_id}/T1-brain_mask.nii.gz"
+
+        else:
+            raise RuntimeError("Dataset name not recognised")
+
 
         """ 
         Load T1 &/ T2 image and brain ROI mask, shape (N, *sizes) 
@@ -165,22 +177,30 @@ class BratsSynthDataset(ptdata.Dataset):
             for name, data in data_dict.items():
                 data_dict[name] = data[slicer, ...]  # (N/1, H, W)
 
-        # 3D volumes, data shape (N=1, H, W, D)
+        # 3D volumes, extend shape to (N=1, H, W, D)
         else:
             data_dict["target_original"] = load_nifti(target_original_path)[np.newaxis, ...]
             data_dict["source"] = load_nifti(source_path)[np.newaxis, ...]
             data_dict["roi_mask"] = load_nifti(roi_mask_path)[np.newaxis, ...]
         """"""
 
+        """ Intensity normalisation, cropping, synthesize deformation """
+        # crop by brain mask bounding box for IXI dataset
+        if self.dataset_name == "IXI":
+            bbox, _ = bbox_from_mask(data_dict["roi_mask"], pad_ratio=0.0)
+            for name, data in data_dict.items():
+                data_dict[name] = bbox_crop(data[:, np.newaxis, ...], bbox)[:, 0, ...]
+
+
+        # cropping
+        for name in ["target_original", "source", "roi_mask"]:
+            data_dict[name] = crop_and_pad(data_dict[name], new_size=self.crop_size)
+
         # intensity normalisation to [0, 1]
         for name in ["target_original", "source"]:
             data_dict[name] = normalise_intensity(data_dict[name],
                                                   min_out=0., max_out=1.,
                                                   mode="minmax", clip=True)
-
-        # cropping
-        for name in ["target_original", "source", "roi_mask"]:
-            data_dict[name] = crop_and_pad(data_dict[name], new_size=self.crop_size)
 
         # generate synthesised DVF and deformed T1 image
         data_dict["target"], data_dict["dvf_gt"] = synthesis_elastic_deformation(data_dict["target_original"],
@@ -200,7 +220,7 @@ class BratsSynthDataset(ptdata.Dataset):
 
 
 
-class BratsDataset(ptdata.Dataset):
+class BrainDataset(ptdata.Dataset):
     """
     Loading pre-generated synthesised training data
     or validation and testing data
@@ -208,7 +228,7 @@ class BratsDataset(ptdata.Dataset):
     """
     def __init__(self, data_path, run, dim):
         """data_path should contain the subject directories"""
-        super(BratsDataset, self).__init__()
+        super(BrainDataset, self).__init__()
         self.data_path = data_path
         self.subject_list = sorted(os.listdir(self.data_path))
         self.run = run  # "train" or else ("val"/"test")
