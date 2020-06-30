@@ -158,7 +158,7 @@ def save_val_visual_results(data_dict, save_result_dir, epoch, axis=0, dpi=50):
         data_dict: (dict, data items shape (N, 1/dim, *sizes))
         save_result_dir: (string) Path to visualisation result directory
         epoch: (int) Epoch number
-        axis: (int) Axis to visualise for 3D
+        axis: (int) Visualise the 2D plane orthogonal to this axis in 3D volume
         dpi: (int) Image resolution of saved figure in DPI
     """
     dim = data_dict["target"].ndim - 2
@@ -176,17 +176,16 @@ def save_val_visual_results(data_dict, save_result_dir, epoch, axis=0, dpi=50):
         # visualise the middle slice of the chosen axis
         z = int(sizes[axis] // 2)
 
-        # choose the other two axes
-        axes = [0, 1, 2]
-        axes.remove(axis)
-
         for name, d in data_dict.items():
             if name in ["dvf_pred", "dvf_gt"]:
                 # dvf
+                # choose the two axes/directions to visualise
+                axes = [0, 1, 2]
+                axes.remove(axis)
                 vis_data_dict[name] = d[0, axes, ...].take(z, axis=axis+1)  # (2, X, X)
             else:
                 # images
                 vis_data_dict[name] = d[0, 0, ...].take(z, axis=axis)  # (X, X)
 
-    fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_slice_{z}.png')
+    fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_axis_{axis}_slice_{z}.png')
     plot_results(vis_data_dict, save_path=fig_save_path, dpi=dpi)
