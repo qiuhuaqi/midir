@@ -28,7 +28,11 @@ def loss_fn(data_dict, params):
         losses: (dict) dictionary of individual losses (weighted)
     """
     sim_losses = {"MSE": nn.MSELoss(),
-                  "NMI": MILossGaussian()}
+                  "NMI": MILossGaussian(num_bins_tar=params.mi_num_bins,
+                                        num_bins_src=params.mi_num_bins,
+                                        sigma_tar=params.mi_sigma,
+                                        sigma_src=params.mi_sigma)}
+
     reg_losses = {"diffusion": diffusion_loss,
                   "be": bending_energy_loss}
 
@@ -258,6 +262,7 @@ class MILossGaussian(nn.Module):
         self.src_min = src_min
         self.src_max = src_max
 
+        # input sigmas are in number of bins
         self.sigma_tar = sigma_tar * (tar_max - tar_min) / num_bins_tar
         self.sigma_src = sigma_src * (src_max - src_min) / num_bins_src
 
@@ -266,6 +271,10 @@ class MILossGaussian(nn.Module):
         self.bins_src = torch.linspace(self.src_min, self.src_max, num_bins_src, requires_grad=False).unsqueeze(1)
 
         self.debug = debug
+        if self.debug:
+            self.p_tar = None
+            self.p_src = None
+            self.p_joint = None
 
 
     def _compute_joint_stat(self, tar, src):
@@ -316,15 +325,20 @@ class MILossGaussian(nn.Module):
 
         # marginalise the joint distribution to get marginal distributions
         # batch size in dim0, target bins in dim1, source bins in dim2
-        p_target = torch.sum(p_joint, dim=2)
-        p_source = torch.sum(p_joint, dim=1)
+        p_tar = torch.sum(p_joint, dim=2)
+        p_src = torch.sum(p_joint, dim=1)
 
         # calculate entropy
-        ent_target = - torch.sum(p_target * torch.log(p_target + 1e-12), dim=1)  # (N,1)
-        ent_source = - torch.sum(p_source * torch.log(p_source + 1e-12), dim=1)  # (N,1)
+        ent_tar = - torch.sum(p_tar * torch.log(p_tar + 1e-12), dim=1)  # (N,1)
+        ent_src = - torch.sum(p_src * torch.log(p_src + 1e-12), dim=1)  # (N,1)
         ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-12), dim=(1, 2))  # (N,1)
 
+        if self.debug:
+            self.p_tar = p_tar
+            self.p_src = p_src
+            self.p_joint = p_joint
+
         if self.normalised:
-            return -torch.mean((ent_target + ent_source) / ent_joint)
+            return -torch.mean((ent_tar + ent_src) / ent_joint)
         else:
-            return -torch.mean(ent_target + ent_source - ent_joint)
+            return -torch.mean(ent_tar + ent_src - ent_joint)

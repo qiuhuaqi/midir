@@ -1,7 +1,7 @@
 import numpy as np
 import torch.nn as nn
 
-"""2D/3D network modules"""
+"""2D/3D network modules wrapper functions"""
 def conv_Nd(dim,
             in_channels,
             out_channels,
@@ -19,12 +19,12 @@ def conv_Nd(dim,
         dim: (int) dimension of the data/model
 
     Returns:
-        (nn.Module instance)
+        (nn.Module instance) Instance of convolution module of the specified dimension
     """
     _ConvNd = getattr(nn, f"Conv{dim}d")
 
     # default initialisation is Kaiming uniform
-    # see class _ConvNd(): https://pytorch.org/docs/stable/_modules/torch/nn/modules/conv.html
+    # see doc of _ConvNd(): https://pytorch.org/docs/stable/_modules/torch/nn/modules/conv.html
     return _ConvNd(in_channels=in_channels,
                    out_channels=out_channels,
                    kernel_size=kernel_size,
@@ -32,6 +32,7 @@ def conv_Nd(dim,
                    padding=padding)
 
 def avg_pool(dim, kernel_size=2):
+    """ Average pooling module of the specified dimension """
     _AvgPoolNd = getattr(nn, f"AvgPool{dim}d")
     return _AvgPoolNd(kernel_size)
 
