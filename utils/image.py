@@ -11,8 +11,8 @@ def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
 
     Args:
         x: (np.ndarray) input array, shape (N, H, W) or (N, H, W, D)
-        new_size: (int or tuple/list) new size excluding the first dimension
-        mode: (string) padding value filling mode for numpy.pad() (default in Numpy v1.18, remove this if upgrade)
+        new_size: (int or tuple/list) new size excluding the batch size
+        mode: (string) padding value filling mode for numpy.pad() (compulsory in Numpy v1.18)
         kwargs: additional arguments to be passed to np.pad
 
     Returns:

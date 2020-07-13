@@ -56,13 +56,13 @@ def plot_results(vis_data_dict, save_path=None, title_font_size=20, show_fig=Fal
 
     # error before
     ax = plt.subplot(2, 4, 3)
-    plt.imshow(error_before, vmin=-2, vmax=2, cmap='gray')  # assuming images were normalised to [0, 1]
+    plt.imshow(error_before, vmin=-2, vmax=2, cmap='seismic')  # assuming images were normalised to [0, 1]
     plt.axis('off')
     ax.set_title('Error before', fontsize=title_font_size, pad=title_pad)
 
     # error after
     ax = plt.subplot(2, 4, 4)
-    plt.imshow(error_after, vmin=-2, vmax=2, cmap='gray')  # assuming images were normalised to [0, 1]
+    plt.imshow(error_after, vmin=-2, vmax=2, cmap='seismic')  # assuming images were normalised to [0, 1]
     # plt.imshow(error_after, cmap='gray')
     plt.axis('off')
     ax.set_title('Error after', fontsize=title_font_size, pad=title_pad)
@@ -145,7 +145,7 @@ def plot_results(vis_data_dict, save_path=None, title_font_size=20, show_fig=Fal
 
     if show_fig:
         plt.show()
-    plt.close()
+    # plt.close()
 
 
 def save_val_visual_results(data_dict, save_result_dir, epoch, axis=0, dpi=50):
