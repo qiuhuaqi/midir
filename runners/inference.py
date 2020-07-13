@@ -3,9 +3,16 @@ from model.transformations import spatial_transform
 
 
 def process_batch(model, data_dict, loss_fn, args):
-    # for mono-modal case
+
+    # define source image based on modality setting
     if model.params.modality == "mono":
         data_dict["source"] = data_dict["target_original"]
+    elif model.params.modality == "pseudo":
+        data_dict["source"] = 1 - data_dict["target_original"]
+    elif model.params.modality == "multi":
+        pass
+    else:
+        raise ValueError("Data modality setting not recognised")
 
     # send relevant data to device
     for name in ["target", "source"]:
