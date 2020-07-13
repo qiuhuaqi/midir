@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 
 import torch
-from data.datasets import BrainSynthDataset
+from data.datasets import CamCANSynthDataset
 from utils.image_io import save_nifti
 
 parser = argparse.ArgumentParser()
@@ -17,7 +17,7 @@ parser.add_argument("--runs",
                     help="train, val, test")
 
 parser.add_argument("--data_dir",
-                    default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/brats17/3d")
+                    default="/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my")
 
 parser.add_argument('--cpu',
                     action='store_true',
@@ -33,7 +33,6 @@ parser.add_argument("--debug",
 
 
 parser.add_argument("-dim",
-                    default=3,
                     type=int,
                     help="Data dimension, 2/3")
 
@@ -58,7 +57,7 @@ parser.add_argument("-disp_max",
 parser.add_argument("-crop_size",
                     nargs='*',
                     type=int,
-                    default=(192, 192, 192),
+                    default=(176, 192, 160),
                     help="Central crop size")
 
 parser.add_argument("-slice_range",
@@ -94,26 +93,22 @@ for run in args.runs:
         os.makedirs(output_dir)
 
     # construct the dataset
-    brats_dataset = BrainSynthDataset("IXI",
-                                      data_original_dir,
-                                      run=run,
-                                      dim=args.dim,
-                                      sigma=args.sigma,
-                                      cps=args.cps,
-                                      disp_max=args.disp_max,
-                                      crop_size=args.crop_size,
-                                      slice_range=args.slice_range,
-                                      device=args.device
-                                      )
+    synth_dataset = CamCANSynthDataset(run, data_original_dir, args.dim,
+                                       sigma=args.sigma,
+                                       cps=args.cps,
+                                       disp_max=args.disp_max,
+                                       crop_size=args.crop_size,
+                                       slice_range=args.slice_range,
+                                       device=args.device
+                                       )
 
     if args.debug:
         print(data_original_dir)
-        print(len(brats_dataset))
-        print(brats_dataset.subject_list)
+        print(len(synth_dataset))
+        print(synth_dataset.subject_list)
 
-
-    with tqdm(total=len(brats_dataset)) as t:
-        for idx, data_dict in enumerate(brats_dataset):
+    with tqdm(total=len(synth_dataset)) as t:
+        for idx, data_dict in enumerate(synth_dataset):
             """
             Note:
             - images are minmax normalised to [0, 1]
@@ -121,17 +116,13 @@ for run in args.runs:
             - all cropped to crop_size
             """
 
-            subj_id = brats_dataset.subject_list[idx]
+            subj_id = synth_dataset.subject_list[idx]
             output_subj_dir = output_dir + f"/{subj_id}"
             if not path.exists(output_subj_dir):
                 os.makedirs(output_subj_dir)
 
             for name, data in data_dict.items():
                 if name == "dvf_gt":
-                    # skip saving ground truth DVF for training data
-                    if run == "train":
-                        continue
-
                     if args.dim == 2:  # 2D
                         # (N, 2, H, W) -> (H, W, N, 2)
                         _data = data.numpy().transpose(2, 3, 0, 1)  # (H, W, N, 2)
