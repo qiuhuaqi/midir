@@ -12,6 +12,8 @@ import utils.misc as misc_utils
 from runners.train import train_and_validate
 from runners.eval import evaluate
 
+torch.autograd.set_detect_anomaly(True)
+
 # set random seed for workers generating random deformation
 import random
 random.seed(12)
@@ -19,7 +21,7 @@ random.seed(12)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--run',
-                    default=None,
+                    default='train',
                     help="'train' or 'eval'")
 
 parser.add_argument('--model_dir',
@@ -51,8 +53,6 @@ parser.add_argument('--num_workers',
 
 args = parser.parse_args()
 
-
-
 # set up device
 os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_num)  # select GPU
 args.cuda = not args.cpu and torch.cuda.is_available()
@@ -77,7 +77,7 @@ logging.info("- Done.")
 
 """Data"""
 logging.info("Setting up Dataloader...")
-brain2d_data = BrainData(args, params)
+brain_data = BrainData(args, params)
 logging.info("- Done.")
 """"""
 
@@ -99,7 +99,7 @@ logging.info("- Done.")
 """ Run """
 if args.run == "train":
     logging.info(f"Running training and validation for {params.num_epochs} epochs...")
-    train_and_validate(reg_model, loss_fn, brain2d_data, args)
+    train_and_validate(reg_model, loss_fn, brain_data, args)
     logging.info("Training and validation complete.")
 
 elif args.run == "test":
@@ -110,7 +110,7 @@ elif args.run == "test":
         misc_utils.load_checkpoint(model_ckpt_path, reg_model)
 
     logging.info("Running testing...")
-    evaluate(reg_model, loss_fn, brain2d_data.test_dataloader, args, val=False)
+    evaluate(reg_model, loss_fn, brain_data.test_dataloader, args, val=False)
     logging.info("Testing complete.")
 
 else:

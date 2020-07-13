@@ -6,7 +6,9 @@ import math
 import torch
 import torch.nn as nn
 
-from utils.image import normalise_intensity
+from utils.image import normalise_intensity, bbox_from_mask
+from utils.spatial_diff import finite_diff
+from model import window_func
 
 
 def loss_fn(data_dict, params):
@@ -36,17 +38,23 @@ def loss_fn(data_dict, params):
     reg_losses = {"diffusion": diffusion_loss,
                   "be": bending_energy_loss}
 
-    sim_loss = sim_losses[params.sim_loss](data_dict["target"], data_dict["warped_source"]) * params.sim_weight
+    tar = data_dict["target"]
+    warped_src = data_dict["warped_source"]
+
+    # (optional) only evaluate similarity loss within ROI bounding box
+    if params.loss_roi:
+        bbox, _ = bbox_from_mask(data_dict["roi_mask"].squeeze(1).numpy())
+        for i in range(params.dim):
+            tar = tar.narrow(i+2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
+            warped_src = warped_src.narrow(i+2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
+
+    sim_loss = sim_losses[params.sim_loss](tar, warped_src) * params.sim_weight
     reg_loss = reg_losses[params.reg_loss](data_dict["dvf_pred"]) * params.reg_weight
 
     return {"loss": sim_loss + reg_loss,
             params.sim_loss: sim_loss,
             params.reg_loss: reg_loss}
 
-
-
-""" Regularisation loss """
-from utils.spatial_diff import finite_diff
 
 def diffusion_loss(dvf):
     """
@@ -82,7 +90,6 @@ def bending_energy_loss(dvf):
     return torch.cat(dvf_d2, dim=1).pow(2).sum(dim=1).mean()
 
 
-""" Regularity loss based on Jacobian """
 # def compute_jacobian(x):
 #     """ reference code from Chen"""
 #     bsize, csize, height, width = x.size()
@@ -104,9 +111,6 @@ def bending_energy_loss(dvf):
 
 
 
-
-""" Similarity loss """
-from model import window_func
 
 class MILossBSpline(nn.Module):
     def __init__(self,
@@ -238,7 +242,6 @@ class MILossBSpline(nn.Module):
             return -torch.mean(ent_target + ent_source - ent_joint)
 
 
-
 class MILossGaussian(nn.Module):
     """
     Mutual information loss using Gaussian kernel in KDE
@@ -276,8 +279,7 @@ class MILossGaussian(nn.Module):
             self.p_src = None
             self.p_joint = None
 
-
-    def _compute_joint_stat(self, tar, src):
+    def _compute_joint_prob(self, tar, src):
         """Compute joint distribution and entropy"""
         # flatten images to (N, 1, prod(*size))
         tar = tar.view(tar.size()[0], tar.size()[1], -1)
@@ -288,10 +290,8 @@ class MILossGaussian(nn.Module):
         self.bins_src = self.bins_src.to(device=src.device, dtype=src.dtype)
 
         # calculate Parzen window function response (N, #bins, H*W)
-        windowed_tar = torch.exp(-(tar - self.bins_tar)**2 / (2 * self.sigma_tar**2)) \
-                       / (math.sqrt(2*math.pi) * self.sigma_tar)
-        windowed_src = torch.exp(-(src - self.bins_src)**2 / (2 * self.sigma_src**2)) \
-                       / (math.sqrt(2*math.pi) * self.sigma_src)
+        windowed_tar = torch.exp( -(tar - self.bins_tar)**2 / (2 * self.sigma_tar**2) ) / math.sqrt(2*math.pi) * self.sigma_tar
+        windowed_src = torch.exp( -(src - self.bins_src)**2 / (2 * self.sigma_src**2) ) / math.sqrt(2*math.pi) * self.sigma_src
 
         # calculate joint histogram batch
         hist_joint = windowed_tar.bmm(windowed_src.transpose(1, 2))  # (N, #bins, #bins)
@@ -301,7 +301,6 @@ class MILossGaussian(nn.Module):
         p_joint = hist_joint / hist_norm.view(-1, 1, 1)  # (N, #bins, #bins) / (N, 1, 1)
 
         return p_joint
-
 
     def forward(self, tar, src):
         """
@@ -321,7 +320,7 @@ class MILossGaussian(nn.Module):
                                   mode='minmax', min_out=self.src_min, max_out=self.src_max).unsqueeze(1)
 
         # compute joint distribution
-        p_joint = self._compute_joint_stat(tar, src)
+        p_joint = self._compute_joint_prob(tar, src)
 
         # marginalise the joint distribution to get marginal distributions
         # batch size in dim0, target bins in dim1, source bins in dim2
@@ -329,9 +328,9 @@ class MILossGaussian(nn.Module):
         p_src = torch.sum(p_joint, dim=1)
 
         # calculate entropy
-        ent_tar = - torch.sum(p_tar * torch.log(p_tar + 1e-12), dim=1)  # (N,1)
-        ent_src = - torch.sum(p_src * torch.log(p_src + 1e-12), dim=1)  # (N,1)
-        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-12), dim=(1, 2))  # (N,1)
+        ent_tar = - torch.sum(p_tar * torch.log(p_tar + 1e-10), dim=1)  # (N,1)
+        ent_src = - torch.sum(p_src * torch.log(p_src + 1e-10), dim=1)  # (N,1)
+        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-10), dim=(1, 2))  # (N,1)
 
         if self.debug:
             self.p_tar = p_tar
