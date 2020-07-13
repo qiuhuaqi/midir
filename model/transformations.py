@@ -86,14 +86,9 @@ class BSplineFFDTransform(object):
         # crop DVF to image size (centres aligned)
         for i in range(self.dim):
             assert dvf.size()[i + 2] >= self.img_size[i], \
-                f"FFD DVF size is smaller than image at dimension {i}"
-
-        crop_starts = [dvf.size()[i + 2] // 2 - self.img_size[i] // 2
-                       for i in range(self.dim)]
-        crop_ends = [crop_starts[i] + self.img_size[i]
-                     for i in range(self.dim)]
-        for i in range(self.dim):
-            dvf = dvf.index_select(i + 2, torch.arange(crop_starts[i], crop_ends[i], device=x.device))
+                f"FFD output DVF size ({dvf.size()[i+2]}) is smaller than image size ({self.img_size[i]}) at dimension {i}"
+            crop_start = dvf.size()[i + 2] // 2 - self.img_size[i] // 2
+            dvf = dvf.narrow(i+2, crop_start, self.img_size[i])
         return dvf
 
 
