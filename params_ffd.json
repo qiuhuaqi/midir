@@ -1,7 +1,7 @@
 {
     "version": "v0.3-dev",
     "run_no": 0,
-    "run_note": "",
+    "run_note": "FFD",
 
     "train_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/ixi/ixi-dl-ffd/3d/train_crop192-192-192_cps10_sigma1_disp4",
     "val_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/ixi/ixi-dl-ffd/3d/val_crop192-192-192_cps10_sigma1_disp4",
@@ -9,14 +9,13 @@
 
     "model": "DL",
     "dim": 3,
-    "modality": "",
+    "modality": "pseudo",
 
-    "network": "UNetDVF",
-    "enc_channels": [16, 32, 32, 32, 32],
-    "dec_channels": [32, 32, 32, 16], 
-    "out_channels": [16, 16],
+    "network": "FFDNet",
+    "enc_channels": [32, 64, 128],
+    "out_channels": [32, 16],
 
-    "transformation": "DVF",
+    "transformation": "FFD",
     "ffd_sigma": 5,
 
     "sim_loss": "NMI",
