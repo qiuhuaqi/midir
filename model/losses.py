@@ -23,7 +23,7 @@ def loss_fn(data_dict, params):
                 "dvf_pred": (Tensor, shape (N, dim, *sizes)) DVF predicted
                 ...
             }
-        params: (object) parameters from params.json
+        params: (object) parameters from params_mirtk.json
 
     Returns:
         loss: (scalar) loss value

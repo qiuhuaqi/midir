@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 # load the base parameters from the JSON file in parent_dir
-json_path = os.path.join(args.parent_dir, 'params.json')
+json_path = os.path.join(args.parent_dir, 'params_mirtk.json')
 params = misc.Params(json_path)
 
 # read the parameter settings from csv file
@@ -66,7 +66,7 @@ for i in range(num_settings):
         os.makedirs(model_dir)
 
     # write the parameters of current config in json file
-    json_path = os.path.join(model_dir, 'params.json')
+    json_path = os.path.join(model_dir, 'params_mirtk.json')
     params.save(json_path)
 
     # training command

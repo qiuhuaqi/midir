@@ -13,7 +13,7 @@ parser.add_argument('--run',
 
 parser.add_argument('--model_dir',
                     default='experiments/base_model',
-                    help='Directory containing params.json')
+                    help='Directory containing params_mirtk.json')
 
 parser.add_argument('--ckpt_file',
                     default=None,

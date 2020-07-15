@@ -48,6 +48,8 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
         for idx, data_dict in enumerate(dataloader):
 
             # reshaping (ch, N, *(dims)) to (N, ch, *(dims))
+            # todo: this is a bit hacky and difficult to understand
+            #  (2D works, 3D only works because batch and ch are both 1)
             for name in ["target", "source", "target_original", "roi_mask"]:
                 data_dict[name] = data_dict[name].transpose(0, 1)  # (N, 1, *(dims))
             data_dict["dvf_gt"] = data_dict["dvf_gt"][0, ...]  # (N, dim, *(dims))
@@ -58,13 +60,14 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 loss_reporter.collect_value(eval_losses)
 
                 # warp original target image using the predicted dvf
+                # todo: this is where the extra memory usage is from training to validation, move to CPU?
                 # (comment this out if images are not synthesised)
                 data_dict["target_pred"] = spatial_transform(data_dict["target_original"].to(device=args.device),
                                                              data_dict["dvf_pred"])
 
             # cast to numpy array
-            for name, one_data in data_dict.items():
-                data_dict[name] = one_data.cpu().numpy()
+            for name, data_point in data_dict.items():
+                data_dict[name] = data_point.cpu().detach().numpy()
             """"""
 
             """
@@ -95,7 +98,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     loss_reporter.summarise()
     metrics_reporter.summarise()
 
-    if val:  # Validation
+    if val:  # Validation only
         # determine if best_model
         model.update_best_model(metric_results)
 
@@ -111,13 +114,14 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
         # save validation visual results for training
         val_vis_dir = misc_utils.setup_dir(result_dir + "/val_visual_results")
         vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=0)
-        # v0.3-dev: visualise all planes of the 3D volume
+        # visualise all planes of the 3D volume
         if model.params.dim == 3:
             vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=1)
             vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=2)
 
-    else:  # Testing
+    else:  # Testing only
         # save mean-std and dataframe of metric results
         metrics_reporter.save_mean_std(result_dir + "/test_metrics_results.json")
-        metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl")
+        metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl",
+                                 f"{model.params.model_name}-{model.params.transformation}")
 

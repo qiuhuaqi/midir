@@ -3,7 +3,19 @@ import pandas as pd
 import torch
 import utils.misc as misc_utils
 
+
 class Reporter(object):
+    """
+    Collect and report values
+        self.collect_value() collects value in `report_data_dict`, which is structured as:
+            self.report_data_dict = {'value_name_A': [A1, A2, ...], ... }
+
+        self.summarise() construct the report dictionary if called, which is structured as:
+            self.report = {'value_name_A': {'mean': A_mean,
+                                            'std': A_std,
+                                            'list': [A1, A2, ...]}
+                            }
+    """
     def __init__(self):
         self.report_data_dict = {}
         self.report = {}
@@ -31,7 +43,6 @@ class Reporter(object):
             }
 
 
-
 class LossReporter(Reporter):
     def __init__(self):
         super(LossReporter, self).__init__()
@@ -39,7 +50,6 @@ class LossReporter(Reporter):
     def log_to_tensorboard(self, tb_writer, step):
         for loss_name in self.report:
             tb_writer.add_scalar(f'losses/{loss_name}', self.report[loss_name]['mean'], global_step=step)
-
 
 
 class MetricReporter(Reporter):
@@ -58,8 +68,8 @@ class MetricReporter(Reporter):
             report_mean_std[metric_name + '_std'] = self.report[metric_name]['std']
         misc_utils.save_dict_to_json(report_mean_std, save_path)
 
-    def save_df(self, save_path):
-        method_column = ['DL'] * len(self.id_list)
+    def save_df(self, save_path, model_name):
+        method_column = [str(model_name)] * len(self.id_list)
         df_dict = {'Method': method_column, 'ID': self.id_list}
         for metric_name in self.report:
             df_dict[metric_name] = self.report[metric_name]['list']
