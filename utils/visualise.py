@@ -4,27 +4,26 @@ import os
 import random
 from matplotlib import pyplot as plt
 
-def show_warped_grid(ax, dvf, bg_img=None, interval=3, title="Grid", fontsize=20):
+def show_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=20):
     """dvf shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
     else:
         background = np.zeros(dvf.shape[1:])
 
-    interval = interval
-    id_grid_X, id_grid_Y = np.meshgrid(range(0, background.shape[0] - 1, interval),
+    id_grid_H, id_grid_W = np.meshgrid(range(0, background.shape[0] - 1, interval),
                                        range(0, background.shape[1] - 1, interval),
                                        indexing='ij')
 
-    new_grid_X = id_grid_X + dvf[0, id_grid_X, id_grid_Y]
-    new_grid_Y = id_grid_Y + dvf[1, id_grid_X, id_grid_Y]
+    new_grid_H = id_grid_H + dvf[0, id_grid_H, id_grid_W]
+    new_grid_W = id_grid_W + dvf[1, id_grid_H, id_grid_W]
 
     kwargs = {"linewidth": 1.5, "color": 'c'}
-    # matplotlib.plot() uses Cartesian indexing (x-y)
-    for i in range(new_grid_X.shape[0]):
-        ax.plot(new_grid_Y[i, :], new_grid_X[i, :], **kwargs)  # each draws a horizontal line
-    for i in range(new_grid_X.shape[1]):
-        ax.plot(new_grid_Y[:, i], new_grid_X[:, i], **kwargs)  # each draws a vertical line
+    # matplotlib.plot() uses CV x-y indexing
+    for i in range(new_grid_H.shape[0]):
+        ax.plot(new_grid_W[i, :], new_grid_H[i, :], **kwargs)  # each draws a horizontal line
+    for i in range(new_grid_H.shape[1]):
+        ax.plot(new_grid_W[:, i], new_grid_H[:, i], **kwargs)  # each draws a vertical line
 
     ax.set_title(title, fontsize=fontsize)
     ax.imshow(background, cmap='gray')
@@ -145,7 +144,8 @@ def plot_results(vis_data_dict, save_path=None, title_font_size=20, show_fig=Fal
 
     if show_fig:
         plt.show()
-    # plt.close()
+    else:
+        plt.close()
 
 
 def save_val_visual_results(data_dict, save_result_dir, epoch, axis=0, dpi=50):
