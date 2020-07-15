@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import torch.utils.data as ptdata
 
+from abc import ABC
+
 from data.synthesis import GaussianFilter, synthesis_elastic_deformation
 from utils.image import crop_and_pad, normalise_intensity, bbox_from_mask, bbox_crop
 from utils.image_io import load_nifti
@@ -54,7 +56,7 @@ class BrainData(object):
             #                                      slice_range=tuple(params.slice_range))
         elif params.dim == 3:
             # load pre-generated training data
-            self.train_dataset = BrainLoadingDataset(train_data_path, "train", params.dim)
+            self.train_dataset = CamCANLoadingDataset(train_data_path, "train", params.dim)
 
         else:
             raise ValueError("Data parsing: dimension of data not specified/recognised.")
@@ -69,7 +71,7 @@ class BrainData(object):
 
 
         # val/test data
-        self.val_dataset = BrainLoadingDataset(val_data_path, "val", params.dim)
+        self.val_dataset = CamCANLoadingDataset(val_data_path, "val", params.dim)
         self.val_dataloader = ptdata.DataLoader(self.val_dataset,
                                                 batch_size=1,
                                                 shuffle=False,
@@ -77,7 +79,7 @@ class BrainData(object):
                                                 pin_memory=args.cuda
                                                 )
 
-        self.test_dataset = BrainLoadingDataset(test_data_path, "test", params.dim)
+        self.test_dataset = CamCANLoadingDataset(test_data_path, "test", params.dim)
         self.test_dataloader = ptdata.DataLoader(self.test_dataset,
                                                  batch_size=1,
                                                  shuffle=False,
@@ -86,23 +88,75 @@ class BrainData(object):
                                                  )
 
 
-class BrainLoadingDataset(ptdata.Dataset):
+
+
+"""
+Loading pre-generated data Datasets
+"""
+
+
+# class _BaseDataset(ptdata.Dataset, ABC):
+#     def __init__(self, data_path, run, dim):
+#         super(_BaseDataset, self).__init__()
+#         self.data_path = data_path
+#         self.run = run  # "train", "val" or "test"
+#         self.dim = dim
+#         self.subject_list = sorted(os.listdir(self.data_path))
+#
+#     @staticmethod
+#     def _to_tensor(data_dict):
+#         # cast to Pytorch Tensor
+#         for name, data in data_dict.items():
+#             data_dict[name] = torch.from_numpy(data).float()
+#         return data_dict
+#
+#     @staticmethod
+#     def _crop_and_pad(data_dict, crop_size):
+#         # cropping and padding
+#         for name, data in data_dict.items():
+#             data_dict[name] = crop_and_pad(data, new_size=crop_size)
+#         return data_dict
+#
+#     @staticmethod
+#     def _normalise_intensity(data_dict):
+#         # intensity normalisation to [0, 1]
+#         for name in ["target_original", "source"]:
+#             data_dict[name] = normalise_intensity(data_dict[name],
+#                                                   min_out=0., max_out=1.,
+#                                                   mode="minmax", clip=True)
+#         return data_dict
+#
+#     def _load_2d(self, data_path_dict):
+#         raise NotImplementedError
+#
+#     def _load_3d(self, data_path_dict):
+#         raise NotImplementedError
+#
+#     @staticmethod
+#     def _set_path(data_path, subj_id):
+#         raise NotImplementedError
+
+
+class _BrainLoadingDataset(ptdata.Dataset):
     """
     Dataset that loads saved generated & pre-processed data
     """
     def __init__(self, data_path, run, dim, slice_range=(70, 90)):
-        super(BrainLoadingDataset, self).__init__()
+        super(_BrainLoadingDataset, self).__init__()
         self.data_path = data_path
         self.run = run  # "train", "val" or "test"
         self.dim = dim
         self.subject_list = sorted(os.listdir(self.data_path))
 
         self.slice_range = slice_range
+        self.data_path_dict = dict()
 
     def _load_2d(self, data_path_dict):
         data_dict = dict()
         for name, data_path in data_path_dict.items():
             if name == "dvf_gt":
+                if self.run == "train":
+                    continue
                 # dvf is saved in shape (H, W, N, 2) -> (N, 2, H, W)
                 data_dict[name] = load_nifti(data_path).transpose(2, 3, 0, 1)
 
@@ -111,7 +165,7 @@ class BrainLoadingDataset(ptdata.Dataset):
                 data_dict[name] = load_nifti(data_path).transpose(2, 0, 1)
 
         # randomly select a slice for training
-        # todo: this is not used?
+        # todo: this is not used as 2D training data is synthesised on-the-fly?
         if self.run == "train":
             z = random.randint(self.slice_range[0], self.slice_range[1])
             slicer = slice(z, z+1)  # use slicer to keep dim
@@ -120,12 +174,13 @@ class BrainLoadingDataset(ptdata.Dataset):
 
         return data_dict
 
-    @staticmethod
-    def _load_3d(data_path_dict):
+    def _load_3d(self, data_path_dict):
         data_dict = dict()
         for name, data_path in data_path_dict.items():
             if name == "dvf_gt":
                 # skip loading ground truth DVF for training data
+                if self.run == "train":
+                    continue
 
                 # dvf_gt is saved in shape (H, W, D, 3) -> (ch=1, 3, H, W, D)
                 data_dict[name] = load_nifti(data_path).transpose(3, 0, 1, 2)[np.newaxis, ...]
@@ -135,24 +190,45 @@ class BrainLoadingDataset(ptdata.Dataset):
                 data_dict[name] = load_nifti(data_path)[np.newaxis, ...]
         return data_dict
 
-    def __getitem__(self, index):
+    @staticmethod
+    def _set_path(data_path, subj_id):
+        """Sets data keys and paths to the data files"""
+        raise NotImplementedError
 
-        subject_id = self.subject_list[index]
-        data_path_dict = dict()
-        for name in ["target", "source", "target_original", "roi_mask", "dvf_gt"]:
-             data_path_dict[name] = f"{self.data_path}/{subject_id}/{name}.nii.gz"
-
-        # load 2d/3d
-        data_dict = getattr(self, f"_load_{self.dim}d")(data_path_dict)
-
+    @staticmethod
+    def _to_tensor(data_dict):
         # cast to Pytorch Tensor
         for name, data in data_dict.items():
             data_dict[name] = torch.from_numpy(data).float()
-
         return data_dict
+
+    def __getitem__(self, index):
+        subject_id = self.subject_list[index]
+        data_path_dict = self._set_path(self.data_path, subject_id)
+        data_dict = getattr(self, f"_load_{self.dim}d")(data_path_dict)  # load 2d/3d
+        return self._to_tensor(data_dict)
 
     def __len__(self):
         return len(self.subject_list)
+
+
+class CamCANLoadingDataset(_BrainLoadingDataset):
+    def __init__(self, *args, **kwargs):
+        super(CamCANLoadingDataset, self).__init__(*args, **kwargs)
+
+    @staticmethod
+    def _set_path(data_path, subj_id):
+        data_path_dict = dict()
+        for name in ["target", "source", "target_original", "roi_mask", "dvf_gt", "cor_seg", "subcor_seg"]:
+            data_path_dict[name] = f"{data_path}/{subj_id}/{name}.nii.gz"
+        return data_path_dict
+
+
+
+
+"""
+Synthesis datasets
+"""
 
 
 class _SynthDataset(ptdata.Dataset):
@@ -177,7 +253,7 @@ class _SynthDataset(ptdata.Dataset):
 
         self.run = run
         self.dim = dim
-        self.crop_size = crop_size
+        self.crop_size = crop_size  # todo: dimension check to enable integer argument
         self.slice_range = slice_range
         self.device = device
 
@@ -191,7 +267,7 @@ class _SynthDataset(ptdata.Dataset):
 
     @staticmethod
     def _set_path(data_path, subj_id):
-        """Sets data keys and paths to data files"""
+        """Sets data keys and paths to the data files"""
         raise NotImplementedError
 
     def _load_2d(self, data_path_dict):
@@ -258,6 +334,7 @@ class _SynthDataset(ptdata.Dataset):
     def __getitem__(self, index):
         subject_id = self.subject_list[index]
         data_path_dict = self._set_path(self.data_path, subject_id)
+
         data_dict = getattr(self, f"_load_{self.dim}d")(data_path_dict)  # load 2d/3d
         data_dict = self._crop_and_pad(data_dict, self.crop_size)
         data_dict = self._normalise_intensity(data_dict)
