@@ -3,11 +3,11 @@
     "run_no": 0,
     "run_note": "",
 
-    "train_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/ixi/ixi-dl-ffd/3d/train_crop192-192-192_cps10_sigma1_disp4",
-    "val_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/ixi/ixi-dl-ffd/3d/val_crop192-192-192_cps10_sigma1_disp4",
-    "test_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/ixi/ixi-dl-ffd/3d/test_crop192-192-192_cps10_sigma1_disp4",
+    "train_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/train",
+    "val_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/val",
+    "test_data_path": "/vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/test",
 
-    "model": "DL",
+    "model_name": "DL",
     "dim": 3,
     "modality": "",
 
@@ -34,13 +34,13 @@
     "save_summary_steps": 1,
 
     "batch_size": 1,
-    "crop_size": [192, 192, 192],
+    "crop_size": [176, 192, 160],
 
     "synthesis_cps": 10,
     "synthesis_sigma": 1.0,
     "disp_max": 4.0,
     "slice_range": [70, 90],
 
-    "metric_groups": ["dvf_metrics", "image_metrics"],
+    "metric_groups": ["dvf_metrics", "image_metrics", "seg_metrics"],
     "best_metrics": ["rmse_dvf", "aee", "rmse"]
 }
