@@ -1,10 +1,14 @@
 import numpy as np
+import torch
 import cv2
 from scipy.spatial.distance import directed_hausdorff
-
+import SimpleITK as sitk
 from utils.image import bbox_from_mask, bbox_crop
+from model.transformations import spatial_transform
 
-""" Wrapper functions """
+""" Wrapper functions for metric evaluation """
+
+
 def metrics_fn(metric_data, metric_groups):
     """
     Wrapper function for calculating all metrics.
@@ -20,7 +24,8 @@ def metrics_fn(metric_data, metric_groups):
     # keys must match those in metric_groups and params.metric_groups
     # (using groups to share common pre-processings)
     metric_group_fns = {'dvf_metrics': dvf_metrics_fn,
-                        'image_metrics': image_metrics_fn}
+                        'image_metrics': image_metrics_fn,
+                        'seg_metrics': seg_metrics_fn}
 
     for metric_group in metric_groups:
         metric_results.update(metric_group_fns[metric_group](metric_data))
@@ -33,7 +38,7 @@ def dvf_metrics_fn(metric_data):
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
 
     Args:
-        metric_data: (dict) dvf shape (N, dim, *dims), roi mask shape (N, 1, *(dims))
+        metric_data: (dict) dvf shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
 
     Returns:
         metric_results: (dict)
@@ -70,29 +75,68 @@ def dvf_metrics_fn(metric_data):
 def image_metrics_fn(metric_data):
     # unpack metric data, keys must match metric_data input
     img = metric_data['target']
-    img_pred = metric_data['target_pred']  # (N, 1, *(dims))
+    img_pred = metric_data['target_pred']  # (N, 1, *sizes)
 
     if 'roi_mask' in metric_data.keys():
+        # crop out image by the roi mask bounding box if given
         roi_mask = metric_data['roi_mask']
 
         # find brian mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
-        # crop out image within the roi mask bounding box
         img = bbox_crop(img, mask_bbox)
         img_pred = bbox_crop(img_pred, mask_bbox)
-
     return {'rmse': calculate_rmse(img, img_pred)}
+
+
+def seg_metrics_fn(metric_data):
+    seg_metric_results = {}
+
+    # fetch original segmentation masks
+    cor_seg = metric_data["cor_seg"]
+    subcor_seg = metric_data["subcor_seg"]
+
+    # apply transformations to get target mask and predicted target mask
+    dvf_gt = metric_data["dvf_gt"]
+    dvf_pred = metric_data["dvf_pred"]
+
+    cor_seg_gt = spatial_transform(torch.from_numpy(cor_seg),
+                                   torch.from_numpy(dvf_gt),
+                                   interp_mode='nearest').numpy()
+    cor_seg_pred = spatial_transform(torch.from_numpy(cor_seg),
+                                     torch.from_numpy(dvf_pred),
+                                     interp_mode='nearest').numpy()
+
+    subcor_seg_gt = spatial_transform(torch.from_numpy(subcor_seg),
+                                      torch.from_numpy(dvf_gt),
+                                      interp_mode='nearest').numpy()
+    subcor_seg_pred = spatial_transform(torch.from_numpy(subcor_seg),
+                                        torch.from_numpy(dvf_pred),
+                                        interp_mode='nearest').numpy()
+
+    # calculate dice for cortical segmentation
+    for label_cls in np.unique(cor_seg):
+        if label_cls == 0: continue  # exclude background
+        seg_metric_results[f'cor_dice_class_{label_cls}'] = calculate_dice_volume(cor_seg_gt, cor_seg_pred,
+                                                                                  label_class=label_cls)
+
+    # calculate dice for sub-cortical segmentation
+    for label_cls in np.unique(subcor_seg):
+        if label_cls == 0: continue  # exclude background
+        seg_metric_results[f'subcor_dice_class_{label_cls}'] = calculate_dice_volume(subcor_seg_gt, subcor_seg_pred,
+                                                                                     label_class=label_cls)
+
+    # mean dice
+    seg_metric_results['dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
+    return seg_metric_results
+
 
 """"""
 
 
-"""
-Transformation accuracy metrics
-"""
 def calculate_aee(x, y):
     """
-    Average End point error (mean over point-wise L2 norm)
+    Average End point Error (AEE, mean over point-wise L2 norm)
     Input DVF shape: (N, dim, *(sizes))
     """
     return np.sqrt(((x - y) ** 2).sum(axis=1)).mean()
@@ -104,34 +148,14 @@ def calculate_rmse_dvf(x, y):
     Input DVF shape: (N, dim, *(sizes))
     """
     return np.sqrt(((x - y) ** 2).sum(axis=1).mean())
-""""""
 
 
-"""
-Image intensity metrics
-"""
 def calculate_rmse(x, y):
     """Standard RMSE formula, square root over mean
     (https://wikimedia.org/api/rest_v1/media/math/render/svg/6d689379d70cd119e3a9ed3c8ae306cafa5d516d)
     """
     return np.sqrt(((x - y) ** 2).mean())
 
-
-# def calculate_ssim(x, y):
-#     pass
-#
-# def calculate_psnr(x, y):
-#     pass
-#
-# def calculate_mi(x, y, normalise=False):
-#     pass
-""""""
-
-
-""" 
-Transformation regularity metrics 
-"""
-import SimpleITK as sitk
 
 def calculate_jacobian_metrics(dvf):
     """
@@ -170,12 +194,7 @@ def calculate_jacobian_det(dvf):
     jac_det = sitk.GetArrayFromImage(jac_det_img)
     return jac_det
 
-""""""
 
-
-"""
-Segmentation metrics
-"""
 def contour_distances_2d(image1, image2, dx=1):
     """
     Calculate contour distances between binary masks.
@@ -261,7 +280,7 @@ def contour_distances_stack(stack1, stack2, label_class, dx=1):
     return np.mean(mcd_buffer), np.mean(hd_buffer)
 
 
-def categorical_dice_stack(mask1, mask2, label_class=0):
+def calculate_dice_stack(mask1, mask2, label_class=0):
     """
     todo: this evaluation function should ignore slices that has empty masks at either ED or ES frame
     Dice scores of a specified class between two masks or two 2D "stacks" of masks
@@ -285,11 +304,10 @@ def categorical_dice_stack(mask1, mask2, label_class=0):
 
     # numerical stability is needed because of possible empty masks
     dice = np.mean(2 * pos1and2 / (pos1or2 + 1e-3))
-
     return dice
 
 
-def categorical_dice_volume(mask1, mask2, label_class=0):
+def calculate_dice_volume(mask1, mask2, label_class=0):
     """
     Dice score of a specified class between two volumes of label masks.
     (classes are encoded but by label class number not one-hot )
@@ -307,5 +325,3 @@ def categorical_dice_volume(mask1, mask2, label_class=0):
     mask2_pos = (mask2 == label_class).astype(np.float32)
     dice = 2 * np.sum(mask1_pos * mask2_pos) / (np.sum(mask1_pos) + np.sum(mask2_pos))
     return dice
-""""""
-
