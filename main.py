@@ -4,8 +4,7 @@ import logging
 import torch
 
 from data.datasets import BrainData
-from model.models import DLRegModel
-from baselines.baseline_models import IdBaselineModel
+from model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
 from model.losses import loss_fn
 import utils.misc as misc_utils
 
@@ -46,7 +45,7 @@ parser.add_argument('--gpu_num',
                     help='Choose GPU')
 
 parser.add_argument('--num_workers',
-                    default=0,
+                    default=2,
                     type=int,
                     help='Number of processes used by dataloader, 0 means use main process')
 
@@ -83,12 +82,19 @@ logging.info("- Done.")
 
 """Model"""
 logging.info("Setting up Model...")
-if params.model == "DL":
+if params.model_name == "DL":
     reg_model = DLRegModel(params)
     reg_model = reg_model.to(device=args.device)
 
-elif params.model == "IdBaseline":
+elif params.model_name == "IdBaseline":
     reg_model = IdBaselineModel(params)
+
+elif params.model_name == "MIRTK":
+    # work dir set up in model dir
+    work_dir = args.model_dir + "/work_dir"
+    if not os.path.exists(work_dir):
+        os.makedirs(work_dir)
+    reg_model = MIRTKBaselineModel(params, work_dir)
 
 else:
     raise ValueError("Registration model not recognised.")
@@ -103,7 +109,7 @@ if args.run == "train":
     logging.info("Training and validation complete.")
 
 elif args.run == "test":
-    if params.model != "IdBaseline":
+    if params.model_name == "DL":
         model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
         assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
         logging.info(f"Loading model parameters from: {model_ckpt_path}")

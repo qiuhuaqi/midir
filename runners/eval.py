@@ -122,6 +122,5 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
     else:  # Testing only
         # save mean-std and dataframe of metric results
         metrics_reporter.save_mean_std(result_dir + "/test_metrics_results.json")
-        metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl",
-                                 f"{model.params.model_name}-{model.params.transformation}")
+        metrics_reporter.save_df(result_dir + "/test_metrics_results.pkl", model.params.model_name)
 
