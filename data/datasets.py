@@ -236,6 +236,9 @@ class BrainLoadingDataset(_BaseDataset):
             data_path_dict["source_cor_seg"] = f"{self.data_path}/{src_subj_id}/cor_seg.nii.gz"
             data_path_dict["source_subcor_seg"] = f"{self.data_path}/{src_subj_id}/subcor_seg.nii.gz"
 
+            # set brain mask path
+            data_path_dict["roi_mask"] = f"{self.data_path}/{src_subj_id}/roi_mask.nii.gz"
+
         return data_path_dict
 
     def __getitem__(self, index):

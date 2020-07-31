@@ -6,33 +6,42 @@ import SimpleITK as sitk
 from utils.image import bbox_from_mask, bbox_crop
 from model.transformations import spatial_transform
 
-""" Wrapper functions for metric evaluation """
 
-
-def metrics_fn(metric_data, metric_groups):
+def calculate_metrics(metric_data, metric_groups, return_tensor=False):
     """
-    Wrapper function for calculating all metrics.
+    Wrapper function for calculating all metrics in Numpy
     Args:
-        metric_data: (dict) data used for calculation of metrics
+        metric_data: (dict) data used for calculation of metrics, could be Tensor or Numpy Array
         metric_groups: (list of strings) name of metric groups
+        return_tensor: (bool) return Torch Tensor if True
 
     Returns:
         metrics_results: (dict) {metric_name: metric_value}
     """
-    metric_results = {}
 
-    # keys must match those in metric_groups and params.metric_groups
-    # (using groups to share common pre-processings)
-    metric_group_fns = {'dvf_metrics': dvf_metrics_fn,
-                        'image_metrics': image_metrics_fn,
-                        'seg_metrics': seg_metrics_fn}
+    # cast Tensor to Numpy Array if needed
+    for k, x in metric_data.items():
+        if isinstance(x, torch.Tensor):
+            metric_data[k] = x.cpu().numpy()
 
-    for metric_group in metric_groups:
-        metric_results.update(metric_group_fns[metric_group](metric_data))
+    # keys must match metric_groups and params.metric_groups
+    # (using groups to share pre-processing)
+    metric_group_fns = {'dvf_metrics': calculate_dvf_metrics,
+                        'image_metrics': calculate_image_metrics,
+                        'seg_metrics': calculate_seg_metrics}
+    metric_results = dict()
+    for group in metric_groups:
+        metric_results.update(metric_group_fns[group](metric_data))
+
+    # cast results back to Tensor if needed
+    if return_tensor:
+        for k, x in metric_results.items():
+            metric_results[k] = torch.tensor(x)
+
     return metric_results
 
 
-def dvf_metrics_fn(metric_data):
+def calculate_dvf_metrics(metric_data):
     """
     Calculate DVF-related metrics.
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
@@ -72,24 +81,22 @@ def dvf_metrics_fn(metric_data):
             'mean_negative_detJ': mag_det_jac_det}
 
 
-def image_metrics_fn(metric_data):
+def calculate_image_metrics(metric_data):
     # unpack metric data, keys must match metric_data input
     img = metric_data['target']
     img_pred = metric_data['target_pred']  # (N, 1, *sizes)
 
+    # crop out image by the roi mask bounding box if given
     if 'roi_mask' in metric_data.keys():
-        # crop out image by the roi mask bounding box if given
         roi_mask = metric_data['roi_mask']
-
-        # find brian mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
-
         img = bbox_crop(img, mask_bbox)
         img_pred = bbox_crop(img_pred, mask_bbox)
+
     return {'rmse': calculate_rmse(img, img_pred)}
 
 
-def seg_metrics_fn(metric_data):
+def calculate_seg_metrics(metric_data):
     seg_metric_results = {}
 
     # fetch original segmentation masks
@@ -114,18 +121,19 @@ def seg_metrics_fn(metric_data):
                                         torch.from_numpy(dvf_pred),
                                         interp_mode='nearest').numpy()
 
-    # calculate dice for cortical segmentation
+    # dice for cortical segmentation
     for label_cls in np.unique(cor_seg):
-        if label_cls == 0: continue  # exclude background
+        if label_cls == 0:
+            continue  # exclude background
         seg_metric_results[f'cor_dice_class_{label_cls}'] = calculate_dice_volume(cor_seg_gt, cor_seg_pred,
                                                                                   label_class=label_cls)
 
-    # calculate dice for sub-cortical segmentation
+    # dice for sub-cortical segmentation
     for label_cls in np.unique(subcor_seg):
-        if label_cls == 0: continue  # exclude background
+        if label_cls == 0:
+            continue  # exclude background
         seg_metric_results[f'subcor_dice_class_{label_cls}'] = calculate_dice_volume(subcor_seg_gt, subcor_seg_pred,
                                                                                      label_class=label_cls)
-
     # mean dice
     seg_metric_results['dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
     return seg_metric_results

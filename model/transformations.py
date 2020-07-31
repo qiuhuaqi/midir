@@ -152,11 +152,10 @@ Spatial Transformer
 
 def spatial_transform(x, dvf, interp_mode="bilinear"):
     """
-    Spatially transform an image by sampling at transformed locations
-    # todo: add affine mode
+    Spatially transform an image by sampling at transformed locations (2D and 3D)
 
     Args:
-        x: (Tensor float, shape (N, Ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
+        x: (Tensor float, shape (N, ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
         dvf: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
         interp_mode: (string) mode of interpolation in grid_sample()
 
@@ -170,8 +169,8 @@ def spatial_transform(x, dvf, interp_mode="bilinear"):
     dvf = normalise_dvf(dvf)
 
     # generate standard mesh grid
-    mesh_grid = torch.meshgrid([torch.linspace(-1, 1, size[i], dtype=dvf.dtype) for i in range(dim)])
-    mesh_grid = [mesh_grid[i].requires_grad_(False).to(device=dvf.device) for i in range(dim)]
+    mesh_grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(dvf) for i in range(dim)])
+    mesh_grid = [mesh_grid[i].requires_grad_(False) for i in range(dim)]
 
     # apply displacements to each direction (N, *size)
     deformed_meshgrid = [mesh_grid[i] + dvf[:, i, ...] for i in range(dim)]

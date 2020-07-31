@@ -199,8 +199,8 @@ class MILossBSpline(nn.Module):
 
         """histograms"""
         # bins to device
-        self.bins_target = self.bins_target.to(device=target.device)
-        self.bins_source = self.bins_source.to(device=source.device)
+        self.bins_target = self.bins_target.type_as(target)
+        self.bins_source = self.bins_source.type_as(source)
 
         # calculate Parzen window function response
         D_target = (self.bins_target - target) / self.eps_target
@@ -286,8 +286,8 @@ class MILossGaussian(nn.Module):
         src = src.view(src.size()[0], src.size()[1], -1)
 
         # cast bins
-        self.bins_tar = self.bins_tar.to(device=tar.device, dtype=tar.dtype)
-        self.bins_src = self.bins_src.to(device=src.device, dtype=src.dtype)
+        self.bins_tar = self.bins_tar.type_as(tar)
+        self.bins_src = self.bins_src.type_as(src)
 
         # calculate Parzen window function response (N, #bins, H*W)
         windowed_tar = torch.exp( -(tar - self.bins_tar)**2 / (2 * self.sigma_tar**2) ) / math.sqrt(2*math.pi) * self.sigma_tar

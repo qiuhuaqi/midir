@@ -2,9 +2,22 @@ import os
 import json
 import logging
 import shutil
+import random
 
+import numpy as np
 import torch
 from tensorboardX import SummaryWriter
+
+def worker_init_fn(worker_id):
+    """Callback function passed to DataLoader to initialise the workers"""
+    # # generate a random sequence of seeds for the workers
+    # print(f"Random state before generating the random seed: {random.getstate()}")
+    random_seed = random.randint(0, 2 ** 32 - 1)
+    # ##debug
+    # print(f"Random state after generating the random seed: {random.getstate()}")
+    # print(f"Random seed for worker {worker_id} is: {random_seed}")
+    # ##
+    np.random.seed(random_seed)
 
 
 class Params(object):

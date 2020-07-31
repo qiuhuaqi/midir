@@ -73,7 +73,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
             """
             Calculate metrics
             """
-            metric_results = metrics_utils.metrics_fn(data_dict, model.params.metric_groups)
+            metric_results = metrics_utils.calculate_metrics(data_dict, model.params.metric_groups)
             metrics_reporter.collect_value(metric_results)
             """"""
 
@@ -113,11 +113,11 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
 
         # save validation visual results for training
         val_vis_dir = misc_utils.setup_dir(result_dir + "/val_visual_results")
-        vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=0)
+        vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=0)
         # visualise all planes of the 3D volume
         if model.params.dim == 3:
-            vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=1)
-            vis_utils.save_val_visual_results(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=2)
+            vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=1)
+            vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=2)
 
     else:  # Testing only
         # save mean-std and dataframe of metric results
