@@ -1,0 +1,10 @@
+lr: 1e-4
+optimiser: Adam
+
+num_epochs: 50
+val_epochs: 5
+save_summary_steps: 1
+batch_size: 1
+
+metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
+best_metrics: ["rmse_dvf", "aee", "rmse"]
