@@ -1,4 +1,0 @@
-network: UNetDVF
-enc_channels: [16, 32, 32, 32, 32],
-dec_channels: [32, 32, 32, 16],
-out_channels: [16, 16],

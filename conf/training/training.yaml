@@ -1,0 +1,11 @@
+# @package _group_
+lr: 1e-4
+
+trainer:
+    gpus: 1
+    max_epochs: 50
+    row_log_interval: 1
+    check_val_every_n_epoch: 1
+    fast_dev_run: False
+    limit_train_batches: 1.0
+    limit_val_batches: 1.0

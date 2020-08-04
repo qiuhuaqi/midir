@@ -21,7 +21,7 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
         output_dir: (str) full path of output dir
 
     Returns:
-        dvf: (ndarray of shape HxWx2) dense DVF, numpy array coordinate system
+        dvf.yaml: (ndarray of shape HxWx2) dense DVF, numpy array coordinate system
             this DVF is in number of pixels (not normalised)
 
     """
@@ -73,13 +73,13 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
 def normalise_dvf(dvf):
     """
     Spatially normalise DVF to [-1, 1] coordinate system used by Pytorch `grid_sample()`
-    Assumes dvf size is the same as the corresponding image.
+    Assumes dvf.yaml size is the same as the corresponding image.
 
     Args:
         dvf: (numpy.ndarray or torch.Tensor, shape (N, dim, *size)) Displacement Vector Field
 
     Returns:
-        dvf: (normalised DVF)
+        dvf.yaml: (normalised DVF)
     """
 
     dim = dvf.ndim - 2

@@ -1,9 +1,14 @@
-train_path: data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/train
-val_path: data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/val
-test_path: data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/test
+# @package _group_
+dim: 3
+batch_size: 1
+num_workers: 2
+shuffle: True
 
+modality: multi
+crop_size: [176, 192, 160]
 data_pair: intra
 atlas_path: /vol/biomedic2/hq615/data/dl_registration/_camcan/camcan_my/atlas/sub-CC320267
 
-crop_size: [176, 192, 160]
-modality: "multi"
+train_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/train
+val_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/val
+test_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/test

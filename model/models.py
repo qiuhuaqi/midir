@@ -4,8 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from model.networks.dvf_nets import SiameseNet, UNet
-from model.networks.ffd_nets import SiameseNetFFD, FFDNet
+from model.networks.networks import UNet, FFDNet, SiameseNetFFD, SiameseNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 from utils.image_io import save_nifti, load_nifti
 
@@ -94,7 +93,7 @@ class IdBaselineModel(_BaselineModel):
         super(IdBaselineModel, self).__init__(params)
 
     def forward(self, tar, src):
-        """Output dvf in shape (N, dim, *(dims))"""
+        """Output dvf.yaml in shape (N, dim, *(dims))"""
         dim = len(tar.size()) - 2   # image dimension
         dvf = torch.zeros_like(tar).repeat(1, dim, *(1,) * dim)
         return dvf
@@ -131,14 +130,14 @@ class MIRTKBaselineModel(_BaselineModel):
                        f'-padding -1 '
         subprocess.check_call(cmd_register, shell=True)
 
-        # convert dof to dvf
+        # convert dof to dvf.yaml
         dvf_pred_path = self.work_dir + f'/dvf_pred.nii.gz'
         cmd_dof_dvf = f'mirtk convert-dof {dof_path} {dvf_pred_path} ' \
                       f'-output-format disp_voxel ' \
                       f'-target {tar_path}'
         subprocess.check_call(cmd_dof_dvf, shell=True)
 
-        # load converted dvf
+        # load converted dvf.yaml
         # todo: only work for 3D a.t.m.
         dvf = load_nifti(dvf_pred_path)[..., 0, :]  # (H, W, D, 3)
         dvf = np.moveaxis(dvf, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)

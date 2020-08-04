@@ -59,7 +59,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
                 eval_losses = process_batch(model, data_dict, loss_fn, args)
                 loss_reporter.collect_value(eval_losses)
 
-                # warp original target image using the predicted dvf
+                # warp original target image using the predicted dvf.yaml
                 # todo: this is where the extra memory usage is from training to validation, move to CPU?
                 # (comment this out if images are not synthesised)
                 data_dict["target_pred"] = spatial_transform(data_dict["target_original"].to(device=args.device),

@@ -210,7 +210,7 @@ def save_train_result(target, source, warped_source, dvf, save_result_dir, epoch
 
 def plot_results_old(target, source, warped_source, dvf, save_path=None, title_font_size=20, show_fig=False, dpi=100):
     """Plot all motion related results in a single figure
-    dvf is expected to be in number of pixels"""
+    dvf.yaml is expected to be in number of pixels"""
 
     # convert flow into HSV flow with white background
     hsv_flow = flow_to_hsv(dvf, max_mag=0.15, white_bg=True)
@@ -277,7 +277,7 @@ def plot_results_old(target, source, warped_source, dvf, save_path=None, title_f
 
     # # det Jac
     # ax = plt.subplot(2, 4, 8)
-    # jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
+    # jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf.yaml)
     # spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
     #         (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
     #         (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),

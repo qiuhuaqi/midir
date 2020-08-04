@@ -133,7 +133,7 @@ class _BaseDataset(ptdata.Dataset):
             if name == "dvf_gt":
                 if self.run == "train":
                     continue
-                # dvf is saved in shape (H, W, N, 2) -> (N, 2, H, W)
+                # dvf.yaml is saved in shape (H, W, N, 2) -> (N, 2, H, W)
                 data_dict[name] = load_nifti(data_path).transpose(2, 3, 0, 1)
 
             else:

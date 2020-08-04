@@ -1,4 +1,18 @@
-dim: 3
-version: v0.3-dev
-run_no: 0
-run_note: ""
+# @package _global_
+defaults:
+  - data: camcan
+  - network: dvfnet
+  - loss: nmi
+  - transformation: dvf
+  - training: training
+
+meta:
+  model_dir:
+  gpu: 1
+  ver: v0.3-dev
+  metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
+  metrics_to_log: ["dice", "aee"]
+
+  best_metric: dice_mean
+  best_metric_init: 0.0
+  best_metric_mode: max

@@ -91,7 +91,7 @@ def synthesis_elastic_deformation(image,
 
     Returns:
         image_deformed: (numpy.ndarray, shape same as input image)
-        dvf: (numpy.ndarray, shape (N, 2, H, W) or (N, 3, H, W, D)) Synthesised dense Displacement Vector Field
+        dvf.yaml: (numpy.ndarray, shape (N, 2, H, W) or (N, 3, H, W, D)) Synthesised dense Displacement Vector Field
     """
     dim = image.ndim - 1
     batch_size = image.shape[0]

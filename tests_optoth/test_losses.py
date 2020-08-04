@@ -2,6 +2,9 @@ import unittest
 import torch
 import numpy as np
 import sys
+
+import model.losses.reg_loss
+
 sys.path.append('../')
 from model import losses
 
@@ -14,7 +17,7 @@ class TestDiffusionLoss(unittest.TestCase):
         W = 64
 
         th_x = torch.randn(1, 1, H, W).cuda()
-        th_loss = losses.diffusion_loss(th_x)
+        th_loss = model.losses.reg_loss.l2reg(th_x)
 
         # optoth - cannot deal with [nBatch, nCh, H, W] yet
         nabla = Nabla(dim=2).cuda()
@@ -30,7 +33,7 @@ class TestBendingLoss(unittest.TestCase):
         W = 64
 
         th_x = torch.randn(1, 1, H, W).cuda()
-        th_loss = losses.bending_energy_loss(th_x)
+        th_loss = model.losses.reg_loss.bending_energy(th_x)
 
         # optoth - cannot deal with [nBatch, nCh, H, W] yet
         nabla  = Nabla(dim=2).cuda()

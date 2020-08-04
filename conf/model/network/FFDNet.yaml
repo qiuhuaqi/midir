@@ -1,3 +1,0 @@
-network: FFDNet
-enc_channels: [32, 64, 128]
-out_channels: [32, 16]

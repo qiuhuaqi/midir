@@ -1,0 +1,16 @@
+# @package _group_
+sim_loss: NMI
+
+mi_cfg:
+  vmin: 0.0
+  vmax: 1.0
+  num_bins: 32
+  sigma: 0.1
+  normalised: True
+  debug: False
+
+sim_weight: 1.0
+loss_roi: True
+
+reg_loss: l2reg
+reg_weight: 0.1

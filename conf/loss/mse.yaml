@@ -1,0 +1,7 @@
+# @package _group_
+sim_loss: MSE
+sim_weight: 1.0,
+loss_roi: true
+
+reg_loss: l2reg
+reg_weight: 0.1

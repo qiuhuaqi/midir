@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 
 def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=20):
-    """dvf shape (2, H, W)"""
+    """dvf.yaml shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
     else:
@@ -33,16 +33,16 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 
 
 # TODO: adapt quiver plot
-# def plot_quiver(ax, dvf):
+# def plot_quiver(ax, dvf.yaml):
 #     # quiver, or "Displacement Vector Field" (DVF)
 #     # todo: DVF shape change to (2, H, W) to be applied
 #     interval = 3  # interval between points on the grid
 #     background = source
-#     quiver_flow = np.zeros_like(dvf)
-#     quiver_flow[:, :, 0] = dvf[:, :, 0]
-#     quiver_flow[:, :, 1] = dvf[:, :, 1]
-#     mesh_x, mesh_y = np.meshgrid(range(0, dvf.shape[1] - 1, interval),
-#                                  range(0, dvf.shape[0] - 1, interval))
+#     quiver_flow = np.zeros_like(dvf.yaml)
+#     quiver_flow[:, :, 0] = dvf.yaml[:, :, 0]
+#     quiver_flow[:, :, 1] = dvf.yaml[:, :, 1]
+#     mesh_x, mesh_y = np.meshgrid(range(0, dvf.yaml.shape[1] - 1, interval),
+#                                  range(0, dvf.yaml.shape[0] - 1, interval))
 #     plt.imshow(background[:, :], cmap='gray')
 #     plt.quiver(mesh_x, mesh_y,
 #                quiver_flow[mesh_y, mesh_x, 1], quiver_flow[mesh_y, mesh_x, 0],
@@ -52,9 +52,9 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 
 
 # TODO: adapt Jacobian visualisation code
-# def plot_det_jac(ax, dvf)
+# def plot_det_jac(ax, dvf.yaml)
 #     # todo: DVF shape change to (2, H, W) to be applied
-#     jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf)
+#     jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf.yaml)
 #     spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
 #             (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
 #             (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
@@ -72,9 +72,9 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 #     cb.ax.tick_params(labelsize=20)
 
 
-# def plot_hsv_dvf(ax, dvf):
+# def plot_hsv_dvf(ax, dvf.yaml):
 #     # convert flow into HSV flow with white background
-#     hsv_flow = flow_to_hsv(vis_data_dict["dvf"], max_mag=0.15, white_bg=True)
+#     hsv_flow = flow_to_hsv(vis_data_dict["dvf.yaml"], max_mag=0.15, white_bg=True)
 #     # todo: DVF shape change to be applied
 #     ax = plt.subplot(2, 4, 7)
 #     plt.imshow(hsv_flow)
@@ -186,7 +186,7 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
         z = int(sizes[axis] // 2)
         for name, d in data_dict.items():
             if name in ["dvf_pred", "dvf_gt"]:
-                # dvf: choose the two axes/directions to visualise
+                # dvf.yaml: choose the two axes/directions to visualise
                 axes = [0, 1, 2]
                 axes.remove(axis)
                 vis_data_dict[name] = d[0, axes, ...].take(z, axis=axis+1)  # (2, X, X)

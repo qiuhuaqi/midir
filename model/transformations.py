@@ -71,7 +71,7 @@ class BSplineFFDTransform(object):
             x: (N, dim, *(sizes)) network output i.e. control point parameters
 
         Returns:
-            dvf: (N, dim, *(img_sizes)) dense Displacement Vector Field of the transformation
+            dvf.yaml: (N, dim, *(img_sizes)) dense Displacement Vector Field of the transformation
         """
         self.kernel = self.kernel.to(dtype=x.dtype, device=x.device)
 

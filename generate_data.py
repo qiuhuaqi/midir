@@ -112,7 +112,7 @@ for run in args.runs:
             """
             Note:
             - images are minmax normalised to [0, 1]
-            - dvf is not normalised (in number of pixels)
+            - dvf.yaml is not normalised (in number of pixels)
             - all cropped to crop_size
             """
 

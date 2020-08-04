@@ -47,7 +47,7 @@ def calculate_dvf_metrics(metric_data):
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
 
     Args:
-        metric_data: (dict) dvf shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
+        metric_data: (dict) dvf.yaml shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
 
     Returns:
         metric_results: (dict)
