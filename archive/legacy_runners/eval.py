@@ -5,8 +5,8 @@ import numpy as np
 
 import torch
 from model.transformations import spatial_transform
-from runners.inference import process_batch
-from runners.helpers import LossReporter, MetricReporter
+from archive.runners.inference import process_batch
+from archive.runners.helpers import LossReporter, MetricReporter
 
 import utils.metric as metrics_utils
 import utils.misc as misc_utils

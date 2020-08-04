@@ -4,7 +4,7 @@ from omegaconf import DictConfig
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from Lightning import LightningDLReg
+from model.lightning_model import LightningDLReg
 from pytorch_lightning import Trainer
 
 

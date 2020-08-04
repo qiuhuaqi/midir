@@ -17,13 +17,11 @@ import sys
 # always run from one dir above ./src
 sys.path.insert(0, f'{os.getcwd()}/src')
 
-from runners.helpers import MetricReporter
+from archive.runners.helpers import MetricReporter
 from utils.metric import calculate_metrics
 from utils import misc
 from utils.image_io import save_nifti, split_volume_idmat
 from utils.transformation import dof_to_dvf
-
-import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-modality',

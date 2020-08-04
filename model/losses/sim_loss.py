@@ -3,7 +3,7 @@ import math
 import torch
 from torch import nn as nn
 
-from model import window_func
+from model.losses import window_func
 from utils.image import normalise_intensity
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model.window_func import cubic_bspline_torch
+from model.losses.window_func import cubic_bspline_torch
 from utils.transformation import normalise_dvf
 from utils.misc import param_dim_setup
 

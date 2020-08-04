@@ -4,12 +4,12 @@ import logging
 import torch
 
 from data.datasets import BrainData
-from model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
+from archive.legacy_model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
 from model.losses import loss_fn
 import utils.misc as misc_utils
 
-from runners.train import train_and_validate
-from runners.eval import evaluate
+from archive.runners.train import train_and_validate
+from archive.runners.eval import evaluate
 
 torch.autograd.set_detect_anomaly(True)
 

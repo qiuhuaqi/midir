@@ -1,10 +1,9 @@
-import os
 import torch
 from tqdm import tqdm
 import logging
 
-from runners.inference import process_batch
-from runners.eval import evaluate
+from archive.runners.inference import process_batch
+from archive.runners.eval import evaluate
 import utils.misc as misc_utils
 
 
