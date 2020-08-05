@@ -20,19 +20,24 @@ def main(cfg: DictConfig) -> None:
     if gpu is not None and isinstance(gpu, int):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
 
+    # lightning model
     model = LightningDLReg(hparams=cfg)
 
+    # configure logger and checkpointing callback
     logger = TensorBoardLogger(model_dir, name='log')
     ckpt_callback = ModelCheckpoint(monitor=cfg.meta.best_metric,
                                     mode=cfg.meta.best_metric_mode,
                                     filepath=f'{logger.log_dir}/checkpoints/'+'{epoch}-{val_loss:.2f}-{dice_mean:.2f}',
                                     verbose=True
                                     )
+    # configure trainer
     trainer = Trainer(default_root_dir=model_dir,
                       logger=logger,
                       checkpoint_callback=ckpt_callback,
                       **cfg.training.trainer
                       )
+
+    # training
     trainer.fit(model)
 
 

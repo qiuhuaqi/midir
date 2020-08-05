@@ -22,77 +22,7 @@ def worker_init_fn(worker_id):
     np.random.seed(random_seed)
 
 
-class BrainData(object):
-    """
-    # todo: this object shouldn't be at this level. Move to config parsing
-    Data object:
-    - Construct Datasets and Dataloaders
-    - Standardize data interface
-    """
-    def __init__(self, args, params):
-        # path check
-        train_data_path = params.train_data_path
-        assert os.path.exists(train_data_path), f"Training data path does not exist: \n{train_data_path}, not generated?"
-        val_data_path = params.val_data_path
-        assert os.path.exists(val_data_path), f"Validation data path does not exist: \n{val_data_path}, not generated?"
-        test_data_path = params.test_data_path
-        assert os.path.exists(test_data_path), f"Testing data path does not exist: \n{test_data_path}, not generated?"
-
-        # training data
-        if params.dim == 2:
-            # synthesis on-the-fly training data
-            self.train_dataset = CamCANSynthDataset(train_data_path,
-                                                    dim=params.dim,
-                                                    run="train",
-                                                    cps=params.synthesis_cps,
-                                                    sigma=params.synthesis_sigma,
-                                                    disp_max=params.disp_max,
-                                                    crop_size=params.crop_size,
-                                                    slice_range=tuple(params.slice_range))
-
-        elif params.dim == 3:
-            # load pre-generated training data
-            self.train_dataset = BrainLoadingDataset(train_data_path, "train", params.dim, data_pair=params.data_pair,
-                                                     atlas_path=params.atlas_path)
-
-        else:
-            raise ValueError("Data parsing: dimension of data not specified/recognised.")
-
-        self.train_dataloader = ptdata.DataLoader(self.train_dataset,
-                                                  batch_size=params.batch_size,
-                                                  shuffle=True,
-                                                  num_workers=args.num_workers,
-                                                  pin_memory=args.cuda,
-                                                  worker_init_fn=worker_init_fn  # todo: fix random seeding
-                                                  )
-
-
-        # val/test data
-        self.val_dataset = BrainLoadingDataset(val_data_path, "val", params.dim,
-                                               data_pair=params.data_pair, atlas_path=params.atlas_path)
-
-        self.val_dataloader = ptdata.DataLoader(self.val_dataset,
-                                                batch_size=1,
-                                                shuffle=False,
-                                                num_workers=args.num_workers,
-                                                pin_memory=args.cuda
-                                                )
-
-        self.test_dataset = BrainLoadingDataset(test_data_path, "test", params.dim,
-                                                data_pair=params.data_pair, atlas_path=params.atlas_path)
-
-        self.test_dataloader = ptdata.DataLoader(self.test_dataset,
-                                                 batch_size=1,
-                                                 shuffle=False,
-                                                 num_workers=args.num_workers,
-                                                 pin_memory=args.cuda
-                                                 )
-
-
-
-
-""" Base Dataset """
-
+# Base #
 
 class _BaseDataset(ptdata.Dataset):
     def __init__(self, data_path, run, dim, slice_range=(70, 90)):
@@ -175,10 +105,7 @@ class _BaseDataset(ptdata.Dataset):
         return len(self.subject_list)
 
 
-
-
-""" Loading pre-generated data Datasets """
-
+# Loading #
 
 class BrainLoadingDataset(_BaseDataset):
     """
@@ -247,9 +174,7 @@ class BrainLoadingDataset(_BaseDataset):
         return self._to_tensor(data_dict)
 
 
-
-""" Synthesis datasets """
-
+# Synthesis #
 
 class _SynthDataset(_BaseDataset):
     def __init__(self,
