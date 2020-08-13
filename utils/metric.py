@@ -54,33 +54,37 @@ def calculate_dvf_metrics(metric_data):
     Returns:
         metric_results: (dict)
     """
-
-    # unpack metric data, keys must match metric_data input
+    # new object to avoid changing data in metric_data
     dvf_pred = metric_data['dvf_pred']
-    dvf_gt = metric_data['dvf_gt']
+    if 'dvf_gt' in metric_data.keys():
+        dvf_gt = metric_data['dvf_gt']
 
+    # mask the DVF with roi mask if given
     if 'roi_mask' in metric_data.keys():
         roi_mask = metric_data['roi_mask']  # (N, 1, *(dims))
 
-        # find brian mask bbox mask
+        # find roi mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
-        # mask dvf gt and pred
+        # mask and bbox crop dvf gt and pred by roi_mask
         dvf_pred = dvf_pred * roi_mask
-        dvf_gt = dvf_gt * roi_mask
-
-        # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
         dvf_pred = bbox_crop(dvf_pred, mask_bbox)
-        dvf_gt = bbox_crop(dvf_gt, mask_bbox)
+
+        if 'dvf_gt' in metric_data.keys():
+            dvf_gt = dvf_gt * roi_mask
+            dvf_gt = bbox_crop(dvf_gt, mask_bbox)
 
     # Jacobian metrics
     folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(dvf_pred)
 
-    # metric keys must match params specification
-    return {'aee': calculate_aee(dvf_pred, dvf_gt),
-            'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt),
-            'folding_ratio': folding_ratio,
-            'mean_negative_detJ': mag_det_jac_det}
+    dvf_metric_results = dict()
+    dvf_metric_results.update({'folding_ratio': folding_ratio,
+                               'mean_negative_detJ': mag_det_jac_det})
+
+    if 'dvf_gt' in metric_data.keys():
+        dvf_metric_results.update({'aee': calculate_aee(dvf_pred, dvf_gt),
+                                   'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt)})
+    return dvf_metric_results
 
 
 def calculate_image_metrics(metric_data):
