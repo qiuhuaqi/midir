@@ -7,6 +7,8 @@ from utils.image import bbox_from_mask, bbox_crop
 from model.transformations import spatial_transform
 
 
+# Calculate metrics #
+
 def calculate_metrics(metric_data, metric_groups, return_tensor=False):
     """
     Wrapper function for calculating all metrics in Numpy
@@ -25,7 +27,7 @@ def calculate_metrics(metric_data, metric_groups, return_tensor=False):
             metric_data[k] = x.cpu().numpy()
 
     # keys must match metric_groups and params.metric_groups
-    # (using groups to share pre-processing)
+    # (using groups to share pre-scripts)
     metric_group_fns = {'dvf_metrics': calculate_dvf_metrics,
                         'image_metrics': calculate_image_metrics,
                         'seg_metrics': calculate_seg_metrics}
@@ -47,7 +49,7 @@ def calculate_dvf_metrics(metric_data):
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
 
     Args:
-        metric_data: (dict) dvf.yaml shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
+        metric_data: (dict) DVF shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
 
     Returns:
         metric_results: (dict)
@@ -63,7 +65,7 @@ def calculate_dvf_metrics(metric_data):
         # find brian mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
-        # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
+        # mask dvf gt and pred
         dvf_pred = dvf_pred * roi_mask
         dvf_gt = dvf_gt * roi_mask
 
@@ -97,49 +99,31 @@ def calculate_image_metrics(metric_data):
 
 
 def calculate_seg_metrics(metric_data):
+    """TODO: 2D (could use a dummy loop)"""
     seg_metric_results = {}
 
-    # fetch original segmentation masks
-    cor_seg = metric_data["cor_seg"]
-    subcor_seg = metric_data["subcor_seg"]
-
-    # apply transformations to get target mask and predicted target mask
-    dvf_gt = metric_data["dvf_gt"]
-    dvf_pred = metric_data["dvf_pred"]
-
-    cor_seg_gt = spatial_transform(torch.from_numpy(cor_seg),
-                                   torch.from_numpy(dvf_gt),
-                                   interp_mode='nearest').numpy()
-    cor_seg_pred = spatial_transform(torch.from_numpy(cor_seg),
-                                     torch.from_numpy(dvf_pred),
-                                     interp_mode='nearest').numpy()
-
-    subcor_seg_gt = spatial_transform(torch.from_numpy(subcor_seg),
-                                      torch.from_numpy(dvf_gt),
-                                      interp_mode='nearest').numpy()
-    subcor_seg_pred = spatial_transform(torch.from_numpy(subcor_seg),
-                                        torch.from_numpy(dvf_pred),
-                                        interp_mode='nearest').numpy()
-
     # dice for cortical segmentation
-    for label_cls in np.unique(cor_seg):
+    cor_seg_gt = metric_data['target_cor_seg']
+    cor_seg_pred = metric_data['target_cor_seg_pred']
+
+    for label_cls in np.unique(cor_seg_gt):
         if label_cls == 0:
             continue  # exclude background
         seg_metric_results[f'cor_dice_class_{label_cls}'] = calculate_dice_volume(cor_seg_gt, cor_seg_pred,
                                                                                   label_class=label_cls)
 
     # dice for sub-cortical segmentation
-    for label_cls in np.unique(subcor_seg):
+    subcor_seg_gt = metric_data['target_subcor_seg']
+    subcor_seg_pred = metric_data['target_subcor_seg_pred']
+
+    for label_cls in np.unique(subcor_seg_gt):
         if label_cls == 0:
             continue  # exclude background
         seg_metric_results[f'subcor_dice_class_{label_cls}'] = calculate_dice_volume(subcor_seg_gt, subcor_seg_pred,
                                                                                      label_class=label_cls)
     # mean dice
-    seg_metric_results['dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
+    seg_metric_results['mean_dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
     return seg_metric_results
-
-
-""""""
 
 
 def calculate_aee(x, y):

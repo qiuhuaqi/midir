@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import torch
+
+import utils.experiment
+import utils.misc
 import utils.misc as misc_utils
 
 
@@ -66,7 +69,7 @@ class MetricReporter(Reporter):
         for metric_name in self.report:
             report_mean_std[metric_name + '_mean'] = self.report[metric_name]['mean']
             report_mean_std[metric_name + '_std'] = self.report[metric_name]['std']
-        misc_utils.save_dict_to_json(report_mean_std, save_path)
+        utils.misc.save_dict_to_json(report_mean_std, save_path)
 
     def save_df(self, save_path, model_name):
         method_column = [str(model_name)] * len(self.id_list)

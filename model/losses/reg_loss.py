@@ -1,6 +1,6 @@
 import torch
 
-from utils.spatial_diff import finite_diff
+from utils.spt_derivative import finite_diff
 
 
 def l2reg(dvf):

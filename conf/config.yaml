@@ -11,8 +11,8 @@ meta:
   gpu: 1
   ver: v0.3-dev
   metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
-  metrics_to_log: ["dice", "aee"]
+  metrics_to_log: ["mean_dice", "aee"]
 
-  best_metric: dice_mean
+  best_metric: mean_dice_mean
   best_metric_init: 0.0
   best_metric_mode: max

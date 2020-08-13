@@ -4,7 +4,10 @@ import logging
 
 from archive.runners.inference import process_batch
 from archive.runners.eval import evaluate
-import utils.misc as misc_utils
+
+import utils.experiment
+import utils.experiment.experiment
+import utils.experiment.model
 
 
 def train_and_validate(model, loss_fn, data, args):
@@ -20,8 +23,8 @@ def train_and_validate(model, loss_fn, data, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=model.params.learning_rate)
 
     # set up TensorboardX summary writers
-    train_tb_writer = misc_utils.set_summary_writer(args.model_dir, 'train')
-    val_tb_writer = misc_utils.set_summary_writer(args.model_dir, 'val')
+    train_tb_writer = utils.experiment.set_summary_writer(args.model_dir, 'train')
+    val_tb_writer = utils.experiment.set_summary_writer(args.model_dir, 'val')
 
     for epoch in range(model.params.num_epochs):
         """Train for one epoch"""
@@ -61,11 +64,11 @@ def train_and_validate(model, loss_fn, data, args):
             evaluate(model, loss_fn, data.val_dataloader, args, tb_writer=val_tb_writer, val=True)
 
             # save model
-            misc_utils.save_checkpoint({'epoch': epoch + 1,
+            model.utils.save_checkpoint({'epoch': epoch + 1,
                                         'state_dict': model.state_dict(),
                                         'optim_dict': optimizer.state_dict()},
-                                       is_best=model.is_best,
-                                       checkpoint=args.model_dir)
+                                        is_best=model.is_best,
+                                        checkpoint=args.model_dir)
 
             if model.is_best:
                 logging.info("Best model found at epoch {} ...".format(epoch+1))

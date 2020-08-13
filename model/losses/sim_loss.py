@@ -81,7 +81,7 @@ class MILossBSpline(nn.Module):
             (Normalise)MI: (scalar)
         """
 
-        """pre-processing"""
+        """pre-scripts"""
         # normalise intensity for histogram calculation
         target = normalise_intensity(target[:, 0, ...],
                                      mode='minmax', min_out=self.target_min, max_out=self.target_max).unsqueeze(1)

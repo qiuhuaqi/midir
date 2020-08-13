@@ -11,4 +11,3 @@ atlas_path: /vol/biomedic2/hq615/data/dl_registration/_camcan/camcan_my/atlas/su
 
 train_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/train
 val_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/val
-test_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/test

@@ -144,15 +144,10 @@ class DVFTransform(object):
 """"""
 
 
-
-
-"""
-Spatial Transformer
-"""
-
 def spatial_transform(x, dvf, interp_mode="bilinear"):
     """
     Spatially transform an image by sampling at transformed locations (2D and 3D)
+    Note that the dvf should not be spatially normalised.
 
     Args:
         x: (Tensor float, shape (N, ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
@@ -180,3 +175,5 @@ def spatial_transform(x, dvf, interp_mode="bilinear"):
     deformed_meshgrid = torch.stack(deformed_meshgrid, -1)  # (N, *size, dim)
 
     return F.grid_sample(x, deformed_meshgrid, mode=interp_mode, align_corners=False)
+
+

@@ -25,12 +25,12 @@ def worker_init_fn(worker_id):
 # Base #
 
 class _BaseDataset(ptdata.Dataset):
-    def __init__(self, data_path, run, dim, slice_range=(70, 90)):
+    def __init__(self, data_dir, run, dim, slice_range=(70, 90)):
         super(_BaseDataset, self).__init__()
-        self.data_path = data_path
+        self.data_dir = data_dir
         self.run = run  # "train", "val" or "test"
         self.dim = dim
-        self.subject_list = sorted(os.listdir(self.data_path))
+        self.subject_list = sorted(os.listdir(self.data_dir))
 
         self.slice_range = slice_range
 
@@ -63,7 +63,7 @@ class _BaseDataset(ptdata.Dataset):
             if name == "dvf_gt":
                 if self.run == "train":
                     continue
-                # dvf.yaml is saved in shape (H, W, N, 2) -> (N, 2, H, W)
+                # dvf is saved in shape (H, W, N, 2) -> (N, 2, H, W)
                 data_dict[name] = load_nifti(data_path).transpose(2, 3, 0, 1)
 
             else:
@@ -111,60 +111,91 @@ class BrainLoadingDataset(_BaseDataset):
     """
     Dataset that loads saved generated & pre-processed data
     """
-    def __init__(self, data_path, run, dim, data_pair,
+    def __init__(self, data_dir, run, dim, data_pair,
                  slice_range=(70, 90), atlas_path=None):
-        super(BrainLoadingDataset, self).__init__(data_path, run, dim, slice_range=slice_range)
+        super(BrainLoadingDataset, self).__init__(data_dir, run, dim, slice_range=slice_range)
+
+        assert os.path.exists(data_dir), f"Data dir does not exist: {data_dir}"
         self.data_pair = data_pair
         self.atlas_path = atlas_path
 
     def _set_path(self, index):
         """ Set the paths of data files to load and the keys in data_dict"""
         data_path_dict = dict()
-        if self.data_pair == "intra":  # intra-subject
+
+        # intra-subject mode
+        if self.data_pair == "intra":
             subj_id = self.subject_list[index]
-            for name in ["target", "source", "target_original", "roi_mask", "dvf_gt", "cor_seg", "subcor_seg"]:
-                data_path_dict[name] = f"{self.data_path}/{subj_id}/{name}.nii.gz"
+            data_path_dict["target"] = f"{self.data_dir}/{subj_id}/T1w_synth.nii.gz"
+            data_path_dict["source"] = f"{self.data_dir}/{subj_id}/T2w.nii.gz"
+            data_path_dict["roi_mask"] = f"{self.data_dir}/{subj_id}/roi_mask.nii.gz"
 
-        else:  # inter-subject
-            if self.data_pair == "inter_random":
-                tar_subj_id = self.subject_list[index]
-                if self.run == "train":
-                    # randomly choose source subject from other subjects
-                    src_subj_pool = self.subject_list.copy()
-                    src_subj_pool.remove(tar_subj_id)
-                    src_subj_id = random.choice(src_subj_pool)
+            if self.run == "eval":
+                data_path_dict["target_original"] = f"{self.data_dir}/{subj_id}/T1w.nii.gz"
+                data_path_dict["target_cor_seg"] = f"{self.data_dir}/{subj_id}/cor_seg_synth.nii.gz"
+                data_path_dict["target_subcor_seg"] = f"{self.data_dir}/{subj_id}/subcor_seg_synth.nii.gz"
+                data_path_dict["source_cor_seg"] = f"{self.data_dir}/{subj_id}/cor_seg.nii.gz"
+                data_path_dict["source_subcor_seg"] = f"{self.data_dir}/{subj_id}/subcor_seg.nii.gz"
+                data_path_dict["dvf_gt"] = f"{self.data_dir}/{subj_id}/dvf_gt.nii.gz"
 
-                else:
-                    # for val/test, fixed pairing with the next subject on the list (looping)
-                    if index < len(self.subject_list) - 1:
-                        src_subj_id = self.subject_list[index+1]
-                    else:
-                        src_subj_id = self.subject_list[0]
+        # inter-subject mode (including intra-subject, randomly choose synthesised images)
+        elif self.data_pair == "inter":
+            tar_subj_id = self.subject_list[index]
+            src_subj_id = random.choice(self.subject_list)  # allows choosing the same subject (incl. intra)
 
-                # set target data paths for intra-subject
-                data_path_dict["target"] = f"{self.data_path}/{tar_subj_id}/target.nii.gz"
-                data_path_dict["target_cor_seg"] = f"{self.data_path}/{tar_subj_id}/cor_seg.nii.gz"
-                data_path_dict["target_subcor_seg"] = f"{self.data_path}/{tar_subj_id}/subcor_seg.nii.gz"
 
-            elif self.data_pair == "inter_atlas":
-                assert self.atlas_path is not None, "Atlas path not given."
-                # set target data paths for inter-subject
-                data_path_dict["target"] = f"{self.atlas_path}/target.nii.gz"
-                data_path_dict["target_cor_seg"] = f"{self.atlas_path}/cor_seg.nii.gz"
-                data_path_dict["target_subcor_seg"] = f"{self.atlas_path}/subcor_seg.nii.gz"
+            #######
+            # v0.5-dev: test random seeding
+            print(tar_subj_id, src_subj_id)
+            #######
 
-                src_subj_id = self.subject_list[index]
 
+            # images
+            if self.run == "train" and random.choice([True, False]):
+                # training: randomly choose to use synthesised image as target image
+                data_path_dict["target"] = f"{self.data_dir}/{tar_subj_id}/T1w_synth.nii.gz"
             else:
-                raise ValueError(f"Data pairing setting ({self.data_pair}) not recognised.")
+                data_path_dict["target"] = f"{self.data_dir}/{tar_subj_id}/T1w.nii.gz"
 
-            # set source data paths
-            data_path_dict["source"] = f"{self.data_path}/{src_subj_id}/source.nii.gz"
-            data_path_dict["source_cor_seg"] = f"{self.data_path}/{src_subj_id}/cor_seg.nii.gz"
-            data_path_dict["source_subcor_seg"] = f"{self.data_path}/{src_subj_id}/subcor_seg.nii.gz"
+            data_path_dict["source"] = f"{self.data_dir}/{src_subj_id}/T2w.nii.gz"
+            data_path_dict["roi_mask"] = f"{self.data_dir}/{tar_subj_id}/roi_mask.nii.gz"
 
-            # set brain mask path
-            data_path_dict["roi_mask"] = f"{self.data_path}/{src_subj_id}/roi_mask.nii.gz"
+            if self.run == "eval":
+                # T1w image of the other subject for error maps and RMSE
+                data_path_dict["target_original"] = f"{self.data_dir}/{src_subj_id}/T1w.nii.gz"
+
+                # eval: load original segmentation (w/o synthesised transformation)
+                data_path_dict["target_cor_seg"] = f"{self.data_dir}/{tar_subj_id}/cor_seg.nii.gz"
+                data_path_dict["target_subcor_seg"] = f"{self.data_dir}/{tar_subj_id}/subcor_seg.nii.gz"
+                data_path_dict["source_cor_seg"] = f"{self.data_dir}/{src_subj_id}/cor_seg.nii.gz"
+                data_path_dict["source_subcor_seg"] = f"{self.data_dir}/{src_subj_id}/subcor_seg.nii.gz"
+
+        elif self.data_pair == "inter_atlas":
+            subj_id = self.subject_list[index]
+            assert self.atlas_path is not None, "Atlas path not given."
+
+            # images
+            if self.run == "train" and random.choice([True, False]):
+                # training: randomly choose to use synthesised image as target image
+                data_path_dict["target"] = f"{self.data_dir}/{subj_id}/T1w_synth.nii.gz"
+            else:
+                data_path_dict["target"] = f"{self.data_dir}/{subj_id}/T1w.nii.gz"
+
+            data_path_dict["source"] = f"{self.atlas_path}/T2w.nii.gz"  # atlas
+            data_path_dict["roi_mask"] = f"{self.data_dir}/{subj_id}/roi_mask.nii.gz"
+
+            if self.run == "eval":
+                # T1w image of the other subject for error maps and RMSE
+                data_path_dict["target_original"] = f"{self.atlas_path}/T1w.nii.gz"
+
+                # eval: load original segmentation (w/o synthesised transformation)
+                data_path_dict["target_cor_seg"] = f"{self.data_dir}/{subj_id}/cor_seg.nii.gz"
+                data_path_dict["target_subcor_seg"] = f"{self.data_dir}/{subj_id}/subcor_seg.nii.gz"
+                data_path_dict["source_cor_seg"] = f"{self.atlas_path}/cor_seg.nii.gz"  # atlas
+                data_path_dict["source_subcor_seg"] = f"{self.atlas_path}/subcor_seg.nii.gz"  # atlas
+
+        else:
+            raise ValueError(f"Data pairing setting not recognised: {self.data_pair}")
 
         return data_path_dict
 
@@ -178,7 +209,7 @@ class BrainLoadingDataset(_BaseDataset):
 
 class _SynthDataset(_BaseDataset):
     def __init__(self,
-                 data_path,
+                 data_dir,
                  run,
                  dim,
                  slice_range=(70, 90),
@@ -189,7 +220,7 @@ class _SynthDataset(_BaseDataset):
                  device=torch.device('cpu')  # ??
                  ):
         """
-        Loading, processing and synthesising transformation
+        Loading, scripts and synthesising transformation
         Args:
             sigma: (int, float or tuple) sigma of the Gaussian smoothing filter
             cps: (int, float or tuple) Control point spacing
@@ -197,7 +228,7 @@ class _SynthDataset(_BaseDataset):
             crop_size: (int or tuple) Size of the image to crop into
             device: (torch.device)
         """
-        super(_SynthDataset, self).__init__(data_path, run, dim, slice_range=slice_range)
+        super(_SynthDataset, self).__init__(data_dir, run, dim, slice_range=slice_range)
 
         self.crop_size = crop_size  # todo: dimension check to enable integer argument
         self.device = device
@@ -260,9 +291,9 @@ class BratsSynthDataset(_SynthDataset):
     def _set_path(self, index):
         subj_id = self.subject_list[index]
         data_path_dict = dict()
-        data_path_dict["target_original"] = f"{self.data_path}/{subj_id}/{subj_id}_t1.nii.gz"
-        data_path_dict["source"] = f"{self.data_path}/{subj_id}/{subj_id}_t2.nii.gz"
-        data_path_dict["roi_mask"] = f"{self.data_path}/{subj_id}/{subj_id}_brainmask.nii.gz"
+        data_path_dict["target_original"] = f"{self.data_dir}/{subj_id}/{subj_id}_t1.nii.gz"
+        data_path_dict["source"] = f"{self.data_dir}/{subj_id}/{subj_id}_t2.nii.gz"
+        data_path_dict["roi_mask"] = f"{self.data_dir}/{subj_id}/{subj_id}_brainmask.nii.gz"
         return data_path_dict
 
 
@@ -273,9 +304,9 @@ class IXISynthDataset(_SynthDataset):
     def _set_path(self, index):
         subj_id = self.subject_list[index]
         data_path_dict = dict()
-        data_path_dict["target_original"] = f"{self.data_path}/{subj_id}/T1-brain.nii.gz"
-        data_path_dict["source"] = f"{self.data_path}/{subj_id}/T2-brain.nii.gz"
-        data_path_dict["roi_mask"] = f"{self.data_path}/{subj_id}/T1-brain_mask.nii.gz"
+        data_path_dict["target_original"] = f"{self.data_dir}/{subj_id}/T1-brain.nii.gz"
+        data_path_dict["source"] = f"{self.data_dir}/{subj_id}/T2-brain.nii.gz"
+        data_path_dict["roi_mask"] = f"{self.data_dir}/{subj_id}/T1-brain_mask.nii.gz"
         return data_path_dict
 
     @staticmethod
@@ -299,11 +330,11 @@ class CamCANSynthDataset(_SynthDataset):
     def _set_path(self, index):
         subj_id = self.subject_list[index]
         data_path_dict = dict()
-        data_path_dict["target_original"] = f"{self.data_path}/{subj_id}/T1_brain.nii.gz"
-        data_path_dict["source"] = f"{self.data_path}/{subj_id}/T2_brain.nii.gz"
-        data_path_dict["roi_mask"] = f"{self.data_path}/{subj_id}/T1_brain_mask.nii.gz"
+        data_path_dict["target_original"] = f"{self.data_dir}/{subj_id}/T1_brain.nii.gz"
+        data_path_dict["source"] = f"{self.data_dir}/{subj_id}/T2_brain.nii.gz"
+        data_path_dict["roi_mask"] = f"{self.data_dir}/{subj_id}/T1_brain_mask.nii.gz"
 
         # structural segmentation maps
-        data_path_dict["cor_seg"] = f"{self.data_path}/{subj_id}/fsl_cortical_seg.nii.gz"
-        data_path_dict["subcor_seg"] = f"{self.data_path}/{subj_id}/fsl_all_fast_firstseg.nii.gz"
+        data_path_dict["cor_seg"] = f"{self.data_dir}/{subj_id}/fsl_cortical_seg.nii.gz"
+        data_path_dict["subcor_seg"] = f"{self.data_dir}/{subj_id}/fsl_all_fast_firstseg.nii.gz"
         return data_path_dict

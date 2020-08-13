@@ -11,7 +11,8 @@ from utils.image import upsample_image
 
 def load_nifti(path, data_type=np.float32, nim=False):
     xnim = nib.load(path)
-    x = xnim.get_data().astype(data_type)
+    # x = xnim.get_data().astype(data_type)  # deprecated nibabel>5.0
+    x = np.asanyarray(xnim.dataobj)
     if nim:
         return x, xnim
     else:

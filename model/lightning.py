@@ -1,4 +1,6 @@
 import os
+import random
+import numpy as np
 from omegaconf import DictConfig
 
 import torch
@@ -10,12 +12,23 @@ from data.datasets import CamCANSynthDataset, BrainLoadingDataset
 from model.transformations import spatial_transform
 from model.utils import get_network, get_transformation, get_loss_fn
 
-from utils.misc import worker_init_fn
 from utils.image import bbox_from_mask
 from utils.metric import calculate_metrics
 from utils.visualise import visualise_result
 
 import pytorch_lightning as pl
+
+
+def worker_init_fn(worker_id):
+    """Callback function passed to DataLoader to initialise the workers"""
+    # # generate a random sequence of seeds for the workers
+    # print(f"Random state before generating the random seed: {random.getstate()}")
+    random_seed = random.randint(0, 2 ** 32 - 1)
+    # ##debug
+    # print(f"Random state after generating the random seed: {random.getstate()}")
+    # print(f"Random seed for worker {worker_id} is: {random_seed}")
+    # ##
+    np.random.seed(random_seed)
 
 
 class LightningDLReg(pl.LightningModule):
@@ -55,7 +68,7 @@ class LightningDLReg(pl.LightningModule):
         elif self.hparams.data.dim == 3:
             # load pre-generated training data
             train_dataset = BrainLoadingDataset(run="train",
-                                                data_path=self.hparams.data.train_path,
+                                                data_dir=self.hparams.data.train_path,
                                                 dim=self.hparams.data.dim,
                                                 data_pair=self.hparams.data.data_pair,
                                                 atlas_path=self.hparams.data.atlas_path)
@@ -74,8 +87,8 @@ class LightningDLReg(pl.LightningModule):
     def val_dataloader(self):
         assert os.path.exists(self.hparams.data.val_path), \
             f"Val data path does not exist: {self.hparams.data.val_path}"
-        val_dataset = BrainLoadingDataset(data_path=self.hparams.data.val_path,
-                                          run="val",
+        val_dataset = BrainLoadingDataset(data_dir=self.hparams.data.val_path,
+                                          run="eval",
                                           dim=self.hparams.data.dim,
                                           data_pair=self.hparams.data.data_pair,
                                           atlas_path=self.hparams.data.atlas_path)
@@ -141,16 +154,20 @@ class LightningDLReg(pl.LightningModule):
             return {'loss': train_losses['loss']}
 
     def validation_step(self, batch, batch_idx):
-        # reshape data (to be compatible with 2D)
+        # hacky reshape data
+        # TODO: not compatible with 3D when batch_size>1
         for k, x in batch.items():
             if k == "dvf_gt":
-                batch[k] = x[0, ...]  # (N, dim, *(dims))
+                batch[k] = x[0, ...]  # (N, dim, *(sizes))
             else:
                 batch[k] = x.transpose(0, 1)  # (N, 1, *(dims))
 
         # inference
         val_losses, step_dict = self._step(batch)
-        step_dict["target_pred"] = spatial_transform(batch["target_original"], step_dict["dvf_pred"])
+
+        step_dict['target_pred'] = spatial_transform(batch['target_original'], step_dict['dvf_pred'])
+        step_dict['target_cor_seg_pred'] = spatial_transform(batch['source_cor_seg'], step_dict['dvf_pred'])
+        step_dict['target_subcor_seg_pred'] = spatial_transform(batch['source_subcor_seg'], step_dict['dvf_pred'])
 
         # calculate metric for one validation batch
         val_data = dict(batch, **step_dict)  # merge data dicts
@@ -218,4 +235,4 @@ class LightningDLReg(pl.LightningModule):
         self._check_log_best_metric(metric_result_reduced)
 
         # return callback metrics for checkpointing
-        return {'val_loss': losses_reduced['loss'], 'dice_mean': metric_result_reduced['dice_mean']}
+        return {'val_loss': losses_reduced['loss'], 'mean_dice_mean': metric_result_reduced['mean_dice_mean']}
