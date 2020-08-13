@@ -35,15 +35,21 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
                 batch[k] = x.unsqueeze(1).to(device=device)
 
         # model inference
-        batch['dvf_pred'] = model(batch['target'], batch['source'])
+        batch['dvf_pred'] = model(batch['target'].to(device=device), batch['source'].to(device=device))
 
         # deformed images with predicted DVF
-        batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
-        batch['warped_source'] = spatial_transform(batch['source'], batch['dvf_pred'])
+        batch['target_pred'] = spatial_transform(batch['target_original'].to(device=device),
+                                                 batch['dvf_pred'].to(device=device))
+        batch['warped_source'] = spatial_transform(batch['source'].to(device=device),
+                                                   batch['dvf_pred'].to(device=device))
 
         # deformed segmentation with predicted DVF
-        batch['target_cor_seg_pred'] = spatial_transform(batch['source_cor_seg'], batch['dvf_pred'])
-        batch['target_subcor_seg_pred'] = spatial_transform(batch['source_subcor_seg'], batch['dvf_pred'])
+        batch['target_cor_seg_pred'] = spatial_transform(batch['source_cor_seg'].to(device=device),
+                                                         batch['dvf_pred'].to(device=device),
+                                                         interp_mode='nearest')
+        batch['target_subcor_seg_pred'] = spatial_transform(batch['source_subcor_seg'].to(device=device),
+                                                            batch['dvf_pred'].to(device=device),
+                                                            interp_mode='nearest')
 
         # save the outputs
         id = inference_dataset.subject_list[idx]
