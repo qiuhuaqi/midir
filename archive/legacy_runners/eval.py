@@ -73,7 +73,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
             """
             Calculate metrics
             """
-            metric_results = metrics_utils.calculate_metrics(data_dict, model.params.metric_groups)
+            metric_results = metrics_utils.measure_metrics(data_dict, model.params.metric_groups)
             metrics_reporter.collect(metric_results)
             """"""
 
