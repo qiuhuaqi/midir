@@ -1,0 +1,8 @@
+# @package _group_
+name: MIRTK
+mirtk_params:
+  work_dir:
+  sim: NMI
+  ds: 8
+  be: 1e-4
+  bins: 64
