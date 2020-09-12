@@ -12,7 +12,7 @@ from utils.image import upsample_image
 
 def load_nifti(path, data_type=np.float32, nim=False):
     xnim = nib.load(path)
-    # x = xnim.get_data().astype(data_type)  # deprecated nibabel>5.0
+    # x = xnim.get_data().astype(data_type)  # deprecated in nibabel>5.0
     x = np.asanyarray(xnim.dataobj).astype(data_type)
     if nim:
         return x, xnim
