@@ -22,7 +22,7 @@ import utils.experiment.model
 sys.path.insert(0, f'{os.getcwd()}/src')
 
 from archive.runners.helpers import MetricReporter
-from utils.metric import calculate_metrics
+from utils.metric import measure_metrics
 from utils import misc
 from utils.image_io import save_nifti, split_volume_idmat
 from utils.transformation import dof_to_dvf
@@ -196,7 +196,7 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
         """
         Calculate metrics
         """
-        metric_results = calculate_metrics(data_dict, metric_groups)
+        metric_results = measure_metrics(data_dict, metric_groups)
         metrics_reporter.collect(metric_results)
         """"""
 
