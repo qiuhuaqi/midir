@@ -1,8 +1,8 @@
 # @package _global_
-defaults:
-    - network: dvfnet
-    - loss: nmi
-    - transformation: dvf
+model_name: 'baseline'  # 'baseline' or 'dl'
+gpu: 0
+analyse: True
+metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
 
 data:
     data_dir: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/camcan_my/crop176-192-160_cps10_sigma1_disp4/test
@@ -11,6 +11,9 @@ data:
     data_pair: intra
     atlas_path: /vol/biomedic2/hq615/data/dl_registration/_camcan/camcan_my/atlas/sub-CC320267
 
-gpu: 0
-analyse: True
-metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
+defaults:
+    - network: dvfnet
+    - loss: nmi
+    - transformation: dvf
+    - baseline:
+      optional: true
