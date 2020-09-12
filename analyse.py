@@ -1,4 +1,4 @@
-""" Calculate metric results from the model predictions """
+""" Calculate metric results from the model predictions/outputs"""
 import os
 import argparse
 from tqdm import tqdm
@@ -8,7 +8,7 @@ import numpy as np
 # sys.path.append('../')
 
 from utils.image_io import load_nifti
-from utils.metric import calculate_metrics
+from utils.metric import measure_metrics
 from utils.experiment import MetricReporter
 
 
@@ -46,7 +46,7 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
                     data_dict[k] = x[np.newaxis, np.newaxis, ...]
 
         # calculate metric for one validation batch
-        metric_result_step = calculate_metrics(data_dict, metric_groups, return_tensor=False)
+        metric_result_step = measure_metrics(data_dict, metric_groups, return_tensor=False)
         metric_reporter.collect(metric_result_step)
 
     # save the metric results

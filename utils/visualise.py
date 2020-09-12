@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 
 def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=20):
-    """dvf.yaml shape (2, H, W)"""
+    """dvf shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
     else:
@@ -82,9 +82,8 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 #     ax.set_title('HSV', fontsize=title_font_size, pad=title_pad)
 
 
-def result_fig(vis_data_dict, save_path=None, title_font_size=20, dpi=100, show=False, close=False):
-    """Plot visual results in a single figure with subplots,
-    input data in vis_data_dict should have either"""
+def plot_result_fig(vis_data_dict, save_path=None, title_font_size=20, dpi=100, show=False, close=False):
+    """Plot visual results in a single figure/subplots. DVF in vis_data_dict should be shaped (dim, *sizes)"""
 
     ## set up the figure
     fig = plt.figure(figsize=(30, 18))
@@ -200,5 +199,5 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
     else:
         fig_save_path = None
 
-    fig = result_fig(vis_data_dict, save_path=fig_save_path, dpi=dpi)
+    fig = plot_result_fig(vis_data_dict, save_path=fig_save_path, dpi=dpi)
     return fig
