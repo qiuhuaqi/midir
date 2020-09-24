@@ -7,9 +7,9 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from data.datasets import BrainLoadingDataset
+from data.datasets import BrainInterSubject3DEval
 from model.baselines import Identity, MirtkFFD, AntsSyN
-from model.lightning import LightningDLReg
+from lightning import LightningDLReg
 from model.transformations import spatial_transform
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
@@ -22,13 +22,13 @@ random.seed(7)
 
 
 def get_inference_model(cfg):
-    if cfg.model_name == 'dl':
+    if cfg.model_type == 'dl':
         # TODO: DL model load model checkpoint; 2) eval mode; 3)put on GPU
         model = LightningDLReg(hparams=cfg)
 
-    elif cfg.model_name == 'baseline':
+    elif cfg.model_type == 'baseline':
         if cfg.baseline.name == 'Id':
-            model = Identity(cfg.data.dim)
+            model = Identity(cfg.dim)
 
         elif cfg.baseline.name == 'MIRTK':
             model = MirtkFFD(hparams=cfg.baseline.mirtk_params)
@@ -40,7 +40,7 @@ def get_inference_model(cfg):
             raise ValueError(f"Unknown baseline: {cfg.baseline.name}")
 
     else:
-        raise ValueError(f"Unknown model_name: {cfg.model_name}")
+        raise ValueError(f"Unknown model_name: {cfg.model_type}")
     return model
 
 
@@ -56,17 +56,18 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
                 batch[k] = x.unsqueeze(1).to(device=device)
 
         # model inference
-        batch['dvf_pred'] = model(batch['target'], batch['source'])  # TODO: output needs to be as_type input
+        batch['dvf_pred'] = model(batch['target'], batch['source'])
 
         # deformed images with predicted DVF
-        batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
         batch['warped_source'] = spatial_transform(batch['source'], batch['dvf_pred'])
+        if 'target_original' in batch.keys():
+            batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
 
         # deformed segmentation with predicted DVF
-        batch['target_cor_seg_pred'] = spatial_transform(batch['source_cor_seg'], batch['dvf_pred'],
-                                                         interp_mode='nearest')
-        batch['target_subcor_seg_pred'] = spatial_transform(batch['source_subcor_seg'], batch['dvf_pred'],
-                                                            interp_mode='nearest')
+        if 'source_seg' in batch.keys():
+            # apply estimated transformation to segmentation
+            batch['warped_source_seg'] = spatial_transform(batch['source_seg'], batch['dvf_pred'],
+                                                           interp_mode='nearest')
 
         # save the outputs
         subj_id = inference_dataset.subject_list[idx]
@@ -91,7 +92,7 @@ def main(cfg: DictConfig) -> None:
         device = torch.device('cpu')
 
     # configure dataset & model
-    inference_dataset = BrainLoadingDataset(**cfg.data)
+    inference_dataset = BrainInterSubject3DEval(**cfg.data)
     model = get_inference_model(cfg)
 
     # run inference
