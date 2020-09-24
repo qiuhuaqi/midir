@@ -1,13 +1,17 @@
 import math
+import numpy as np
 
 import torch
 from torch import nn as nn
+import torch.nn.functional as F
 
 from model.losses import window_func
 from utils.image import normalise_intensity
+from utils.misc import param_dim_setup
 
 
 class MILossBSpline(nn.Module):
+    # (Not in use due to memory issue with polynomial B-spline)
     def __init__(self,
                  target_min=0.0,
                  target_max=1.0,
@@ -230,3 +234,53 @@ class MILossGaussian(nn.Module):
             return -torch.mean((ent_tar + ent_src) / ent_joint)
         else:
             return -torch.mean(ent_tar + ent_src - ent_joint)
+
+
+class LNCCLoss(nn.Module):
+    """
+    Local Normalized Cross Correlation loss
+    Modified on VoxelMorph implementation:
+    https://github.com/voxelmorph/voxelmorph/blob/5273132227c4a41f793903f1ae7e27c5829485c8/voxelmorph/torch/losses.py#L7
+    """
+    def __init__(self, window_size=9):
+        super(LNCCLoss, self).__init__()
+        self.window_size = window_size
+
+    def forward(self, tar, src):
+        # products and squares
+        tar2 = tar * tar
+        src2 = src * src
+        tar_src = tar * src
+
+        # set window size
+        dim = tar.dim() - 2
+        window_size = param_dim_setup(self.window_size, dim)
+
+        # summation filter for convolution
+        sum_filt = torch.ones(1, 1, *window_size).type_as(tar)
+
+        # set stride and padding
+        stride = (1,) * dim
+        padding = tuple([math.floor(window_size[i]/2) for i in range(dim)])
+
+        # get convolution function of the correct dimension
+        conv_fn = getattr(F, f'conv{dim}d')
+
+        # summing over window by convolution
+        tar_sum = conv_fn(tar, sum_filt, stride=stride, padding=padding)
+        src_sum = conv_fn(src, sum_filt, stride=stride, padding=padding)
+        tar2_sum = conv_fn(tar2, sum_filt, stride=stride, padding=padding)
+        src2_sum = conv_fn(src2, sum_filt, stride=stride, padding=padding)
+        tar_src_sum = conv_fn(tar_src, sum_filt, stride=stride, padding=padding)
+
+        window_num_points = np.prod(window_size)
+        mu_tar = tar_sum / window_num_points
+        mu_src = src_sum / window_num_points
+
+        cov = tar_src_sum - mu_src * tar_sum - mu_tar * src_sum + mu_tar * mu_src * window_num_points
+        tar_var = tar2_sum - 2 * mu_tar * tar_sum + mu_tar * mu_tar * window_num_points
+        src_var = src2_sum - 2 * mu_src * src_sum + mu_src * mu_src * window_num_points
+
+        lncc = cov * cov / (tar_var * src_var + 1e-5)
+
+        return -torch.mean(lncc)

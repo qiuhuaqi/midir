@@ -5,14 +5,23 @@ import torch
 from torch import nn as nn
 
 from model.losses import sim_loss, reg_loss
-from model.networks import networks
+from model.networks.networks import UNet, FFDNet
 from model.transformations import DVFTransform, BSplineFFDTransform
 
 
 def get_network(hparams):
-    """Configure network, return network instance"""
-    network = getattr(networks, hparams.network.name)
-    network = network(dim=hparams.data.dim, **hparams.network.net_config)
+    """Configure network"""
+    if hparams.network.name == "UNet":
+        network = UNet(dim=hparams.data.dim,
+                       **hparams.network.net_config)
+
+    elif hparams.network.name == "FFDNet":
+        network = FFDNet(dim=hparams.data.dim,
+                         img_size=hparams.data.crop_size,
+                         cpt_spacing=hparams.transformation.sigma,
+                         **hparams.network.net_config)
+    else:
+        raise ValueError("Model: Transformation model not recognised")
     return network
 
 
@@ -21,7 +30,7 @@ def get_transformation(hparams):
     if hparams.transformation.type == "DVF":
         transformation = DVFTransform()
 
-    elif hparams.transformation == "FFD":
+    elif hparams.transformation.type == "FFD":
         transformation = BSplineFFDTransform(dim=hparams.data.dim,
                                              img_size=hparams.data.crop_size,
                                              sigma=hparams.transformation.sigma)
@@ -35,8 +44,12 @@ def get_loss_fn(hparams):
     if hparams.loss.sim_loss == 'MSE':
         sim_loss_fn = nn.MSELoss()
 
+    elif hparams.loss.sim_loss == 'LNCC':
+        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.window_size)
+
     elif hparams.loss.sim_loss == 'NMI':
         sim_loss_fn = sim_loss.MILossGaussian(**hparams.loss.mi_cfg)
+
     else:
         raise ValueError(f'Similarity loss not recognised: {hparams.loss.sim_loss}.')
 

@@ -10,7 +10,7 @@ mi_cfg:
   debug: False
 
 sim_weight: 1.0
-loss_roi: True
+loss_roi: False
 
 reg_loss: l2reg
 reg_weight: 0.1
