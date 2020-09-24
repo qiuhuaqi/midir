@@ -30,6 +30,7 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
     metric_group_fns = {'dvf_metrics': measure_dvf_metrics,
                         'image_metrics': measure_image_metrics,
                         'seg_metrics': measure_seg_metrics}
+
     metric_results = dict()
     for group in metric_groups:
         metric_results.update(metric_group_fns[group](metric_data))
@@ -105,32 +106,21 @@ def measure_seg_metrics(metric_data):
     """ Calculate segmentation """
     # TODO: add 2D support (could use a dummy loop)
 
-    seg_metric_results = {}
+    seg_gt = metric_data['target_seg']
+    seg_pred = metric_data['warped_source_seg']
 
-    # cortical segmentation
-    cor_seg_gt = metric_data['target_cor_seg']
-    cor_seg_pred = metric_data['target_cor_seg_pred']
+    results = dict()
 
-    for label_cls in np.unique(cor_seg_gt):
-        # exclude background
-        if label_cls == 0: continue
+    # calculate DICE score for each class
+    for label_cls in np.unique(seg_gt):
+        if label_cls == 0:
+            # ignore background
+            continue
+        results[f'dice_class_{label_cls}'] = calculate_dice_volume(seg_gt, seg_pred, label_class=label_cls)
 
-        seg_metric_results[f'cor_dice_class_{label_cls}'] = calculate_dice_volume(cor_seg_gt, cor_seg_pred,
-                                                                                  label_class=label_cls)
-
-    # sub-cortical segmentation
-    subcor_seg_gt = metric_data['target_subcor_seg']
-    subcor_seg_pred = metric_data['target_subcor_seg_pred']
-
-    for label_cls in np.unique(subcor_seg_gt):
-        # exclude background
-        if label_cls == 0: continue
-
-        seg_metric_results[f'subcor_dice_class_{label_cls}'] = calculate_dice_volume(subcor_seg_gt, subcor_seg_pred,
-                                                                                     label_class=label_cls)
-    # mean dice
-    seg_metric_results['mean_dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
-    return seg_metric_results
+    # calculate mean dice
+    results['mean_dice'] = np.mean([dice for k, dice in results.items()])
+    return results
 
 
 # Individual metrics #

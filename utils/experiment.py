@@ -67,11 +67,11 @@ class MetricReporter(object):
         df.to_pickle(self.save_dir + f'/{self.save_name}_df.pkl')
 
 
-def save_dict_to_csv(d, csv_path):
+def save_dict_to_csv(d, csv_path, model_name='modelX'):
     for k, x in d.items():
         if not isinstance(x, list):
             d[k] = [x]
-    pd.DataFrame(d, index=['modelX']).to_csv(csv_path)
+    pd.DataFrame(d, index=[model_name]).to_csv(csv_path)
 
 
 def set_logger(log_path):

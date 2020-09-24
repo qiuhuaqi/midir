@@ -193,6 +193,10 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
                 # images
                 vis_data_dict[name] = d[0, 0, ...].take(z, axis=axis)  # (X, X)
 
+    # housekeeping: dummy dvf_gt for inter-subject case
+    if not "dvf_gt" in data_dict.keys():
+        vis_data_dict["dvf_gt"] = np.zeros_like(vis_data_dict["dvf_pred"])
+
     # set up figure saving path
     if save_result_dir is not None:
         fig_save_path = os.path.join(save_result_dir, f'epoch{epoch}_axis_{axis}_slice_{z}.png')

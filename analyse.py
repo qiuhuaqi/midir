@@ -17,7 +17,7 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    metric_reporter = MetricReporter(id_list=os.listdir(inference_output_dir), save_dir=save_dir)
+    metric_reporter = MetricReporter(id_list=os.listdir(inference_output_dir))
 
     for d in tqdm(os.listdir(inference_output_dir)):
         subj_output_dir = inference_output_dir + f'/{d}'

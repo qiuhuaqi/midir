@@ -1,5 +1,6 @@
-import json
 import os
+import json
+import omegaconf
 
 
 def setup_dir(dir_path):
@@ -63,9 +64,9 @@ def param_dim_setup(param, dim):
     Returns:
         param: (tuple)
     """
-    if isinstance(param, int) or isinstance(param, float):
+    if isinstance(param, (int, float)):
         param = (param,) * dim
-    elif isinstance(param, tuple) or isinstance(param, list):
+    elif isinstance(param, (tuple, list, omegaconf.listconfig.ListConfig)):
         assert len(param) == dim, \
             f"Dimension ({dim}) mismatch with data"
         param = tuple(param)

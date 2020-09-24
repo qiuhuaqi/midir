@@ -7,6 +7,7 @@ from utils.image_io import save_nifti, load_nifti
 
 MIRTK_PATH = "/vol/medic02/users/hq615/softwares/mirtk-build/mirtk-build-ubuntu18.04/bin/mirtk"
 
+
 class Identity(object):
     def __init__(self, dim):
         self.dim = dim
@@ -65,7 +66,7 @@ class MirtkFFD(object):
         dvf = load_nifti(dvf_pred_path)[..., 0, :]  # (H, W, D, 3)
         dvf = np.moveaxis(dvf, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)
 
-        return torch.from_numpy(dvf).to(device=tar.device)
+        return torch.from_numpy(dvf).type_as(tar)
 
 
 
@@ -76,4 +77,5 @@ class AntsSyN(object):
     def __call__(self, tar, src):
         # dvf = ants_syn_reg(tar, src)
         dvf = None
+        # dvf = dvf.type_as(tar)
         return dvf

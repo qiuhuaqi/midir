@@ -2,16 +2,16 @@
 defaults:
   - data: camcan
   - network: dvfnet
-  - loss: nmi
   - transformation: dvf
+  - loss: nmi
   - training: training
 
 meta:
   model_dir:
   gpu: 1
-  ver: v0.3-dev
-  metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
-  metrics_to_log: ["mean_dice", "aee"]
+  ver: v0.5-dev
+  metric_groups: ["image_metrics", "seg_metrics"]
+  metrics_to_log: ["mean_dice"]
 
   best_metric: mean_dice_mean
   best_metric_init: 0.0
