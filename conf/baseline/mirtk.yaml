@@ -3,6 +3,7 @@ name: MIRTK
 mirtk_params:
   work_dir:
   sim: NMI
+  model: FFD
   ds: 8
   be: 1e-4
   bins: 64

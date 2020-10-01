@@ -58,24 +58,26 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
         # model inference
         batch['dvf_pred'] = model(batch['target'], batch['source'])
 
-        # deformed images with predicted DVF
-        batch['warped_source'] = spatial_transform(batch['source'], batch['dvf_pred'])
-        if 'target_original' in batch.keys():
-            batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
-
-        # deformed segmentation with predicted DVF
+        # deform source segmentation with predicted DVF
         if 'source_seg' in batch.keys():
             # apply estimated transformation to segmentation
             batch['warped_source_seg'] = spatial_transform(batch['source_seg'], batch['dvf_pred'],
                                                            interp_mode='nearest')
 
+        # deform source image with predicted DVF
+        batch['warped_source'] = spatial_transform(batch['source'], batch['dvf_pred'])
+
+        # deform target original image with predicted DVF
+        if 'target_original' in batch.keys():
+            batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
+
         # save the outputs
         subj_id = inference_dataset.subject_list[idx]
+
         output_id_dir = setup_dir(output_dir + f'/{subj_id}')
         for k, x in batch.items():
             x = x.detach().cpu().numpy()
             x = np.moveaxis(x, [0, 1], [-2, -1]).squeeze()
-
             save_nifti(x, path=output_id_dir + f'/{k}.nii.gz')
 
 

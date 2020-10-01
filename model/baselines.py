@@ -5,8 +5,6 @@ import numpy as np
 import torch
 from utils.image_io import save_nifti, load_nifti
 
-MIRTK_PATH = "/vol/medic02/users/hq615/softwares/mirtk-build/mirtk-build-ubuntu18.04/bin/mirtk"
-
 
 class Identity(object):
     def __init__(self, dim):
@@ -21,12 +19,14 @@ class Identity(object):
 
 class MirtkFFD(object):
     """" Baseline method: conventional iterative registration using MIRTK"""
+    MIRTK_PATH = "/vol/biomedic2/hq615/softwares/mirtk_2.1-pre1/mirtk"
+
     def __init__(self, hparams):
         self.hparams = hparams
 
         # configure working directory for MIRTK
         if self.hparams.work_dir is None:
-            self.hparams.work_dir = os.getcwd() + '/workdir'  # TODO: depends on PYTHON CWD, which is hydra.run.dir, bad practice?
+            self.hparams.work_dir = os.getcwd() + '/workdir'
         if not os.path.exists(self.hparams.work_dir):
             os.makedirs(self.hparams.work_dir)
 
@@ -44,11 +44,13 @@ class MirtkFFD(object):
         dof_path = self.hparams.work_dir + '/dof.dof.gz'
 
         # register
-        cmd_register = f'{MIRTK_PATH} register {tar_path} {src_path} ' \
+        cmd_register = f'{MirtkFFD.MIRTK_PATH} register {tar_path} {src_path} ' \
                        f'-sim {self.hparams.sim} ' \
+                       f'-model {self.hparams.model} ' \
                        f'-ds {self.hparams.ds} ' \
                        f'-be {self.hparams.be} ' \
                        f'-bins {self.hparams.bins} ' \
+                       f'-window 7 ' \
                        f'-dofout {dof_path} ' \
                        f'-model FFD ' \
                        f'-levels 3 ' \
@@ -57,7 +59,7 @@ class MirtkFFD(object):
 
         # convert dof to dvf
         dvf_pred_path = self.hparams.work_dir + f'/dvf_pred.nii.gz'
-        cmd_dof_dvf = f'{MIRTK_PATH} convert-dof {dof_path} {dvf_pred_path} ' \
+        cmd_dof_dvf = f'{MirtkFFD.MIRTK_PATH} convert-dof {dof_path} {dvf_pred_path} ' \
                       f'-output-format disp_voxel ' \
                       f'-target {tar_path}'
         subprocess.check_call(cmd_dof_dvf, shell=True)

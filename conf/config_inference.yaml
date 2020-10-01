@@ -2,7 +2,7 @@
 model_type: 'baseline'  # 'baseline' or 'dl'
 gpu: 0
 analyse: True
-metric_groups: ["image_metrics", "seg_metrics"]
+metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
 dim: 3
 
 data:
@@ -12,8 +12,11 @@ data:
     atlas_path:
 
 defaults:
-    - network: dvfnet
-    - loss: nmi
-    - transformation: dvf
+    - network:
+      optional: True
+    - loss:
+      optional: True
+    - transformation:
+      optional: True
     - baseline:
       optional: True

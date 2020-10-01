@@ -78,7 +78,7 @@ def measure_dvf_metrics(metric_data):
 
     dvf_metric_results = dict()
     dvf_metric_results.update({'folding_ratio': folding_ratio,
-                               'mean_negative_detJ': mag_det_jac_det})
+                               'mag_det_jac_det': mag_det_jac_det})
 
     # DVF accuracy metrics if ground truth is available
     if 'dvf_gt' in metric_data.keys():

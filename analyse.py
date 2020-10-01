@@ -17,7 +17,7 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    metric_reporter = MetricReporter(id_list=os.listdir(inference_output_dir))
+    metric_reporter = MetricReporter(id_list=os.listdir(inference_output_dir), save_dir=save_dir)
 
     for d in tqdm(os.listdir(inference_output_dir)):
         subj_output_dir = inference_output_dir + f'/{d}'
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # main single run to analyse outputs of one model
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dir')
+    parser.add_argument('-d', '--model_dir')
     parser.add_argument('-o', '--inference_output_dir')
     parser.add_argument('-s', '--save_dir')
     parser.add_argument('-m', '--metric_groups',
@@ -70,16 +70,16 @@ if __name__ == '__main__':
 
     # default inference output directory
     if args.inference_output_dir is None:
-        args.inference_output_dir = args.dir + '/outputs'
+        args.inference_output_dir = args.model_dir + '/outputs'
 
     # default save directory
     if args.save_dir is None:
-        args.save_dir = args.dir + '/analysis'
+        args.save_dir = args.model_dir + '/analysis'
 
     # pretty print args
-    delattr(args, 'dir')
     for k, i in args.__dict__.items():
         print(f'{k}: {i}')
 
     # run analysis
+    delattr(args, 'model_dir')
     analyse_output(**args.__dict__)

@@ -17,13 +17,13 @@ class BrainInterSubject3DTrain(_BaseDataset3D):
     def _set_path(self, index):
         # choose the target and source subjects/paths
         if self.atlas_path is None:
-            tar_subj_id = self.subject_list[index]
-            self.tar_subj_path = f'{self.data_dir}/{tar_subj_id}'
+            self.tar_subj_id = self.subject_list[index]
+            self.tar_subj_path = f'{self.data_dir}/{self.tar_subj_id}'
         else:
             self.tar_subj_path = self.atlas_path
 
-        src_subj_id = random.choice(self.subject_list)
-        self.src_subj_path = f'{self.data_dir}/{src_subj_id}'
+        self.src_subj_id = random.choice(self.subject_list)
+        self.src_subj_path = f'{self.data_dir}/{self.src_subj_id}'
 
         self.data_path_dict = dict()
         self.data_path_dict['target'] = f'{self.tar_subj_path}/T1_brain.nii.gz'
