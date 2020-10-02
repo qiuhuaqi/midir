@@ -4,10 +4,11 @@ import cv2
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
 from utils.image import bbox_from_mask, bbox_crop
-from model.transformations import spatial_transform
 
 
-def calculate_metrics(metric_data, metric_groups, return_tensor=False):
+# Wrapper functions #
+
+def measure_metrics(metric_data, metric_groups, return_tensor=False):
     """
     Wrapper function for calculating all metrics in Numpy
     Args:
@@ -25,15 +26,15 @@ def calculate_metrics(metric_data, metric_groups, return_tensor=False):
             metric_data[k] = x.cpu().numpy()
 
     # keys must match metric_groups and params.metric_groups
-    # (using groups to share pre-processing)
-    metric_group_fns = {'dvf_metrics': calculate_dvf_metrics,
-                        'image_metrics': calculate_image_metrics,
-                        'seg_metrics': calculate_seg_metrics}
+    # (using groups to share pre-scripts)
+    metric_group_fns = {'dvf_metrics': measure_dvf_metrics,
+                        'image_metrics': measure_image_metrics,
+                        'seg_metrics': measure_seg_metrics}
+
     metric_results = dict()
     for group in metric_groups:
         metric_results.update(metric_group_fns[group](metric_data))
 
-    # cast results back to Tensor if needed
     if return_tensor:
         for k, x in metric_results.items():
             metric_results[k] = torch.tensor(x)
@@ -41,47 +42,52 @@ def calculate_metrics(metric_data, metric_groups, return_tensor=False):
     return metric_results
 
 
-def calculate_dvf_metrics(metric_data):
+def measure_dvf_metrics(metric_data):
     """
     Calculate DVF-related metrics.
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
 
     Args:
-        metric_data: (dict) dvf.yaml shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
+        metric_data: (dict) DVF shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
 
     Returns:
         metric_results: (dict)
     """
-
-    # unpack metric data, keys must match metric_data input
+    # new object to avoid changing data in metric_data
     dvf_pred = metric_data['dvf_pred']
-    dvf_gt = metric_data['dvf_gt']
+    if 'dvf_gt' in metric_data.keys():
+        dvf_gt = metric_data['dvf_gt']
 
+    # mask the DVF with roi mask if given
     if 'roi_mask' in metric_data.keys():
         roi_mask = metric_data['roi_mask']  # (N, 1, *(dims))
 
-        # find brian mask bbox mask
+        # find roi mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
-        # mask by roi mask(N, dim, *dims) * (N, 1, *dims) = (N, dim, *dims)
+        # mask and bbox crop dvf gt and pred by roi_mask
         dvf_pred = dvf_pred * roi_mask
-        dvf_gt = dvf_gt * roi_mask
-
-        # crop out DVF within the roi mask bounding box (N, dim, *dims_cropped)
         dvf_pred = bbox_crop(dvf_pred, mask_bbox)
-        dvf_gt = bbox_crop(dvf_gt, mask_bbox)
 
-    # Jacobian metrics
+        if 'dvf_gt' in metric_data.keys():
+            dvf_gt = dvf_gt * roi_mask
+            dvf_gt = bbox_crop(dvf_gt, mask_bbox)
+
+    # Regularity (Jacobian) metrics
     folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(dvf_pred)
 
-    # metric keys must match params specification
-    return {'aee': calculate_aee(dvf_pred, dvf_gt),
-            'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt),
-            'folding_ratio': folding_ratio,
-            'mean_negative_detJ': mag_det_jac_det}
+    dvf_metric_results = dict()
+    dvf_metric_results.update({'folding_ratio': folding_ratio,
+                               'mag_det_jac_det': mag_det_jac_det})
+
+    # DVF accuracy metrics if ground truth is available
+    if 'dvf_gt' in metric_data.keys():
+        dvf_metric_results.update({'aee': calculate_aee(dvf_pred, dvf_gt),
+                                   'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt)})
+    return dvf_metric_results
 
 
-def calculate_image_metrics(metric_data):
+def measure_image_metrics(metric_data):
     # unpack metric data, keys must match metric_data input
     img = metric_data['target']
     img_pred = metric_data['target_pred']  # (N, 1, *sizes)
@@ -96,51 +102,28 @@ def calculate_image_metrics(metric_data):
     return {'rmse': calculate_rmse(img, img_pred)}
 
 
-def calculate_seg_metrics(metric_data):
-    seg_metric_results = {}
+def measure_seg_metrics(metric_data):
+    """ Calculate segmentation """
+    # TODO: add 2D support (could use a dummy loop)
 
-    # fetch original segmentation masks
-    cor_seg = metric_data["cor_seg"]
-    subcor_seg = metric_data["subcor_seg"]
+    seg_gt = metric_data['target_seg']
+    seg_pred = metric_data['warped_source_seg']
 
-    # apply transformations to get target mask and predicted target mask
-    dvf_gt = metric_data["dvf_gt"]
-    dvf_pred = metric_data["dvf_pred"]
+    results = dict()
 
-    cor_seg_gt = spatial_transform(torch.from_numpy(cor_seg),
-                                   torch.from_numpy(dvf_gt),
-                                   interp_mode='nearest').numpy()
-    cor_seg_pred = spatial_transform(torch.from_numpy(cor_seg),
-                                     torch.from_numpy(dvf_pred),
-                                     interp_mode='nearest').numpy()
-
-    subcor_seg_gt = spatial_transform(torch.from_numpy(subcor_seg),
-                                      torch.from_numpy(dvf_gt),
-                                      interp_mode='nearest').numpy()
-    subcor_seg_pred = spatial_transform(torch.from_numpy(subcor_seg),
-                                        torch.from_numpy(dvf_pred),
-                                        interp_mode='nearest').numpy()
-
-    # dice for cortical segmentation
-    for label_cls in np.unique(cor_seg):
+    # calculate DICE score for each class
+    for label_cls in np.unique(seg_gt):
         if label_cls == 0:
-            continue  # exclude background
-        seg_metric_results[f'cor_dice_class_{label_cls}'] = calculate_dice_volume(cor_seg_gt, cor_seg_pred,
-                                                                                  label_class=label_cls)
+            # ignore background
+            continue
+        results[f'dice_class_{label_cls}'] = calculate_dice_volume(seg_gt, seg_pred, label_class=label_cls)
 
-    # dice for sub-cortical segmentation
-    for label_cls in np.unique(subcor_seg):
-        if label_cls == 0:
-            continue  # exclude background
-        seg_metric_results[f'subcor_dice_class_{label_cls}'] = calculate_dice_volume(subcor_seg_gt, subcor_seg_pred,
-                                                                                     label_class=label_cls)
-    # mean dice
-    seg_metric_results['dice'] = np.mean([dice for k, dice in seg_metric_results.items()])
-    return seg_metric_results
+    # calculate mean dice
+    results['mean_dice'] = np.mean([dice for k, dice in results.items()])
+    return results
 
 
-""""""
-
+# Individual metrics #
 
 def calculate_aee(x, y):
     """
@@ -192,7 +175,7 @@ def calculate_jacobian_det(dvf):
     Calculate Jacobian determinant of displacement field of one image/volume (2D/3D)
 
     Args:
-        dvf: (numpy.ndarray, shape (*sizes, dim) Displacement field
+        dvf: (numpy.ndarray, shape (*sizes, dim)) Displacement field
 
     Returns:
         jac_det: (numpy.adarray, shape (*sizes) Point-wise Jacobian determinant
@@ -201,6 +184,26 @@ def calculate_jacobian_det(dvf):
     jac_det_img = sitk.DisplacementFieldJacobianDeterminant(dvf_img)
     jac_det = sitk.GetArrayFromImage(jac_det_img)
     return jac_det
+
+
+def calculate_dice_volume(mask1, mask2, label_class=0):
+    """
+    Dice score of a specified class between two volumes of label masks.
+    (classes are encoded but by label class number not one-hot )
+    Note: stacks of 2D slices are considered volumes.
+
+    Args:
+        mask1: N label masks, numpy array shaped (H, W, N)
+        mask2: N label masks, numpy array shaped (H, W, N)
+        label_class: the class over which to calculate dice scores
+
+    Returns:
+        volume_dice
+    """
+    mask1_pos = (mask1 == label_class).astype(np.float32)
+    mask2_pos = (mask2 == label_class).astype(np.float32)
+    dice = 2 * np.sum(mask1_pos * mask2_pos) / (np.sum(mask1_pos) + np.sum(mask2_pos))
+    return dice
 
 
 def contour_distances_2d(image1, image2, dx=1):
@@ -315,21 +318,3 @@ def calculate_dice_stack(mask1, mask2, label_class=0):
     return dice
 
 
-def calculate_dice_volume(mask1, mask2, label_class=0):
-    """
-    Dice score of a specified class between two volumes of label masks.
-    (classes are encoded but by label class number not one-hot )
-    Note: stacks of 2D slices are considered volumes.
-
-    Args:
-        mask1: N label masks, numpy array shaped (H, W, N)
-        mask2: N label masks, numpy array shaped (H, W, N)
-        label_class: the class over which to calculate dice scores
-
-    Returns:
-        volume_dice
-    """
-    mask1_pos = (mask1 == label_class).astype(np.float32)
-    mask2_pos = (mask2 == label_class).astype(np.float32)
-    dice = 2 * np.sum(mask1_pos * mask2_pos) / (np.sum(mask1_pos) + np.sum(mask2_pos))
-    return dice

@@ -57,7 +57,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
             """ Inference & loss """
             with torch.no_grad():
                 eval_losses = process_batch(model, data_dict, loss_fn, args)
-                loss_reporter.collect_value(eval_losses)
+                loss_reporter.collect(eval_losses)
 
                 # warp original target image using the predicted dvf.yaml
                 # todo: this is where the extra memory usage is from training to validation, move to CPU?
@@ -67,14 +67,14 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
 
             # cast to numpy array
             for name, data_point in data_dict.items():
-                data_dict[name] = data_point.cpu().detach().numpy()
+                data_dict[name] = data_point.detach().cpu().numpy()
             """"""
 
             """
             Calculate metrics
             """
-            metric_results = metrics_utils.calculate_metrics(data_dict, model.params.metric_groups)
-            metrics_reporter.collect_value(metric_results)
+            metric_results = metrics_utils.measure_metrics(data_dict, model.params.metric_groups)
+            metrics_reporter.collect(metric_results)
             """"""
 
             """ 

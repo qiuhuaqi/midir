@@ -6,7 +6,8 @@ import subprocess
 import sys
 import pandas as pd
 
-from utils import misc
+import utils.misc
+import utils.experiment.model
 
 # note: need to activate virtualenv before
 
@@ -38,7 +39,7 @@ args = parser.parse_args()
 
 # load the base parameters from the JSON file in parent_dir
 json_path = os.path.join(args.parent_dir, 'params_mirtk.json')
-params = misc.Params(json_path)
+params = utils.misc.Params(json_path)
 
 # read the parameter settings from csv file
 params_dict = pd.read_csv(args.params_list_csv).to_dict('list')

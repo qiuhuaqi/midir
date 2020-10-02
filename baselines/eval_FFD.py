@@ -15,10 +15,14 @@ from tqdm import tqdm
 
 import sys
 # always run from one dir above ./src
+import utils.experiment
+import utils.experiment.experiment
+import utils.experiment.model
+
 sys.path.insert(0, f'{os.getcwd()}/src')
 
 from archive.runners.helpers import MetricReporter
-from utils.metric import calculate_metrics
+from utils.metric import measure_metrics
 from utils import misc
 from utils.image_io import save_nifti, split_volume_idmat
 from utils.transformation import dof_to_dvf
@@ -74,7 +78,7 @@ model_dir = misc.setup_dir(f"{args.run_dir}/sim_{args.sim}_CPS_{args.CPS}_BE_{ar
 parout = path.join(model_dir, "par.conf")
 
 # set up logger
-misc.set_logger(path.join(model_dir, 'ffd_eval.log'))
+utils.experiment.set_logger(path.join(model_dir, 'ffd_eval.log'))
 logging.info('Starting FFD evaluation...')
 
 # instantiate metric result reporters
@@ -192,8 +196,8 @@ with tqdm(total=len(os.listdir(args.data_dir))) as t:
         """
         Calculate metrics
         """
-        metric_results = calculate_metrics(data_dict, metric_groups)
-        metrics_reporter.collect_value(metric_results)
+        metric_results = measure_metrics(data_dict, metric_groups)
+        metrics_reporter.collect(metric_results)
         """"""
 
         """ 

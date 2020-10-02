@@ -3,10 +3,14 @@ import argparse
 import logging
 import torch
 
+import model.utils
+import utils.experiment
+import utils.experiment.experiment
+import utils.misc
+import utils.experiment.model
 from data.datasets import BrainData
 from archive.legacy_model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
 from model.losses import loss_fn
-import utils.misc as misc_utils
 
 from archive.runners.train import train_and_validate
 from archive.runners.eval import evaluate
@@ -63,7 +67,7 @@ else:
 assert os.path.exists(args.model_dir), f"Model directory does not exist at \n\t {args.model_dir}."
 
 # set up the logger
-misc_utils.set_logger(f"{args.model_dir}/{args.run}.log")
+utils.experiment.set_logger(f"{args.model_dir}/{args.run}.log")
 logging.info("What a beautiful day to save lives!")
 logging.info(f"Model: \n\t{args.model_dir}")
 
@@ -71,7 +75,7 @@ logging.info(f"Model: \n\t{args.model_dir}")
 json_path = os.path.join(args.model_dir, 'params.json')
 logging.info(f"Loading JSON configuration...")
 assert os.path.isfile(json_path), "No JSON configuration file found at {}".format(json_path)
-params = misc_utils.Params(json_path)
+params = utils.misc.Params(json_path)
 logging.info("- Done.")
 
 """Data"""
@@ -113,7 +117,7 @@ elif args.run == "test":
         model_ckpt_path = f"{args.model_dir}/{args.ckpt_file}"
         assert os.path.exists(model_ckpt_path), "Model checkpoint does not exist."
         logging.info(f"Loading model parameters from: {model_ckpt_path}")
-        misc_utils.load_checkpoint(model_ckpt_path, reg_model)
+        model.utils.load_checkpoint(model_ckpt_path, reg_model)
 
     logging.info("Running testing...")
     evaluate(reg_model, loss_fn, brain_data.test_dataloader, args, val=False)

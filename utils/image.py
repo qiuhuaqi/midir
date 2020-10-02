@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 from utils.misc import param_dim_setup
 
+
 def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
     """
     Crop and/or pad input to new size.
@@ -235,8 +236,8 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 
     # find non-zero locations in the mask
     nonzero_indices = np.nonzero(mask > 0)
-    bbox = [(nonzero_indices[i+1].min(), nonzero_indices[i+1].max())
-                    for i in range(dim)]
+    bbox = [(nonzero_indices[i + 1].min(), nonzero_indices[i + 1].max())
+            for i in range(dim)]
 
     # pad pad_ratio of the minimum distance
     #  from mask bounding box to the image boundaries (half each side)

@@ -1,21 +1,35 @@
 import os
+import random
+import numpy as np
 from omegaconf import DictConfig
 
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from data.datasets import CamCANSynthDataset, BrainLoadingDataset
+# from data.datasets import CamCANSynthDataset, BrainLoadingDataset
+from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
 
 from model.transformations import spatial_transform
 from model.utils import get_network, get_transformation, get_loss_fn
 
-from utils.misc import worker_init_fn
 from utils.image import bbox_from_mask
-from utils.metric import calculate_metrics
+from utils.metric import measure_metrics
 from utils.visualise import visualise_result
 
 import pytorch_lightning as pl
+
+
+def worker_init_fn(worker_id):
+    """Callback function passed to DataLoader to initialise the workers"""
+    # # generate a random sequence of seeds for the workers
+    # print(f"Random state before generating the random seed: {random.getstate()}")
+    random_seed = random.randint(0, 2 ** 32 - 1)
+    # ##debug
+    # print(f"Random state after generating the random seed: {random.getstate()}")
+    # print(f"Random seed for worker {worker_id} is: {random_seed}")
+    # ##
+    np.random.seed(random_seed)
 
 
 class LightningDLReg(pl.LightningModule):
@@ -31,37 +45,18 @@ class LightningDLReg(pl.LightningModule):
         self.best_metric_result = self.hparams.meta.best_metric_init
 
     def on_fit_start(self):
-        # log dummy initial best hparams w/ metrics
+        # log dummy initial hparams w/ best metrics
         best_metric_init = {'best/' + self.hparams.meta.best_metric: self.hparams.meta.best_metric_init}
         self.logger.log_hyperparams(self.hparams, metrics=best_metric_init)
 
     def train_dataloader(self):
         assert os.path.exists(self.hparams.data.train_path), \
-            f"Train data path does not exist: {self.hparams.data.val_path}"
+            f"Training data path does not exist: {self.hparams.data.train_path}"
 
-        # training data
-        if self.hparams.data.dim == 2:
-            # synthesis on-the-fly training data
-            # TODO: adjust to hydra configuration
-            train_dataset = CamCANSynthDataset(run="train",
-                                               data_path=self.hparams.data.train_path,
-                                               dim=self.params.data.dim,
-                                               cps=self.params.synthesis_cps,
-                                               sigma=self.params.synthesis_sigma,
-                                               disp_max=self.params.disp_max,
-                                               crop_size=self.params.crop_size,
-                                               slice_range=tuple(self.params.slice_range))
-
-        elif self.hparams.data.dim == 3:
-            # load pre-generated training data
-            train_dataset = BrainLoadingDataset(run="train",
-                                                data_path=self.hparams.data.train_path,
-                                                dim=self.hparams.data.dim,
-                                                data_pair=self.hparams.data.data_pair,
-                                                atlas_path=self.hparams.data.atlas_path)
-
-        else:
-            raise ValueError("Data parsing: dimension of data not specified/recognised.")
+        train_dataset = BrainInterSubject3DTrain(self.hparams.data.train_path,
+                                                 self.hparams.data.crop_size,
+                                                 modality=self.hparams.data.modality,
+                                                 atlas_path=self.hparams.data.atlas_path)
 
         return DataLoader(train_dataset,
                           batch_size=self.hparams.data.batch_size,
@@ -73,12 +68,13 @@ class LightningDLReg(pl.LightningModule):
 
     def val_dataloader(self):
         assert os.path.exists(self.hparams.data.val_path), \
-            f"Val data path does not exist: {self.hparams.data.val_path}"
-        val_dataset = BrainLoadingDataset(data_path=self.hparams.data.val_path,
-                                          run="val",
-                                          dim=self.hparams.data.dim,
-                                          data_pair=self.hparams.data.data_pair,
-                                          atlas_path=self.hparams.data.atlas_path)
+            f"Validation data path does not exist: {self.hparams.data.val_path}"
+
+        val_dataset = BrainInterSubject3DEval(self.hparams.data.val_path,
+                                              self.hparams.data.crop_size,
+                                              modality=self.hparams.data.modality,
+                                              atlas_path=self.hparams.data.atlas_path)
+
         return DataLoader(val_dataset,
                           batch_size=1,
                           shuffle=False,
@@ -96,10 +92,10 @@ class LightningDLReg(pl.LightningModule):
 
     def _roi_crop(self, x, mask):
         bbox, _ = bbox_from_mask(mask.squeeze(1).cpu().numpy())
-        # TODO: add Tensor support
+        # TODO: 1) add Tensor support, 2) move this to utility
         for i in range(self.hparams.data.dim):
             x = x.narrow(i + 2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
-        # return a view instead of a copy?
+        # returns a view instead of a copy?
         return x
 
     def loss_fn(self, batch, warped_source, dvf_pred):
@@ -122,9 +118,11 @@ class LightningDLReg(pl.LightningModule):
         return losses
 
     def _step(self, batch):
+        """ Forward pass inference + compute loss """
         dvf_pred = self.forward(batch['target'], batch['source'])
         warped_source = spatial_transform(batch['source'], dvf_pred)
         losses = self.loss_fn(batch, warped_source, dvf_pred)
+
         step_dict = {'dvf_pred': dvf_pred,
                      'warped_source': warped_source}
         return losses, step_dict
@@ -136,35 +134,48 @@ class LightningDLReg(pl.LightningModule):
         if self.global_step % self.trainer.row_log_interval == 0:
             for k, loss in train_losses.items():
                 # self.logger.experiment.add_scalars(k, {'train': loss}, global_step=self.global_step)
-                self.logger.experiment.add_scalar(f'train_loss/{k}', loss, global_step=self.global_step)
-
-            return {'loss': train_losses['loss']}
+                self.logger.experiment.add_scalar(f'train_loss/{k}',
+                                                  loss,
+                                                  global_step=self.global_step)
+        return {'loss': train_losses['loss']}
 
     def validation_step(self, batch, batch_idx):
-        # reshape data (to be compatible with 2D)
+        # reshape data from dataloader
+        # TODO: hacky reshape data is not compatible with 3D when batch_size>1
         for k, x in batch.items():
             if k == "dvf_gt":
-                batch[k] = x[0, ...]  # (N, dim, *(dims))
+                batch[k] = x[0, ...]  # (N, dim, *(sizes))
             else:
                 batch[k] = x.transpose(0, 1)  # (N, 1, *(dims))
 
-        # inference
+        # run inference, compute losses and outputs
         val_losses, step_dict = self._step(batch)
-        step_dict["target_pred"] = spatial_transform(batch["target_original"], step_dict["dvf_pred"])
+
+        if 'source_seg' in batch.keys():
+            # apply estimated transformation to segmentation
+            step_dict['warped_source_seg'] = spatial_transform(batch['source_seg'], step_dict['dvf_pred'],
+                                                               interp_mode='nearest')
+
+        if 'target_original' in batch.keys():
+            step_dict['target_pred'] = spatial_transform(batch['target_original'], step_dict['dvf_pred'])
 
         # calculate metric for one validation batch
         val_data = dict(batch, **step_dict)  # merge data dicts
-        metric_result_step = calculate_metrics(val_data, self.hparams.meta.metric_groups, return_tensor=True)
+        metric_result_step = measure_metrics(val_data,
+                                             self.hparams.meta.metric_groups,
+                                             return_tensor=True)
 
-        # log one validation visual result figure
+        # log one figure to visually monitor training
         if batch_idx == 0:
             val_fig = visualise_result(val_data, axis=2)
-            self.logger.experiment.add_figure('val', val_fig, global_step=self.global_step, close=True)
-
+            self.logger.experiment.add_figure('val',
+                                              val_fig,
+                                              global_step=self.global_step,
+                                              close=True)
         return val_losses, metric_result_step
 
     def _log_metrics(self, metric_result):
-        """Log metric results"""
+        """ Log metrics """
         if self.hparams.meta.metrics_to_log is not None:
             # log only selected metrics
             for metric in self.hparams.meta.metrics_to_log:
@@ -176,10 +187,12 @@ class LightningDLReg(pl.LightningModule):
                                                   global_step=self.global_step)
         else:
             for k, x in metric_result.items():
-                self.logger.experiment.add_scalar(f'metrics/{k}', x, global_step=self.global_step)
+                self.logger.experiment.add_scalar(f'metrics/{k}',
+                                                  x,
+                                                  global_step=self.global_step)
 
     def _check_log_best_metric(self, metric_result):
-        """check and update best metric"""
+        """ Update the best metric """
         current = metric_result[self.hparams.meta.best_metric]
 
         if self.hparams.meta.best_metric_mode == 'max':
@@ -202,8 +215,9 @@ class LightningDLReg(pl.LightningModule):
         for k in losses_list[0].keys():
             loss_reduced = torch.stack([x[k] for x in losses_list]).mean()
             losses_reduced[k] = loss_reduced
-            self.logger.experiment.add_scalar(f'val_loss/{k}', loss_reduced, global_step=self.global_step)
-            # self.logger.experiment.add_scalars(k, {'val': loss_reduced}, global_step=self.global_step)
+            self.logger.experiment.add_scalar(f'val_loss/{k}',
+                                              loss_reduced,
+                                              global_step=self.global_step)
 
         # reduce and log validation metric results (mean & std)
         metric_result_list = [x[1] for x in outputs]
@@ -218,4 +232,4 @@ class LightningDLReg(pl.LightningModule):
         self._check_log_best_metric(metric_result_reduced)
 
         # return callback metrics for checkpointing
-        return {'val_loss': losses_reduced['loss'], 'dice_mean': metric_result_reduced['dice_mean']}
+        return {'val_loss': losses_reduced['loss'], 'mean_dice_mean': metric_result_reduced['mean_dice_mean']}

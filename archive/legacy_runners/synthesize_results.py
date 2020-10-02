@@ -72,7 +72,6 @@ def metrics_to_table_v2(metrics):
     return res
 
 
-
 if __name__ == "__main__":
     args = parser.parse_args()
 
