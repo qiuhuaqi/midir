@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model.losses.window_func import cubic_bspline_torch
+from model.loss.window_func import cubic_bspline_torch
 from utils.transformation import normalise_dvf
 from utils.misc import param_dim_setup
 
@@ -177,3 +177,11 @@ def spatial_transform(x, dvf, interp_mode="bilinear"):
     return F.grid_sample(x, deformed_meshgrid, mode=interp_mode, align_corners=False)
 
 
+def ml_spatial_transform(x_pyr, dvfs, interp_mode='bilinear'):
+    """ Multi-resolution spatial transformation"""
+    assert len(x_pyr) == len(dvfs)
+    warped_x_pyr = []
+    for (x, dvf) in zip(x_pyr, dvfs):
+        warped_x = spatial_transform(x, dvf, interp_mode=interp_mode)
+        warped_x_pyr.append(warped_x)
+    return warped_x_pyr

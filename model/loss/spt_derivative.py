@@ -11,7 +11,8 @@ def finite_diff(x, mode="central", boundary="Neumann"):
         x_diff_backward = finite_diff_oneside(x, direction="backward", boundary=boundary)
         return [(x_diff_fw + x_diff_bw) / 2
                 for (x_diff_fw, x_diff_bw) in zip(x_diff_forward, x_diff_backward)]
-    else: # "forward" or "backward"
+    else:
+        # "forward" or "backward"
         return finite_diff_oneside(x, direction=mode, boundary=boundary)
 
 

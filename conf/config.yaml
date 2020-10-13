@@ -1,9 +1,9 @@
 # @package _global_
 defaults:
   - data: camcan
-  - network: dvfnet
+  - network: mlunet
   - transformation: dvf
-  - loss: nmi
+  - loss: mse
   - training: training
 
 meta:
@@ -11,7 +11,8 @@ meta:
   gpu: 1
   ver: v0.5-dev
   metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
-  metrics_to_log: ["mean_dice"]
+  metrics_to_log: ["mean_dice", "folding_ratio"]
+  ml_lvls: 3
 
   best_metric: mean_dice_mean
   best_metric_init: 0.0

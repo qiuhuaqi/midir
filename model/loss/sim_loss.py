@@ -5,7 +5,7 @@ import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
-from model.losses import window_func
+from model.loss import window_func
 from utils.image import normalise_intensity
 from utils.misc import param_dim_setup
 

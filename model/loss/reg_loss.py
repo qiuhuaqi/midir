@@ -1,6 +1,7 @@
+""" Transformation regularisation losses """
 import torch
 
-from utils.spt_derivative import finite_diff
+from model.loss.spt_derivative import finite_diff
 
 
 def l2reg(dvf):
@@ -37,6 +38,7 @@ def bending_energy(dvf):
     return torch.cat(dvf_d2, dim=1).pow(2).sum(dim=1).mean()
 
 
+# TODO: Differentiable Jacobian constraint loss
 # def compute_jacobian(x):
 #     """ reference code from Chen"""
 #     bsize, csize, height, width = x.size()

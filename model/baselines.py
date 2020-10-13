@@ -52,7 +52,6 @@ class MirtkFFD(object):
                        f'-bins {self.hparams.bins} ' \
                        f'-window 7 ' \
                        f'-dofout {dof_path} ' \
-                       f'-model FFD ' \
                        f'-levels 3 ' \
                        f'-padding -1 '
         subprocess.check_call(cmd_register, shell=True)

@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from PIL import Image
 from utils.misc import param_dim_setup
+import torch.nn.functional as F
 
 
 def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
@@ -263,3 +264,27 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 def upsample_image(image, size):
     return np.array(Image.fromarray(image).resize((size, size)))
 
+
+def roi_crop(x, mask, dim):
+    """ Crop input Tensor by the bounding box of roi mask """
+
+    if type(x) == torch.Tensor:
+        bbox, _ = bbox_from_mask(mask.squeeze(1).cpu().numpy())
+    elif type(x) == np.ndarray:
+        bbox, _ = bbox_from_mask(mask)
+
+    for i in range(dim):
+        x = x.narrow(i + 2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
+    # returns a view instead of a copy?
+    return x
+
+
+def create_img_pyramid(x, lvls):
+    """ Create image pyramid, low-resolution to high-resolution"""
+    for l in range(lvls):
+        if l == 0:
+            x_pyr = [x]
+        else:
+            x_pyr.append(F.interpolate(x, scale_factor=0.5 ** l))
+    x_pyr.reverse()
+    return x_pyr

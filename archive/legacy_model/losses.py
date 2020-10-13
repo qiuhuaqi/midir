@@ -4,8 +4,8 @@ Loss functions
 
 import torch.nn as nn
 
-from model.losses.reg_loss import l2reg, bending_energy
-from model.losses.sim_loss import MILossGaussian
+from model.loss.reg_loss import l2reg, bending_energy
+from model.loss.sim_loss import MILossGaussian
 from utils.image import bbox_from_mask
 
 

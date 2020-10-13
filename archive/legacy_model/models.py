@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from model.networks.networks import UNet, FFDNet, SiameseNetFFD, SiameseNet
+from model.network.networks import UNet, FFDNet, SiameseNetFFD, SiameseNet
 from model.transformations import BSplineFFDTransform, DVFTransform
 from utils.image_io import save_nifti, load_nifti
 

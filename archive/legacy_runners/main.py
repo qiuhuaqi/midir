@@ -10,7 +10,7 @@ import utils.misc
 import utils.experiment.model
 from data.datasets import BrainData
 from archive.legacy_model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
-from model.losses import loss_fn
+from model.loss import loss_fn
 
 from archive.runners.train import train_and_validate
 from archive.runners.eval import evaluate

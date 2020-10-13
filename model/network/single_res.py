@@ -4,7 +4,8 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-from model.networks.base import conv_Nd, avg_pool, conv_blocks_2, conv_blocks_3, conv_block_1
+from model.network.base import conv_Nd, avg_pool
+from model.network.base import conv_blocks_2, conv_blocks_3, conv_block_1
 from utils.misc import param_dim_setup
 
 
@@ -17,7 +18,8 @@ class UNet(nn.Module):
                  dim=2,
                  enc_channels=(16, 32, 32, 32, 32),
                  dec_channels=(32, 32, 32, 16),
-                 out_channels=(16, 16)
+                 out_channels=(16, 16),
+                 conv_before_out=True
                  ):
         super(UNet, self).__init__()
 
@@ -49,24 +51,32 @@ class UNet(nn.Module):
         # upsampler
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
 
-        # conv layers before prediction
-        self.out_layers = nn.ModuleList()
-        for i in range(len(out_channels)):
-            in_ch = dec_channels[-1] + enc_channels[0] if i == 0 else out_channels[i-1]
-            self.out_layers.append(
-                nn.Sequential(
-                    conv_Nd(dim, in_ch, out_channels[i]),  # stride=1
-                    nn.LeakyReLU(0.2)
+        # (optional) conv layers before prediction
+        if conv_before_out:
+            self.out_layers = nn.ModuleList()
+            for i in range(len(out_channels)):
+                in_ch = dec_channels[-1] + enc_channels[0] if i == 0 else out_channels[i-1]
+                self.out_layers.append(
+                    nn.Sequential(
+                        conv_Nd(dim, in_ch, out_channels[i]),  # stride=1
+                        nn.LeakyReLU(0.2)
+                    )
                 )
+
+            # final prediction layer with additional conv layers
+            self.out_layers.append(
+                conv_Nd(dim, out_channels[-1], dim)
             )
 
-        # final prediction layer
-        self.out_layers.append(
-            conv_Nd(dim, out_channels[-1], dim)
-        )
+        else:
+
+            # final prediction layer without additional conv layers
+            self.out_layers = nn.ModuleList()
+            self.out_layers.append(
+                conv_Nd(dim, dec_channels[-1] + enc_channels[0], dim)
+            )
 
     def forward(self, tar, src):
-        # concat
         x = torch.cat((tar, src), dim=1)
 
         # encoder
@@ -74,18 +84,18 @@ class UNet(nn.Module):
         for enc in self.enc:
             fm_enc.append(enc(fm_enc[-1]))
 
-        # decoder: conv + upsample + concatenate series (to full resolution)
-        fm_dec = fm_enc[-1]
+        # decoder: conv + upsample + concatenate skip-connections (to full resolution)
+        dec_out = fm_enc[-1]
         for i, dec in enumerate(self.dec):
-            fm_dec = dec(fm_dec)
-            fm_dec = self.upsample(fm_dec)
-            fm_dec = torch.cat([fm_dec, fm_enc[-2-i]], dim=1)
+            dec_out = dec(dec_out)
+            dec_out = self.upsample(dec_out)
+            dec_out = torch.cat([dec_out, fm_enc[-2-i]], dim=1)
 
         # further convs and prediction
-        y = fm_dec
+        y = dec_out
         for out_layer in self.out_layers:
             y = out_layer(y)
-        return y
+        return [y]
 
 
 class FFDNet(nn.Module):
@@ -159,7 +169,7 @@ class FFDNet(nn.Module):
         # 1x1(x1) conv and prediction
         for out_layer in self.out_layers:
             y = out_layer(y)
-        return y
+        return [y]
 
 
 # ---

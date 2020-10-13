@@ -9,7 +9,7 @@ import torch
 
 from data.datasets import BrainInterSubject3DEval
 from model.baselines import Identity, MirtkFFD, AntsSyN
-from lightning import LightningDLReg
+# from lightning import LightningDLReg
 from model.transformations import spatial_transform
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
@@ -24,7 +24,8 @@ random.seed(7)
 def get_inference_model(cfg):
     if cfg.model_type == 'dl':
         # TODO: DL model load model checkpoint; 2) eval mode; 3)put on GPU
-        model = LightningDLReg(hparams=cfg)
+        # model = LightningDLReg(hparams=cfg)
+        pass
 
     elif cfg.model_type == 'baseline':
         if cfg.baseline.name == 'Id':

@@ -2,11 +2,13 @@ import os
 import shutil
 
 import torch
-from torch import nn as nn
 
-from model.losses import sim_loss, reg_loss
-from model.networks.networks import UNet, FFDNet
+from model.network.single_res import UNet, FFDNet
+from model.network.multi_res import mlUNet
 from model.transformations import DVFTransform, BSplineFFDTransform
+import torch.nn as nn
+from model.loss import sim_loss, reg_loss
+from model.loss.ml_loss import mlLoss
 
 
 def get_network(hparams):
@@ -20,8 +22,17 @@ def get_network(hparams):
                          img_size=hparams.data.crop_size,
                          cpt_spacing=hparams.transformation.sigma,
                          **hparams.network.net_config)
+
+    elif hparams.network.name == "mlUNet":
+        network = mlUNet(dim=hparams.data.dim,
+                         ml_lvls=hparams.meta.ml_lvls,
+                         **hparams.network.net_config)
+
+    elif hparams.network.name == "mlFFDNet":
+        raise NotImplementedError
+
     else:
-        raise ValueError("Model: Transformation model not recognised")
+        raise ValueError("Model config parsing: Network not recognised")
     return network
 
 
@@ -35,7 +46,7 @@ def get_transformation(hparams):
                                              img_size=hparams.data.crop_size,
                                              sigma=hparams.transformation.sigma)
     else:
-        raise ValueError("Model: Transformation model not recognised")
+        raise ValueError("Model config parsing: Transformation model not recognised")
     return transformation
 
 
@@ -45,10 +56,10 @@ def get_loss_fn(hparams):
         sim_loss_fn = nn.MSELoss()
 
     elif hparams.loss.sim_loss == 'LNCC':
-        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.window_size)
+        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.lncc_window_size)
 
     elif hparams.loss.sim_loss == 'NMI':
-        sim_loss_fn = sim_loss.MILossGaussian(**hparams.loss.mi_cfg)
+        sim_loss_fn = sim_loss.MILossGaussian(**hparams.loss.mi_loss_cfg)
 
     else:
         raise ValueError(f'Similarity loss not recognised: {hparams.loss.sim_loss}.')
@@ -56,7 +67,15 @@ def get_loss_fn(hparams):
     # regularisation loss
     reg_loss_fn = getattr(reg_loss, hparams.loss.reg_loss)
 
-    return sim_loss_fn, reg_loss_fn
+    # multi-resolution loss function
+    loss_fn = mlLoss(sim_loss_fn,
+                     hparams.loss.sim_loss,
+                     reg_loss_fn,
+                     hparams.loss.reg_loss,
+                     reg_weight=hparams.loss.reg_weight,
+                     ml_lvls=hparams.meta.ml_lvls,
+                     ml_weights=hparams.loss.ml_weights)  # TODO: add ml lvls and weights to config
+    return loss_fn
 
 
 def save_checkpoint(state, is_best, checkpoint):
