@@ -17,7 +17,7 @@ class UNet(nn.Module):
     def __init__(self,
                  dim=2,
                  enc_channels=(16, 32, 32, 32, 32),
-                 dec_channels=(32, 32, 32, 16),
+                 dec_channels=(32, 32, 32, 32),
                  out_channels=(16, 16),
                  conv_before_out=True
                  ):

@@ -1,5 +1,5 @@
 # @package _group_
-name: mlUNet
+name: mulUNet
 net_config:
     enc_channels: [16, 32, 32, 32, 32]
-    dec_channels: [32, 32, 32, 16]
+    dec_channels: [32, 32, 32, 32]
