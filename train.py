@@ -26,8 +26,8 @@ def main(cfg: DictConfig) -> None:
     # configure logger, checkpoint callback and trainer
     logger = TensorBoardLogger(model_dir, name='log')
 
-    ckpt_callback = ModelCheckpoint(monitor=cfg.meta.best_metric,
-                                    mode=cfg.meta.best_metric_mode,
+    ckpt_callback = ModelCheckpoint(monitor='mean_dice_mean',
+                                    mode='max',
                                     filepath=f'{logger.log_dir}/checkpoints/'
                                     + '{epoch}-{val_loss:.2f}-{mean_dice_mean:.2f}',
                                     verbose=True

@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-# from data.datasets import CamCANSynthDataset, BrainLoadingDataset
 from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
 
 from model.transformations import spatial_transform, ml_spatial_transform
@@ -21,14 +20,9 @@ import pytorch_lightning as pl
 
 
 def worker_init_fn(worker_id):
-    """Callback function passed to DataLoader to initialise the workers"""
-    # # generate a random sequence of seeds for the workers
-    # print(f"Random state before generating the random seed: {random.getstate()}")
+    """ Callback function passed to DataLoader to initialise the workers """
+    # Randomly seed the workers
     random_seed = random.randint(0, 2 ** 32 - 1)
-    # ##debug
-    # print(f"Random state after generating the random seed: {random.getstate()}")
-    # print(f"Random seed for worker {worker_id} is: {random_seed}")
-    # ##
     np.random.seed(random_seed)
 
 
@@ -41,13 +35,13 @@ class LightningDLReg(pl.LightningModule):
         self.transformation = get_transformation(self.hparams)
         self.loss_fn = get_loss_fn(self.hparams)
 
-        # initialise best metric
-        self.best_metric_result = self.hparams.meta.best_metric_init
+        # initialise dummy best metrics for logging
+        self.best_metric_result = {'mean_dice_mean': 0.0,
+                                   'folding_ratio_mean': 0.0}
 
     def on_fit_start(self):
-        # log dummy initial hparams w/ best metrics
-        best_metric_init = {'best/' + self.hparams.meta.best_metric: self.hparams.meta.best_metric_init}
-        self.logger.log_hyperparams(self.hparams, metrics=best_metric_init)
+        # log dummy initial hparams w/ best metrics (for tensorboard HPARAMS)
+        self.logger.log_hyperparams(self.hparams, metrics=self.best_metric_result)
 
     def train_dataloader(self):
         assert os.path.exists(self.hparams.data.train_path), \
@@ -87,14 +81,12 @@ class LightningDLReg(pl.LightningModule):
 
     def forward(self, tar, src):
         net_out = self.network(tar, src)
-        # TODO: multi-resolution transformation (FFD)
         dvf = self.transformation(net_out)
         return dvf
 
     def _step(self, batch):
         """ Forward pass inference + compute loss """
 
-        # TODO: +multiresolution
         dvf_preds = self.forward(batch['target'], batch['source'])
 
         # create image pyramids
@@ -196,26 +188,29 @@ class LightningDLReg(pl.LightningModule):
                                                   global_step=self.global_step)
 
     def _check_log_best_metric(self, metric_result):
-        """ Update the best metric """
-        # TODO: this should be in model checkpoint the checkpointing callback
-        #  can access the Trainer's logger
-        current = metric_result[self.hparams.meta.best_metric]
+        """ Update the best metric results, called at validation_epoch_end """
+        # TODO: this should be in model checkpoint the checkpointing callback can access the Trainer's logger
 
-        if self.hparams.meta.best_metric_mode == 'max':
-            is_best = current > self.best_metric_result
-        elif self.hparams.meta.best_metric_mode == 'min':
-            is_best = current < self.best_metric_result
+        # TODO: avoid hard coding best metrics
+        best_metric = 'mean_dice_mean'
+        current = metric_result[best_metric]
+
+        if self.current_epoch == 0:
+            # log metric of the first epoch as the best
+            is_best = True
         else:
-            is_best = False
+            # determine if the current metric result is the best
+            is_best = current > self.best_metric_result[best_metric]
 
         if is_best:
             # update and log the best metric value
-            self.best_metric_result = current
-            self.logger.experiment.add_scalar('best/' + self.hparams.meta.best_metric,
+            self.best_metric_result[best_metric] = current
+            self.logger.experiment.add_scalar('best/' + best_metric,
                                               current,
                                               global_step=self.global_step)
 
     def validation_epoch_end(self, outputs):
+        """ Process and log accumulated validation results in one epoch """
         # average validation loss and log
         losses_list = [x[0] for x in outputs]
         losses_reduced = dict()
