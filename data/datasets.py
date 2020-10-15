@@ -32,7 +32,7 @@ class BrainInterSubject3DTrain(_BaseDataset3D):
         elif self.modality == 'multi':
             self.data_path_dict['source'] = f'{self.src_subj_path}/T2_brain.nii.gz'
 
-        # tells which data points are images
+        # tells which data points are images (to normalise intensity)
         self.image_keys = ['target', 'source']
 
     def __getitem__(self, index):
@@ -54,7 +54,7 @@ class BrainInterSubject3DEval(BrainInterSubject3DTrain):
         # TODO: the name 'target_original' is only a suitable for intra-subject setting
         self.data_path_dict['target_original'] = f'{self.src_subj_path}/T1_brain.nii.gz'
 
-        # tells which data points are images
+        # tells which data points are images (to normalise intensity)
         self.image_keys = ['target', 'source', 'target_original']
 
         # segmentation

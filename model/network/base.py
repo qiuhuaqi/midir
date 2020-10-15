@@ -31,6 +31,7 @@ def conv_Nd(dim,
                    stride=stride,
                    padding=padding)
 
+
 def avg_pool(dim, kernel_size=2):
     """ Average pooling module of the specified dimension """
     _AvgPoolNd = getattr(nn, f"AvgPool{dim}d")

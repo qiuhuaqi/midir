@@ -32,9 +32,7 @@ def bending_energy(dvf):
     dvf_d1 = finite_diff(dvf, mode="forward")
 
     # 2nd order derivatives
-    dvf_d2 = []
-    for dvf_d in dvf_d1:
-        dvf_d2 += finite_diff(dvf_d, mode="forward")
+    dvf_d2 = [finite_diff(dvf_d, mode="forward") for dvf_d in dvf_d1]
     return torch.cat(dvf_d2, dim=1).pow(2).sum(dim=1).mean()
 
 

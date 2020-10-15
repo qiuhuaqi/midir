@@ -4,7 +4,7 @@ from torch import nn as nn
 from utils.image import roi_crop
 
 
-class mlLoss(nn.Module):
+class mulLoss(nn.Module):
     def __init__(self,
                  sim_loss_fn,
                  sim_loss_name,
@@ -14,7 +14,7 @@ class mlLoss(nn.Module):
                  ml_lvls=1,
                  ml_weights=None):
         """
-        Loss function
+        Multi-resolution Loss function
 
         Args:
             sim_loss_name: (str) Name of the similarity loss
@@ -25,7 +25,7 @@ class mlLoss(nn.Module):
             ml_lvls: (int) Numbers of levels for multi-resolution
             ml_weights: (tuple)
         """
-        super(mlLoss, self).__init__()
+        super(mulLoss, self).__init__()
 
         self.sim_loss_fn = sim_loss_fn
         self.sim_loss_name = sim_loss_name

@@ -10,6 +10,7 @@ Transformation models
 """
 
 class BSplineFFDTransform(object):
+    # TODO: multi-resolution transformation (FFD)
     def __init__(self,
                  dim,
                  img_size=(192, 192),
