@@ -2,7 +2,7 @@
 sim_loss: LNCC
 sim_weight: 1.0
 loss_roi: False
-window_size: 9
+window_size: 7
 
 reg_loss: l2reg
 reg_weight: 0.1

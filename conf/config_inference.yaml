@@ -1,9 +1,10 @@
 # @package _global_
-model_type: 'baseline'  # 'baseline' or 'dl'
-gpu: 0
+model_type: baseline  # 'baseline' or 'dl'
+gpu:
 analyse: True
 metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
 dim: 3
+model_dir:
 
 data:
     data_dir_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/malpem_split/val
@@ -12,11 +13,5 @@ data:
     atlas_path:
 
 defaults:
-    - network:
-      optional: True
-    - loss:
-      optional: True
-    - transformation:
-      optional: True
     - baseline:
       optional: True

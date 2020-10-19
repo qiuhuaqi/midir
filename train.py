@@ -7,10 +7,12 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from lightning import LightningDLReg
 from pytorch_lightning import Trainer
 
+import random
+random.seed(7)
+
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    # print(cfg.pretty())
 
     # model_dir set via CLI hydra.run.dir
     model_dir = os.getcwd()
@@ -26,10 +28,10 @@ def main(cfg: DictConfig) -> None:
     # configure logger, checkpoint callback and trainer
     logger = TensorBoardLogger(model_dir, name='log')
 
-    ckpt_callback = ModelCheckpoint(monitor='mean_dice_mean',
-                                    mode='max',
+    ckpt_callback = ModelCheckpoint(monitor='val_loss',
+                                    mode='min',
                                     filepath=f'{logger.log_dir}/checkpoints/'
-                                    + '{epoch}-{val_loss:.2f}-{mean_dice_mean:.2f}',
+                                    + '{epoch}-{val_loss:.4f}-{mean_dice_mean:.4f}',
                                     verbose=True
                                     )
 

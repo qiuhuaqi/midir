@@ -1,5 +1,7 @@
 """Run model inference and save outputs for analysis"""
 import os
+from glob import glob
+
 import hydra
 from omegaconf import DictConfig
 
@@ -8,24 +10,33 @@ import numpy as np
 import torch
 
 from data.datasets import BrainInterSubject3DEval
+from lightning import LightningDLReg
 from model.baselines import Identity, MirtkFFD, AntsSyN
-# from lightning import LightningDLReg
 from model.transformations import spatial_transform
+
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
 
 from analyse import analyse_output
 
 import random
-# seed RNG of eval dataset to get the same pairings for fair comparison
 random.seed(7)
 
 
-def get_inference_model(cfg):
+def get_inference_model(cfg, device=torch.device('cpu')):
     if cfg.model_type == 'dl':
-        # TODO: DL model load model checkpoint; 2) eval mode; 3)put on GPU
-        # model = LightningDLReg(hparams=cfg)
-        pass
+        version_list = glob(cfg.model_dir + '/log/version_*')
+        if len(version_list) != 1:
+            print(f"Warning: more than one version found, using version: {version_list[-1]}")
+        version_dir = version_list[-1]
+        ckpt_list = glob(version_dir + '/checkpoints/*ckpt*')
+        if len(ckpt_list) != 1:
+            print(f"Warning: more than one checkpoint found, using checkpoint: {ckpt_list[-1]}")
+        ckpt_path = ckpt_list[-1]
+
+        model = LightningDLReg.load_from_checkpoint(ckpt_path)
+        model = model.to(device=device)
+        model.eval()
 
     elif cfg.model_type == 'baseline':
         if cfg.baseline.name == 'Id':
@@ -49,7 +60,7 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
     print("Running inference:")
 
     for idx, batch in enumerate(tqdm(inference_dataset)):
-        # reshape data for inference.yaml
+        # reshape data for inference
         for k, x in batch.items():
             # images 2d: (N, 1, H, W), 3d: (1, 1, H, W, D)
             # dvf 2d: (N, 2, H, W), 3d: (1, 3, H, W, D)
@@ -57,7 +68,8 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
                 batch[k] = x.unsqueeze(1).to(device=device)
 
         # model inference
-        batch['dvf_pred'] = model(batch['target'], batch['source'])
+        # TODO: models should produce a list of dvfs (to cope with multi-level)
+        batch['dvf_pred'] = model(batch['target'], batch['source'])[-1]
 
         # deform source segmentation with predicted DVF
         if 'source_seg' in batch.keys():
@@ -74,7 +86,6 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
 
         # save the outputs
         subj_id = inference_dataset.subject_list[idx]
-
         output_id_dir = setup_dir(output_dir + f'/{subj_id}')
         for k, x in batch.items():
             x = x.detach().cpu().numpy()
@@ -96,7 +107,7 @@ def main(cfg: DictConfig) -> None:
 
     # configure dataset & model
     inference_dataset = BrainInterSubject3DEval(**cfg.data)
-    model = get_inference_model(cfg)
+    model = get_inference_model(cfg, device=device)
 
     # run inference
     output_dir = setup_dir(os.getcwd() + '/outputs')
@@ -109,3 +120,5 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == '__main__':
     main()
+
+

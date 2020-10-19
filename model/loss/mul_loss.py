@@ -1,7 +1,5 @@
 from collections import OrderedDict
-
 from torch import nn as nn
-from utils.image import roi_crop
 
 
 class mulLoss(nn.Module):
@@ -39,14 +37,7 @@ class mulLoss(nn.Module):
             ml_weights = (1.,) * ml_lvls
         self.ml_weights = ml_weights
 
-    def forward(self, tar, warped_src, dvf_pred, roi_mask=None):
-        # TODO: tar and warped_src should be lists of length ml_lvl
-
-        if roi_mask is not None:
-            # TODO: check if this changes the original data (pointer depth)
-            tar = roi_crop(tar, roi_mask, dim=self.hparams.data.dim)
-            warped_src = roi_crop(warped_src, roi_mask, dim=self.hparams.data.dim)
-
+    def forward(self, tar, warped_src, dvf_pred):
         # compute loss at multi-level
         loss_val = 0
         sim_loss_val = 0

@@ -56,7 +56,7 @@ def get_loss_fn(hparams):
         sim_loss_fn = nn.MSELoss()
 
     elif hparams.loss.sim_loss == 'LNCC':
-        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.lncc_window_size)
+        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.window_size)
 
     elif hparams.loss.sim_loss == 'NMI':
         sim_loss_fn = sim_loss.MILossGaussian(**hparams.loss.mi_cfg)
@@ -74,7 +74,7 @@ def get_loss_fn(hparams):
                       hparams.loss.reg_loss,
                       reg_weight=hparams.loss.reg_weight,
                       ml_lvls=hparams.meta.ml_lvls,
-                      ml_weights=hparams.loss.ml_weights)  # TODO: add ml lvls and weights to config
+                      ml_weights=hparams.loss.ml_weights)
     return loss_fn
 
 

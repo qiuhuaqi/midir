@@ -35,9 +35,12 @@ class LightningDLReg(pl.LightningModule):
         self.transformation = get_transformation(self.hparams)
         self.loss_fn = get_loss_fn(self.hparams)
 
-        # initialise dummy best metrics for logging
+        # initialise dummy best metrics results for initial logging
+        ## DUMMY
+        # TODO: branch / tag this version for future re-use
         self.best_metric_result = {'mean_dice_mean': 0.0,
                                    'folding_ratio_mean': 0.0}
+        # self.best_metric_result = {f'best/{m}': 0.0 for m in self.hparams.meta.best_metrics}
 
     def on_fit_start(self):
         # log dummy initial hparams w/ best metrics (for tensorboard HPARAMS)
@@ -57,7 +60,7 @@ class LightningDLReg(pl.LightningModule):
                           shuffle=self.hparams.data.shuffle,
                           num_workers=self.hparams.data.num_workers,
                           pin_memory=self.on_gpu,
-                          worker_init_fn=worker_init_fn  # todo: fix random seeding
+                          worker_init_fn=worker_init_fn
                           )
 
     def val_dataloader(self):
@@ -73,7 +76,8 @@ class LightningDLReg(pl.LightningModule):
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.hparams.data.num_workers,
-                          pin_memory=self.on_gpu
+                          pin_memory=self.on_gpu,
+                          worker_init_fn=worker_init_fn
                           )
 
     def configure_optimizers(self):
@@ -97,11 +101,7 @@ class LightningDLReg(pl.LightningModule):
         warped_src_pyr = ml_spatial_transform(src_pyr, dvf_preds)
 
         # compute loss
-        if self.hparams.loss.loss_roi:
-            roi_mask = batch['roi_mask']
-        else:
-            roi_mask = None
-        losses = self.loss_fn(tar_pyr, warped_src_pyr, dvf_preds, roi_mask=roi_mask)
+        losses = self.loss_fn(tar_pyr, warped_src_pyr, dvf_preds)
 
         step_dict = {'dvf_pred': dvf_preds,
                      'target': tar_pyr,
@@ -170,55 +170,41 @@ class LightningDLReg(pl.LightningModule):
                                                   close=True)
         return val_losses, metric_result_step
 
-    def _log_metrics(self, metric_result):
-        """ Log metrics """
-        if self.hparams.meta.metrics_to_log is not None:
-            # log only selected metrics
-            for metric in self.hparams.meta.metrics_to_log:
-                self.logger.experiment.add_scalar(f'metrics/{metric}_mean',
-                                                  metric_result[metric + '_mean'],
-                                                  global_step=self.global_step)
-                self.logger.experiment.add_scalar(f'metrics/{metric}_std',
-                                                  metric_result[metric + '_std'],
-                                                  global_step=self.global_step)
-        else:
-            for k, x in metric_result.items():
-                self.logger.experiment.add_scalar(f'metrics/{k}',
-                                                  x,
-                                                  global_step=self.global_step)
-
-    def _check_log_best_metric(self, metric_result):
+    def _check_log_best_metric(self, val_loss, metric_result):
         """ Update the best metric results, called at validation_epoch_end """
         # TODO: this should be in model checkpoint the checkpointing callback can access the Trainer's logger
 
-        # TODO: avoid hard coding best metrics
-        best_metric = 'mean_dice_mean'
-        current = metric_result[best_metric]
+        current_metric = dict()
+        current_metric.update(val_loss)
+        current_metric.update(metric_result)
 
+        # TODO: avoid hard coding best metrics
+        best_metric = 'loss'
         if self.current_epoch == 0:
-            # log metric of the first epoch as the best
+            # log the first metric as the best
             is_best = True
         else:
             # determine if the current metric result is the best
-            is_best = current > self.best_metric_result[best_metric]
+            is_best = current_metric[best_metric] < self.best_metric_result[best_metric]
 
         if is_best:
-            # update and log the best metric value
-            self.best_metric_result[best_metric] = current
-            self.logger.experiment.add_scalar('best/' + best_metric,
-                                              current,
-                                              global_step=self.global_step)
+            # update the best metric value and log the other best metrics at this step
+            print(f"Best {best_metric}!!!!!: {current_metric[best_metric]}")
+            for m in self.hparams.meta.best_metrics:
+                self.best_metric_result[m] = current_metric[m]
+                self.logger.experiment.add_scalar(f'best/{m}',
+                                                  current_metric[m],
+                                                  global_step=self.global_step)
 
     def validation_epoch_end(self, outputs):
         """ Process and log accumulated validation results in one epoch """
         # average validation loss and log
-        losses_list = [x[0] for x in outputs]
-        losses_reduced = dict()
-        for k in losses_list[0].keys():
-            loss_reduced = torch.stack([x[k] for x in losses_list]).mean()
-            losses_reduced[k] = loss_reduced
+        val_loss_list = [x[0] for x in outputs]
+        val_loss_reduced = dict()
+        for k in val_loss_list[0].keys():
+            val_loss_reduced[k] = torch.stack([x[k] for x in val_loss_list]).mean()
             self.logger.experiment.add_scalar(f'val_loss/{k}',
-                                              loss_reduced,
+                                              val_loss_reduced[k],
                                               global_step=self.global_step)
 
         # reduce and log validation metric results (mean & std)
@@ -228,11 +214,16 @@ class LightningDLReg(pl.LightningModule):
             stacked = torch.stack([x[k] for x in metric_result_list])
             metric_result_reduced[f'{k}_mean'] = stacked.mean()
             metric_result_reduced[f'{k}_std'] = stacked.std()
+            self.logger.experiment.add_scalar(f'metrics/{k}_mean',
+                                              metric_result_reduced[f'{k}_mean'],
+                                              global_step=self.global_step)
+            self.logger.experiment.add_scalar(f'metrics/{k}_std',
+                                              metric_result_reduced[f'{k}_std'],
+                                              global_step=self.global_step)
 
-        # log metric results and update best metrics
-        self._log_metrics(metric_result_reduced)
-        self._check_log_best_metric(metric_result_reduced)
+        # log and update best metrics
+        self._check_log_best_metric(val_loss_reduced, metric_result_reduced)
 
         # return callback metrics for checkpointing
-        return {'val_loss': losses_reduced['loss'],
+        return {'val_loss': val_loss_reduced['loss'],
                 'mean_dice_mean': metric_result_reduced['mean_dice_mean']}

@@ -11,5 +11,5 @@ meta:
   gpu: 1
   ver: v0.5-dev
   metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
-  metrics_to_log: ["mean_dice", "folding_ratio"]
+  best_metrics: ["loss", "mean_dice_mean", "folding_ratio_mean"]
   ml_lvls: 1
