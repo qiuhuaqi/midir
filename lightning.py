@@ -36,11 +36,7 @@ class LightningDLReg(pl.LightningModule):
         self.loss_fn = get_loss_fn(self.hparams)
 
         # initialise dummy best metrics results for initial logging
-        ## DUMMY
-        # TODO: branch / tag this version for future re-use
-        self.best_metric_result = {'mean_dice_mean': 0.0,
-                                   'folding_ratio_mean': 0.0}
-        # self.best_metric_result = {f'best/{m}': 0.0 for m in self.hparams.meta.best_metrics}
+        self.best_metric_result = {f'best/{m}': 0.0 for m in self.hparams.meta.best_metrics}
 
     def on_fit_start(self):
         # log dummy initial hparams w/ best metrics (for tensorboard HPARAMS)
@@ -189,7 +185,6 @@ class LightningDLReg(pl.LightningModule):
 
         if is_best:
             # update the best metric value and log the other best metrics at this step
-            print(f"Best {best_metric}!!!!!: {current_metric[best_metric]}")
             for m in self.hparams.meta.best_metrics:
                 self.best_metric_result[m] = current_metric[m]
                 self.logger.experiment.add_scalar(f'best/{m}',
