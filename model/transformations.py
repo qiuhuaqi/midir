@@ -94,44 +94,6 @@ class BSplineFFDTransform(object):
 
 
 
-class BSplineFFDTransformPoly(BSplineFFDTransform):
-    def __init__(self,
-                 dim,
-                 img_size=(192, 192),
-                 cpt_spacing=(8, 8)
-                 ):
-        """
-        B-spline FFD transformation model
-        with the kernel computed using the polynomial B-spline function formulation
-        """
-        super(BSplineFFDTransformPoly, self).__init__(dim=dim,
-                                                      img_size=img_size,
-                                                      cpt_spacing=cpt_spacing)
-        self._set_kernel()
-        self.strides = ([cps + 1 for cps in self.cpt_spacing])
-        self.padding = [int((ks-1)/2) for ks in self.kernel.size()[2:]]
-
-    def _set_kernel(self, order=3):
-        # initialise the 1-d b-spline kernels (specific for cubic B-spline)
-        kernels = [torch.arange(0, 4 * int(cps) + 1).float() for cps in self.cpt_spacing]
-
-        # distance to kernel centre
-        kernels = [k - len(k) // 2 for k in kernels]
-
-        # cubic b-spline function
-        kernels = [cubic_bspline_torch(k / self.cpt_spacing[i]) / self.cpt_spacing[i]
-                   for i, k in enumerate(kernels)]
-
-        # build the n-d conv kernel by outer-product of 1d filters using broadcasting
-        kernel = kernels[0]
-        for k in kernels[1:]:
-            kernel = kernel.unsqueeze(-1) * k.unsqueeze(0)
-
-        # extend shape to conv filter
-        kernel = kernel.view(1, 1, *kernel.size())
-        self.kernel = kernel.repeat(self.dim, 1, *(1,) * self.dim)  # (dim, 1, *(kernel_sizes))
-        self.kernel = self.kernel.float()
-
 
 
 class DVFTransform(object):
