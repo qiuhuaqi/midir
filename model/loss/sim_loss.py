@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from model.loss import window_func
 from utils.image import normalise_intensity
 from utils.misc import param_dim_setup
+from utils.image import avg_filtering
 
 
 class MILossGaussian(nn.Module):
@@ -75,16 +76,15 @@ class MILossGaussian(nn.Module):
         Returns:
             (Normalise)MI: (scalar)
         """
-
         # Handle roi mask (each loss may handle roi masking differently, e.g. LNCC needs the spatial structure)
+        #  (NOTE: this doesn't work for 2D as each slice could have different number of elements selected,
+        #  use a bounding box mask to select the same region across slices instead)
         if self.roi:
-            x_mask = x > self.roi_threshold
-            y_mask = y > self.roi_threshold
-            mask = torch.logical_or(x_mask, y_mask)
+            img_avg = (x + y) / 2
+            img_avg_smooth = avg_filtering(img_avg, filter_size=7)  # extend ROI
+            mask = img_avg_smooth > self.roi_threshold
             x = torch.masked_select(x, mask).unsqueeze(0).unsqueeze(0)
             y = torch.masked_select(y, mask).unsqueeze(0).unsqueeze(0)
-            # (NOTE: this doesn't work for 2D as each slice could have different number of elements selected,
-            # use a bounding box mask to select the same region across slices instead)
 
         else:
             # same shape as masked
@@ -158,7 +158,6 @@ class LNCCLoss(nn.Module):
         lncc = cov * cov / (tar_var * src_var + 1e-5)
 
         return -torch.mean(lncc)
-
 
 
 class MILossBSpline(nn.Module):

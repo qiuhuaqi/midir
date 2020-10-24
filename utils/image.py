@@ -82,7 +82,6 @@ def normalise_intensity(x,
 
     # for numpy.ndarray
     if type(x) is np.ndarray:
-
         # Clipping
         if clip:
             # intensity clipping
@@ -111,7 +110,6 @@ def normalise_intensity(x,
 
         # cast to float 32
         x = x.astype(np.float32)
-
 
     # for torch.Tensor
     elif type(x) is torch.Tensor:
@@ -143,35 +141,7 @@ def normalise_intensity(x,
 
     else:
         raise TypeError("Input data type not recognised, support numpy.ndarray or torch.Tensor")
-
-
     return x
-
-
-
-# todo: (for Pytorch version of the normalisation function) modify the following function from
-# ()
-# to enable the option `keep_dims` and (maybe) linear interpolation
-
-# def percentile(t: torch.tensor, q: float) -> Union[int, float]:
-#     """
-#     Return the ``q``-th percentile of the flattened input tensor's data.
-#
-#     CAUTION:
-#      * Needs PyTorch >= 1.1.0, as ``torch.kthvalue()`` is used.
-#      * Values are not interpolated, which corresponds to
-#        ``numpy.percentile(..., interpolation="nearest")``.
-#
-#     :param t: Input tensor.
-#     :param q: Percentile to compute, which must be between 0 and 100 inclusive.
-#     :return: Resulting value (scalar).
-#     """
-#     # Note that ``kthvalue()`` works one-based, i.e. the first sorted value
-#     # indeed corresponds to k=1, not k=0! Use float(q) instead of q directly,
-#     # so that ``round()`` returns an integer, even if q is a np.float32.
-#     k = 1 + round(.01 * float(q) * (t.numel() - 1))
-#     result = t.view(-1).kthvalue(k).values.item()
-#     return result
 
 
 def mask_and_crop(x, roi_mask):
@@ -269,6 +239,7 @@ def roi_crop(x, mask, dim):
     """ Crop input Tensor by the bounding box of roi mask """
 
     if type(x) == torch.Tensor:
+        # TODO: Tensor version of bbox_from_mask
         bbox, _ = bbox_from_mask(mask.squeeze(1).cpu().numpy())
     elif type(x) == np.ndarray:
         bbox, _ = bbox_from_mask(mask)
@@ -291,3 +262,12 @@ def create_img_pyramid(x, lvls):
                 x_pyr.append(F.interpolate(x, scale_factor=0.5 ** l, mode='trilinear'))
     x_pyr.reverse()
     return x_pyr
+
+
+def avg_filtering(x, filter_size=7):
+    """ Applies average filtering to Tensor of size (N, 1, *sizes)"""
+    dim = x.ndim - 2
+    avg_filter = torch.ones(1, 1, *(filter_size,)*dim).type_as(x)
+    pad = filter_size // 2
+    conv_fn = getattr(F, f'conv{dim}d')
+    return conv_fn(x, avg_filter, padding=pad)
