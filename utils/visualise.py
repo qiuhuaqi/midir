@@ -6,7 +6,7 @@ import random
 from matplotlib import pyplot as plt
 
 
-def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=20):
+def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=30, color='c'):
     """dvf shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
@@ -20,7 +20,7 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
     new_grid_H = id_grid_H + dvf[0, id_grid_H, id_grid_W]
     new_grid_W = id_grid_W + dvf[1, id_grid_H, id_grid_W]
 
-    kwargs = {"linewidth": 1.5, "color": 'c'}
+    kwargs = {"linewidth": 1.5, "color": color}
     # matplotlib.plot() uses CV x-y indexing
     for i in range(new_grid_H.shape[0]):
         ax.plot(new_grid_W[i, :], new_grid_H[i, :], **kwargs)  # each draws a horizontal line
