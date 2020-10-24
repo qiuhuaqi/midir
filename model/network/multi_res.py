@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from model.network.base import conv_Nd
 from model.network.single_res import UNet
@@ -51,9 +52,8 @@ class mlUNet(UNet):
                 # direct prediction for the coarsest level
                 dvf_l = pred_l
             else:
-                # predict residual and add to coarser level
-                # TODO: return upsample and scaled dvf to compare before/after residual
-                dvf_l = self.upsample(ml_dvfs[-1]) * 2.0 + pred_l
+                # predict residual and add to the upsampled coarser level prediction
+                dvf_l = pred_l + 2.0 * F.interpolate(ml_dvfs[-1], scale_factor=2, mode='trilinear')
             ml_dvfs.append(dvf_l)
 
         assert len(ml_dvfs) == self.ml_lvls

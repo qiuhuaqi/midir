@@ -58,11 +58,10 @@ class mulLoss(nn.Module):
             loss_val = loss_val + loss_val_l * self.ml_weights[l]
 
             # record losses for all resolution levels
-            if l > 0:
-                losses_l = {f"loss_lv{l}": loss_val_l,
-                            f"{self.sim_loss_name}_lv{l}": sim_loss_val_l,
-                            f"{self.reg_loss_name}_lv{l}": reg_loss_val_l}
-                losses.update(losses_l)
+            losses_l = {f"loss_lv{l}": loss_val_l,
+                        f"{self.sim_loss_name}_lv{l}": sim_loss_val_l,
+                        f"{self.reg_loss_name}_lv{l}": reg_loss_val_l}
+            losses.update(losses_l)
 
         # add overall loss
         losses.update({f"loss": loss_val,
