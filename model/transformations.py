@@ -1,111 +1,170 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from model.loss.window_func import cubic_bspline_torch
 from utils.transformation import normalise_dvf
-from utils.misc import param_dim_setup
+from utils.misc import param_ndim_setup
 
-""" 
-Transformation models 
-"""
+from model.mirtk_torch import cubic_bspline1d
+from model.mirtk_torch import conv1d
 
-class BSplineFFDTransform(object):
-    # TODO: multi-resolution transformation (FFD)
-    def __init__(self,
-                 dim,
-                 img_size=(192, 192),
-                 sigma=(5, 5),
-                 order=3
-                 ):
+
+# Transformation models #
+
+class MultiResBSplineFFDTransform(object):
+    def __init__(self, dim, img_size, lvls, cps):
         """
-        Compute dense Displacement Vector Field (DVF) of B-spline FFD transformation model
-        from control point parameters, works with both 2D and 3D.
-        B-spline kernel computed with recursive convolutions.
+        Multi-resolution B-spline transformation
 
         Args:
-            dim: (int) image dimension
-            img_size: (int or tuple) size of the image, if int assume same size on all dimensions
-            cpt_spacing: (int or tuple) number of points between adjacent control points
+            dim: (int) transformation model dimension
+            img_size: (int or tuple)
+            lvls: (int) number of multi-resolution levels
+            cps: (int) control point spacing at the highest resolution
         """
+        self.transforms = []
+        for l in range(lvls):
+            img_size_l = [imsz // (2 ** l) for imsz in img_size]
+            cps_l = cps * (2 ** l)
+            transform_l = CubicBSplineTransform(dim, img_size=img_size_l, cps=cps_l)
+            self.transforms += [transform_l]
 
-        self.dim = dim
-
-        # assume same for all dimensions if one integer is given
-        self.img_size = param_dim_setup(img_size, self.dim)
-        # self.cpt_spacing = param_dim_setup(cpt_spacing, self.dim)
-        self.sigma = param_dim_setup(sigma, self.dim)
-
-        self.conv_transposeNd_fn = getattr(F, f"conv_transpose{self.dim}d")
-
-        self._set_kernel(order=order)
-
-        self.stride = self.sigma
-        self.padding = [int((ks-1)/2) for ks in self.kernel.size()[2:]]
+    def __call__(self, x):
+        assert len(x) == len(self.transforms)
+        dvfs = []
+        for x_l, transform_l in zip(x, self.transforms):
+            dvf_l = transform_l(x_l)
+            dvfs += [dvf_l]
+        return dvfs
 
 
-    def _set_kernel(self, order=3):
+class CubicBSplineTransform(object):
+    def __init__(self, ndim, img_size=192, cps=5):
         """
-        Compute B-spline kernel of arbitrary order using recursive convolution
-        Adapted from AirLab implementation:
-        https://github.com/airlab-unibas/airlab/blob/80c9d487c012892c395d63c6d937a67303c321d1/airlab/utils/kernelFunction.py#L258
+        Compute dense displacement field of Cubic B-spline FFD transformation model
+        from input control point parameters.
 
-        `sigma` is the size of 0th order B-spline function,
-        which determines the size of the n-th order B-spline kernel.
-        Here, sigma is set using the convention that each control point controls +/- 1 cpt_spacing
+        Args:
+            ndim: (int) image dimension
+            img_size: (int or tuple) size of the image
+            cps: (int or tuple) control point spacing in number of intervals between pixel/voxel centres
+            order: (int) B-spline order
         """
-        kernel_ones = torch.ones(1, 1, *self.sigma)
-        kernel = kernel_ones
-        padding = np.array(self.sigma) - 1
+        self.ndim = ndim
+        self.img_size = param_ndim_setup(img_size, self.ndim)
+        self.stride = param_ndim_setup(cps, self.ndim)
 
-        convNd_fn = getattr(F, f"conv{self.dim}d")
+        self.kernels = self.set_kernel()
+        self.padding = [(len(k) - 1) // 2 for k in self.kernels]  # the size of the kernel is always odd number
 
-        for i in range(order):
-            kernel = convNd_fn(kernel, kernel_ones, padding=(padding).tolist()) / np.prod(self.sigma)
-
-        self.kernel = kernel.repeat(self.dim, 1, *(1,) * self.dim)  # (dim, 1, *(kernel_sizes))
-        self.kernel = self.kernel
-
+    def set_kernel(self):
+        kernels = list()
+        for s in self.stride:
+            # 1d cubic b-spline kernels
+            kernels += [cubic_bspline1d(s)]
+        return kernels
 
     def __call__(self, x):
         """
         Args:
-            x: (N, dim, *(sizes)) network output i.e. control point parameters
-
+            x: (N, dim, *(sizes)) Control point parameters
         Returns:
-            dvf.yaml: (N, dim, *(img_sizes)) dense Displacement Vector Field of the transformation
+            dvf: (N, dim, *(img_sizes)) The dense Displacement Vector Field of the transformation
         """
-        self.kernel = self.kernel.to(dtype=x.dtype, device=x.device)
+        # separable 1d transposed convolution
+        y = x
+        for i, (k, s, p) in enumerate(zip(self.kernels, self.stride, self.padding)):
+            k = k.to(dtype=x.dtype, device=x.device)
+            y = conv1d(y, dim=i + 2, kernel=k, stride=s, padding=p, transpose=True)
 
-        # compute the DVF of the FFD transformation by transposed convolution 2D/3D
-        dvf = self.conv_transposeNd_fn(x,
-                                       weight=self.kernel,
-                                       stride=self.stride,
-                                       padding=self.padding,
-                                       groups=self.dim
-                                       )
-
-        # crop DVF to image size (centres aligned)
-        for i in range(self.dim):
-            assert dvf.size()[i + 2] >= self.img_size[i], \
-                f"FFD output DVF size ({dvf.size()[i+2]}) is smaller than image size ({self.img_size[i]}) at dimension {i}"
-            crop_start = dvf.size()[i + 2] // 2 - self.img_size[i] // 2
-            dvf = dvf.narrow(i+2, crop_start, self.img_size[i])
-        return dvf
+        #  crop the output to image size
+        slicer = (slice(0, y.shape[0]), slice(0, y.shape[1])) \
+                 + tuple(slice(s, s + self.img_size[i]) for i, s in enumerate(self.stride))
+        y = y[slicer]
+        return y
 
 
-
+# class BSplineTransform(object):
+#     def __init__(self, dim, img_size=192, cps=5, order=3):
+#         """
+#         Compute dense displacement field of B-spline FFD transformation model from input control point parameters.
+#         B-spline kernel is computed by recursive convolutions.
+#
+#         Args:
+#             dim: (int) image dimension
+#             img_size: (int or tuple) size of the image, if int assume same size on all dimensions
+#             cps: (int or tuple) control point spacing
+#             order: (int) B-spline order
+#         """
+#         self.dim = dim
+#         self.img_size = param_ndim_setup(img_size, self.dim)
+#         self.cps = param_ndim_setup(cps, self.dim)
+#         self.conv_transposed_fn = getattr(F, f"conv_transpose{self.dim}d")
+#         self._set_kernel(order=order)
+#
+#         # TODO: configure stride and padding for the transposed convolution to perform the transformation computation correctly
+#         self.stride = self.cps
+#         # self.padding = [int((ks-1)/2) for ks in self.kernel.size()[2:]]
+#         self.padding = [ks // 2 for ks in self.kernel.size()[2:]]
+#
+#     def _set_kernel(self, order=3):
+#         """
+#         Compute B-spline kernel of arbitrary order using recursive convolution
+#         Adapted from AirLab implementation:
+#         https://github.com/airlab-unibas/airlab/blob/80c9d487c012892c395d63c6d937a67303c321d1/airlab/utils/kernelFunction.py#L258
+#
+#         Control point spacing is set to be the size of 0th order B-spline function
+#         """
+#         kernel_ones = torch.ones(1, 1, *self.cps)
+#         kernel = kernel_ones
+#         padding = np.array(self.cps) - 1
+#
+#         convNd_fn = getattr(F, f"conv{self.dim}d")
+#         for i in range(order):
+#             kernel = convNd_fn(kernel, kernel_ones, padding=(padding).tolist()) / np.prod(self.cps)
+#
+#         self.kernel = kernel.repeat(self.dim, 1, *(1,) * self.dim)  # (dim, 1, *(kernel_sizes))
+#         self.kernel = self.kernel
+#
+#     def __call__(self, x):
+#         """
+#         Args:
+#             x: (N, dim, *(sizes)) Control point parameters
+#         Returns:
+#             dvf: (N, dim, *(img_sizes)) The dense Displacement Vector Field of the transformation
+#         """
+#         self.kernel = self.kernel.to(dtype=x.dtype, device=x.device)
+#
+#         # compute the DVF of the FFD transformation by transposed convolution 2D/3D
+#         dvf = self.conv_transposed_fn(x,
+#                                       weight=self.kernel,
+#                                       stride=self.stride,
+#                                       padding=self.padding,
+#                                       groups=self.dim
+#                                       )
+#
+#         #  crop the output to image size
+#         for i in range(self.dim):
+#             assert dvf.size()[i + 2] >= self.img_size[i], \
+#                 f"FFD output DVF size ({dvf.size()[i + 2]}) is smaller than image size ({self.img_size[i]}) at dimension {i}"
+#             # crop_start = dvf.size()[i + 2] // 2 - self.img_size[i] // 2
+#             # dvf = dvf.narrow(i+2, crop_start, self.img_size[i])
+#             # Note: half support should be already taken off from padding
+#             crop_start = (self.kernel.size()[i + 2] // 2) - self.cps[i]
+#             dvf = dvf.narrow(i + 2, crop_start, self.img_size[i])
+#         return dvf
 
 
 class DVFTransform(object):
-    """ (Dummy) Displacement Vector Field model """
+    """ Displacement field model """
+
     def __init__(self):
         pass
 
     def __call__(self, x):
         return x
 
-""""""
 
+# Spatial transformation functions #
 
 def spatial_transform(x, dvf, interp_mode="bilinear"):
     """
@@ -134,7 +193,7 @@ def spatial_transform(x, dvf, interp_mode="bilinear"):
     deformed_meshgrid = [mesh_grid[i] + dvf[:, i, ...] for i in range(dim)]
 
     # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
-    deformed_meshgrid = [deformed_meshgrid[dim-1-i] for i in range(dim)]
+    deformed_meshgrid = [deformed_meshgrid[dim - 1 - i] for i in range(dim)]
     deformed_meshgrid = torch.stack(deformed_meshgrid, -1)  # (N, *size, dim)
 
     return F.grid_sample(x, deformed_meshgrid, mode=interp_mode, align_corners=False)

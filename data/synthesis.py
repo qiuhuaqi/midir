@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 from model.transformations import spatial_transform
 from utils.image import bbox_from_mask
-from utils.misc import param_dim_setup
+from utils.misc import param_ndim_setup
 
 
 class GaussianFilter(object):
@@ -22,13 +22,13 @@ class GaussianFilter(object):
         self.device = device
 
         # configure Gaussian kernel standard deviation (sigma) and kernel size
-        sigmas = param_dim_setup(sigma, dim)
+        sigmas = param_ndim_setup(sigma, dim)
         if not kernel_size:
             # if not specified, kernel defined in [-4simga, +4sigma]
             kernel_size = [8 * sigmas[i] + 1
                            for i in range(dim)]
         else:
-            kernel_size = param_dim_setup(kernel_size, dim)
+            kernel_size = param_ndim_setup(kernel_size, dim)
 
         # compute nD Gaussian kernel as the product of 1d Gaussian kernels
         kernel = 1
@@ -47,7 +47,7 @@ class GaussianFilter(object):
         # each output channel of the kernel is used by each group in convolution when groups=dim
         # so each input channel is filtered by the same Gaussian kernel
         self.kernel = self.kernel.view(1, 1, *self.kernel.size())
-        self.kernel = self.kernel.repeat(self.dim, *(1,) * (self.kernel.dim()-1))
+        self.kernel = self.kernel.repeat(self.dim, *(1,) * (self.kernel.ndim() - 1))
 
         # set padding as half kernel size (valid)
         self.padding = [int(kernel_size[i]//2) for i in range(dim)]
@@ -98,9 +98,9 @@ def synthesis_elastic_deformation(image,
     image_shape = image.shape[1:]
 
     # check & expand parameters to dimensions if needed
-    cps = param_dim_setup(cps, dim)
-    disp_max = param_dim_setup(disp_max, dim)
-    bbox_pad_ratio = param_dim_setup(bbox_pad_ratio, dim)
+    cps = param_ndim_setup(cps, dim)
+    disp_max = param_ndim_setup(disp_max, dim)
+    bbox_pad_ratio = param_ndim_setup(bbox_pad_ratio, dim)
 
     """Generate random elastic DVF """
     # randomly sample the control point parameters, weight by the scale factor

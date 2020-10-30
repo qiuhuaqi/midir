@@ -5,7 +5,7 @@ import torch
 from torch import nn as nn
 import torch.nn.functional as F
 
-from utils.misc import param_dim_setup
+from utils.misc import param_ndim_setup
 from utils.image import avg_filtering
 
 
@@ -125,8 +125,8 @@ class LNCCLoss(nn.Module):
         tar_src = tar * src
 
         # set window size
-        dim = tar.dim() - 2
-        window_size = param_dim_setup(self.window_size, dim)
+        dim = tar.ndim() - 2
+        window_size = param_ndim_setup(self.window_size, dim)
 
         # summation filter for convolution
         sum_filt = torch.ones(1, 1, *window_size).type_as(tar)

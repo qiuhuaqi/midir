@@ -1,5 +1,6 @@
 # @package _group_
-name: mulunet
+name: bspline_net
 net_config:
     enc_channels: [16, 32, 32, 32, 32]
     dec_channels: [32, 32, 32, 32]
+    resize_channels: [32, 32]

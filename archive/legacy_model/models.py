@@ -29,17 +29,17 @@ class DLRegModel(nn.Module):
             self.network = SiameseNet()
 
         elif self.params.network == "UNetDVF":
-            self.network = UNet(dim=self.params.dim,
-                                   enc_channels=self.params.enc_channels,
-                                   dec_channels=self.params.dec_channels,
-                                   out_channels=self.params.out_channels
-                                   )
+            self.network = UNet(dim=self.params.ndim,
+                                enc_channels=self.params.enc_channels,
+                                dec_channels=self.params.dec_channels,
+                                out_channels=self.params.out_channels
+                                )
 
         elif self.params.network == "SiameseNetFFD":
             self.network = SiameseNetFFD()
 
         elif self.params.network == "FFDNet":
-            self.network = FFDNet(dim=self.params.dim,
+            self.network = FFDNet(dim=self.params.ndim,
                                   img_size=self.params.crop_size,
                                   cpt_spacing=self.params.ffd_sigma,
                                   enc_channels=self.params.enc_channels,
@@ -53,9 +53,9 @@ class DLRegModel(nn.Module):
             self.transform = DVFTransform()
 
         elif self.params.transformation == "FFD":
-            self.transform = BSplineFFDTransform(dim=self.params.dim,
+            self.transform = BSplineFFDTransform(dim=self.params.ndim,
                                                  img_size=self.params.crop_size,
-                                                 sigma=self.params.ffd_sigma)
+                                                 cps=self.params.ffd_sigma)
         else:
             raise ValueError("Model: Transformation model not recognised")
 

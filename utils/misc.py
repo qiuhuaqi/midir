@@ -52,23 +52,23 @@ def save_dict_to_json(d, json_path):
         json.dump(d, f, indent=4)
 
 
-def param_dim_setup(param, dim):
+def param_ndim_setup(param, ndim):
     """
     Check dimensions of paramters and extend dimension if needed.
 
     Args:
         param: (int/float, tuple or list) check dimension match if tuple or list is given,
                 expand to `dim` by repeating if a single integer/float number is given.
-        dim: (int) data/model dimension
+        ndim: (int) data/model dimension
 
     Returns:
         param: (tuple)
     """
     if isinstance(param, (int, float)):
-        param = (param,) * dim
+        param = (param,) * ndim
     elif isinstance(param, (tuple, list, omegaconf.listconfig.ListConfig)):
-        assert len(param) == dim, \
-            f"Dimension ({dim}) mismatch with data"
+        assert len(param) == ndim, \
+            f"Dimension ({ndim}) mismatch with data"
         param = tuple(param)
     else:
         raise TypeError("Parameter type not int, tuple or list")

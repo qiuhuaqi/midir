@@ -42,7 +42,7 @@ def loss_fn(data_dict, params):
     # (optional) only evaluate similarity loss within ROI bounding box
     if params.loss_roi:
         bbox, _ = bbox_from_mask(data_dict["roi_mask"].squeeze(1).numpy())
-        for i in range(params.dim):
+        for i in range(params.ndim):
             tar = tar.narrow(i+2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
             warped_src = warped_src.narrow(i+2, int(bbox[i][0]), int(bbox[i][1] - bbox[i][0]))
 

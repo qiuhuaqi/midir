@@ -1,5 +1,5 @@
 # @package _group_
-name: FFDNet
+name: ffdnet
 net_config:
     enc_channels: [32, 64, 128]
     out_channels: [32, 16]

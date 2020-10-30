@@ -115,7 +115,7 @@ def evaluate(model, loss_fn, dataloader, args, val=False, tb_writer=None):
         val_vis_dir = misc_utils.setup_dir(result_dir + "/val_visual_results")
         vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=0)
         # visualise all planes of the 3D volume
-        if model.params.dim == 3:
+        if model.params.ndim == 3:
             vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=1)
             vis_utils.visualise_result(data_dict, val_vis_dir, model.epoch_num, dpi=50, axis=2)
 

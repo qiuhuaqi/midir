@@ -1,5 +1,5 @@
 # @package _group_
-dim: 3
+ndim: 3
 batch_size: 1
 num_workers: 2
 shuffle: True

@@ -40,7 +40,7 @@ def get_inference_model(cfg, device=torch.device('cpu')):
 
     elif cfg.model_type == 'baseline':
         if cfg.baseline.name == 'Id':
-            model = Identity(cfg.dim)
+            model = Identity(cfg.ndim)
 
         elif cfg.baseline.name == 'MIRTK':
             model = MirtkFFD(hparams=cfg.baseline.mirtk_params)

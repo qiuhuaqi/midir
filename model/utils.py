@@ -1,30 +1,33 @@
-from model.network.single_res import UNet, FFDNet
-from model.network.multi_res import mlUNet
-from model.transformations import DVFTransform, BSplineFFDTransform
 import torch.nn as nn
+
+from model.network.nets import UNet, MultiResUNet, CubicBSplineNet
+from model.transformations import DVFTransform, MultiResBSplineFFDTransform
 from model.loss import sim_loss, reg_loss
-from model.loss.mul_loss import mulLoss
+from model.loss.mul_loss import MultiResLoss
 
 
 def get_network(hparams):
     """Configure network"""
-    if hparams.network.name == "UNet":
-        network = UNet(dim=hparams.data.dim,
+    if hparams.network.name == "unet":
+        network = UNet(ndim=hparams.data.ndim,
                        **hparams.network.net_config)
 
-    elif hparams.network.name == "FFDNet":
-        network = FFDNet(dim=hparams.data.dim,
-                         img_size=hparams.data.crop_size,
-                         cpt_spacing=hparams.transformation.sigma,
-                         **hparams.network.net_config)
+    elif hparams.network.name == "mulunet":
+        network = MultiResUNet(ndim=hparams.data.ndim,
+                               ml_lvls=hparams.meta.ml_lvls,
+                               **hparams.network.net_config)
 
-    elif hparams.network.name == "mulUNet":
-        network = mlUNet(dim=hparams.data.dim,
-                         ml_lvls=hparams.meta.ml_lvls,
-                         **hparams.network.net_config)
+    # elif hparams.network.name == "ffdnet":
+    #     network = FFDNet(dim=hparams.data.ndim,
+    #                      img_size=hparams.data.crop_size,
+    #                      cpt_spacing=hparams.transformation.sigma,
+    #                      **hparams.network.net_config)
 
-    elif hparams.network.name == "mlFFDNet":
-        raise NotImplementedError
+    elif hparams.network.name == "bspline_net":
+        network = CubicBSplineNet(ndim=hparams.data.ndim,
+                                  img_size=hparams.data.crop_size,
+                                  cps=hparams.transformation.cps,
+                                  **hparams.network.net_config)
 
     else:
         raise ValueError("Model config parsing: Network not recognised")
@@ -37,9 +40,10 @@ def get_transformation(hparams):
         transformation = DVFTransform()
 
     elif hparams.transformation.type == "FFD":
-        transformation = BSplineFFDTransform(dim=hparams.data.dim,
-                                             img_size=hparams.data.crop_size,
-                                             sigma=hparams.transformation.sigma)
+        transformation = MultiResBSplineFFDTransform(dim=hparams.data.ndim,
+                                                     img_size=hparams.data.crop_size,
+                                                     lvls=hparams.meta.ml_lvls,
+                                                     cps=hparams.transformation.cps)
     else:
         raise ValueError("Model config parsing: Transformation model not recognised")
     return transformation
@@ -63,58 +67,11 @@ def get_loss_fn(hparams):
     reg_loss_fn = getattr(reg_loss, hparams.loss.reg_loss)
 
     # multi-resolution loss function
-    loss_fn = mulLoss(sim_loss_fn,
-                      hparams.loss.sim_loss,
-                      reg_loss_fn,
-                      hparams.loss.reg_loss,
-                      reg_weight=hparams.loss.reg_weight,
-                      ml_lvls=hparams.meta.ml_lvls,
-                      ml_weights=hparams.loss.ml_weights)
+    loss_fn = MultiResLoss(sim_loss_fn,
+                           hparams.loss.sim_loss,
+                           reg_loss_fn,
+                           hparams.loss.reg_loss,
+                           reg_weight=hparams.loss.reg_weight,
+                           ml_lvls=hparams.meta.ml_lvls,
+                           ml_weights=hparams.loss.ml_weights)
     return loss_fn
-
-
-## DEPRECATED from v0.4 - Pytorch Lightning now handles model checkpointing ##
-# import os
-# import shutil
-#
-# import torch
-
-# def save_checkpoint(state, is_best, checkpoint):
-#     """Saves model and training parameters at checkpoint + 'last.pth.tar'. If is_best==True, also saves
-#     checkpoint + 'best.pth.tar'
-#
-#     Args:
-#         state: (dict) contains model's state_dict, may contain other keys such as epoch, optimizer state_dict
-#         is_best: (bool) True if it is the best model seen till now
-#         checkpoint: (string) folder where parameters are to be saved
-#     """
-#     filepath = os.path.join(checkpoint, 'last.pth.tar')
-#     if not os.path.exists(checkpoint):
-#         print("Checkpoint Directory does not exist! Making directory {}".format(checkpoint))
-#         os.mkdir(checkpoint)
-#     else:
-#         if state['epoch'] == 1:
-#             print("Checkpoint Directory exists! ")
-#     torch.save(state, filepath)
-#     if is_best:
-#         shutil.copyfile(filepath, os.path.join(checkpoint, 'best.pth.tar'))
-#
-#
-# def load_checkpoint(checkpoint, model, optimizer=None):
-#     """Loads model parameters (state_dict) from file_path. If optimizer is provided, loads state_dict of
-#     optimizer assuming it is present in checkpoint.
-#
-#     Args:
-#         checkpoint: (string) filename which needs to be loaded
-#         model: (torch.nn.Module) model for which the parameters are loaded
-#         optimizer: (torch.optim) optional: resume optimizer from checkpoint
-#     """
-#     if not os.path.exists(checkpoint):
-#         raise("File doesn't exist {}".format(checkpoint))
-#     checkpoint = torch.load(checkpoint)
-#     model.load_state_dict(checkpoint['state_dict'])
-#
-#     if optimizer:
-#         optimizer.load_state_dict(checkpoint['optim_dict'])
-#
-#     return checkpoint

@@ -2,7 +2,7 @@ from collections import OrderedDict
 from torch import nn as nn
 
 
-class mulLoss(nn.Module):
+class MultiResLoss(nn.Module):
     def __init__(self,
                  sim_loss_fn,
                  sim_loss_name,
@@ -23,7 +23,7 @@ class mulLoss(nn.Module):
             ml_lvls: (int) Numbers of levels for multi-resolution
             ml_weights: (tuple)
         """
-        super(mulLoss, self).__init__()
+        super(MultiResLoss, self).__init__()
 
         self.sim_loss_fn = sim_loss_fn
         self.sim_loss_name = sim_loss_name

@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 from PIL import Image
-from utils.misc import param_dim_setup
+from utils.misc import param_ndim_setup
 import torch.nn.functional as F
 
 
@@ -21,7 +21,7 @@ def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
         (np.ndarray) cropped and/or padded input array
     """
     assert isinstance(x, (np.ndarray, np.generic))
-    new_size = param_dim_setup(new_size, dim=x.ndim-1)
+    new_size = param_ndim_setup(new_size, ndim=x.ndim - 1)
 
     dim = x.ndim - 1
     sizes = x.shape[1:]
@@ -203,7 +203,7 @@ def bbox_from_mask(mask, pad_ratio=0.2):
     """
     dim = mask.ndim - 1
     mask_shape = mask.shape[1:]
-    pad_ratio = param_dim_setup(pad_ratio, dim)
+    pad_ratio = param_ndim_setup(pad_ratio, dim)
 
     # find non-zero locations in the mask
     nonzero_indices = np.nonzero(mask > 0)
