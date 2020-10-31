@@ -10,9 +10,9 @@ import numpy as np
 import torch
 
 from data.datasets import BrainInterSubject3DEval
-from lightning import LightningDLReg
+from model.lightning import LightningDLReg
 from model.baselines import Identity, MirtkFFD, AntsSyN
-from model.transformations import spatial_transform
+from core_modules.transform.utils import spatial_transform
 
 from utils.image_io import save_nifti
 from utils.misc import setup_dir

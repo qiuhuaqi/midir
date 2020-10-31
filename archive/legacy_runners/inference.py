@@ -1,5 +1,5 @@
 """ Run inference.yaml on full sequence of subjects """
-from model.transformations import spatial_transform
+from model.transform.transform_fn import spatial_transform
 
 
 def process_batch(model, data_dict, loss_fn, args):

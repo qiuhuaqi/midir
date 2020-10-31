@@ -1,7 +1,6 @@
 """ Transformation regularisation losses """
 import torch
-
-from model.loss.spt_derivative import finite_diff
+from core_modules.loss.utils import finite_diff
 
 
 def l2reg(dvf):

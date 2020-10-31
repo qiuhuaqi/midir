@@ -1,9 +1,10 @@
 import torch
-import torch.nn.functional as F
 
 import numpy as np
 import os
 import nibabel as nib
+from torch.nn import functional as F
+
 
 def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     """
@@ -74,6 +75,7 @@ def normalise_dvf(dvf):
     """
     Spatially normalise DVF to [-1, 1] coordinate system used by Pytorch `grid_sample()`
     Assumes dvf.yaml size is the same as the corresponding image.
+    # TODO: allow passing image space size
 
     Args:
         dvf: (numpy.ndarray or torch.Tensor, shape (N, dim, *size)) Displacement Vector Field
@@ -150,3 +152,44 @@ def dvf_line_integral(op_flow):
     return accum_flow
 
 
+def spatial_transform(x, dvf, interp_mode="bilinear"):
+    """
+    Spatially transform an image by sampling at transformed locations (2D and 3D)
+    Note that the dvf should not be spatially normalised.
+
+    Args:
+        x: (Tensor float, shape (N, ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
+        dvf: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
+        interp_mode: (string) mode of interpolation in grid_sample()
+
+    Returns:
+        deformed x, Tensor of the same shape as input
+    """
+    dim = x.ndim - 2
+    size = x.size()[2:]
+
+    # normalise DVF to [-1, 1]
+    dvf = normalise_dvf(dvf)
+
+    # generate standard mesh grid
+    mesh_grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(dvf) for i in range(dim)])
+    mesh_grid = [mesh_grid[i].requires_grad_(False) for i in range(dim)]
+
+    # apply displacements to each direction (N, *size)
+    deformed_meshgrid = [mesh_grid[i] + dvf[:, i, ...] for i in range(dim)]
+
+    # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
+    deformed_meshgrid = [deformed_meshgrid[dim - 1 - i] for i in range(dim)]
+    deformed_meshgrid = torch.stack(deformed_meshgrid, -1)  # (N, *size, dim)
+
+    return F.grid_sample(x, deformed_meshgrid, mode=interp_mode, align_corners=False)
+
+
+def ml_spatial_transform(x_pyr, dvfs, interp_mode='bilinear'):
+    """ Multi-resolution spatial transformation"""
+    assert len(x_pyr) == len(dvfs)
+    warped_x_pyr = []
+    for (x, dvf) in zip(x_pyr, dvfs):
+        warped_x = spatial_transform(x, dvf, interp_mode=interp_mode)
+        warped_x_pyr.append(warped_x)
+    return warped_x_pyr

@@ -9,8 +9,8 @@ from torch.optim import Adam
 
 from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
 
-from model.transformations import spatial_transform, ml_spatial_transform
-from model.utils import get_network, get_transformation, get_loss_fn
+from core_modules.transform.utils import spatial_transform, ml_spatial_transform
+from core_modules.utils import get_network, get_transformation, get_loss_fn
 
 from utils.image import create_img_pyramid
 from utils.metric import measure_metrics

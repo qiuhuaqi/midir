@@ -1,9 +1,8 @@
 import math
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
 
-from model.network.base import conv_Nd, avg_pool
+from core_modules.network.base import conv_Nd, interpolate_
 from utils.misc import param_ndim_setup
 
 
@@ -148,81 +147,6 @@ class MultiResUNet(UNet):
             ml_y.append(y_l)
 
         return ml_y
-
-
-
-# class FFDNet(nn.Module):
-#     """
-#     Encoder/downsample only network specifically for FFD module.
-#     Work with both 2D and 3D
-#     """
-#     def __init__(self,
-#                  dim,
-#                  img_size=(192, 192),
-#                  cpt_spacing=(8, 8),
-#                  enc_channels=(64, 128, 256),
-#                  out_channels=(128, 64)
-#                  ):
-#         super(FFDNet, self).__init__()
-#
-#         self.dim = dim
-#
-#         # parameter dimension check
-#         self.img_size = param_dim_setup(img_size, dim)
-#         self.cpt_spacing = param_dim_setup(cpt_spacing, dim)
-#
-#         # encoder layers
-#         self.enc = nn.ModuleList()
-#         for i in range(len(enc_channels)):
-#             in_ch = 2 if i == 0 else enc_channels[i-1]
-#             out_ch = enc_channels[i]
-#             self.enc.append(nn.Sequential(conv_Nd(dim, in_ch, out_ch),
-#                                           nn.LeakyReLU(0.2),
-#                                           conv_Nd(dim, out_ch, out_ch),
-#                                           nn.LeakyReLU(0.2),
-#                                           avg_pool(self.dim)
-#                                           )
-#                             )
-#
-#         # 1x1(x1) conv layers before prediction
-#         self.out_layers = nn.ModuleList()
-#         for i in range(len(out_channels)):
-#             in_ch = enc_channels[-1] if i == 0 else out_channels[i-1]
-#             out_ch = out_channels[i]
-#             self.out_layers.append(nn.Sequential(conv_Nd(self.dim, in_ch, out_ch, kernel_size=1, padding=0),
-#                                                  nn.LeakyReLU(0.2))
-#                                    )
-#
-#         # final prediction layer
-#         self.out_layers.append(
-#             conv_Nd(self.dim, out_channels[-1], self.dim, kernel_size=1, padding=0)
-#         )
-#
-#         # determine output size from image size and control point spacing
-#         self.output_size = tuple([int(isz // cps) + 2
-#                                   for isz, cps in zip(self.img_size, self.cpt_spacing)])
-#
-#     def _resize(self, x):
-#         if self.dim == 2:
-#             inter_mode = "bilinear"
-#         elif self.dim == 3:
-#             inter_mode = "trilinear"
-#         return F.interpolate(x, self.output_size, mode=inter_mode, align_corners=False)
-#
-#     def forward(self, tar, src):
-#         x = torch.cat((tar, src), dim=1)
-#
-#         # encoder
-#         for enc in self.enc:
-#             x = enc(x)
-#
-#         # resize the feature map to match output size
-#         y = self._resize(x)
-#
-#         # 1x1(x1) conv and prediction
-#         for out_layer in self.out_layers:
-#             y = out_layer(y)
-#         return [y]
 
 
 class CubicBSplineNet(UNet):
@@ -404,26 +328,4 @@ class CubicBSplineNet(UNet):
 #
 #         return ml_y
 
-
-def interpolate_(x, scale_factor=None, size=None, mode=None):
-    """ Wrapper for torch.nn.functional.interpolate """
-    if mode == 'nearest':
-        mode = mode
-    else:
-        ndim = x.ndim - 2
-        if ndim == 1:
-            mode = 'linear'
-        if ndim == 2:
-            mode = 'bilinear'
-        elif ndim == 3:
-            mode = 'trilinear'
-        else:
-            raise ValueError(f'Data dimension ({ndim}) must be 2 or 3')
-    y = F.interpolate(x,
-                      scale_factor=scale_factor,
-                      size=size,
-                      mode=mode,
-                      recompute_scale_factor=False
-                      )
-    return y
 

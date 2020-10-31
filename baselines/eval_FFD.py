@@ -16,7 +16,6 @@ from tqdm import tqdm
 import sys
 # always run from one dir above ./src
 import utils.experiment
-import utils.experiment.experiment
 import utils.experiment.model
 
 sys.path.insert(0, f'{os.getcwd()}/src')
@@ -25,7 +24,7 @@ from archive.runners.helpers import MetricReporter
 from utils.metric import measure_metrics
 from utils import misc
 from utils.image_io import save_nifti, split_volume_idmat
-from utils.transformation import dof_to_dvf
+from model.transform.utils import dof_to_dvf
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-modality',

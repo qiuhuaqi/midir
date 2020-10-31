@@ -4,7 +4,7 @@ from tqdm import tqdm
 import numpy as np
 
 import torch
-from model.transformations import spatial_transform
+from model.transform.transform_fn import spatial_transform
 from archive.runners.inference import process_batch
 from archive.runners.helpers import LossReporter, MetricReporter
 

@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from model.network.nets import UNet, MultiResUNet, CubicBSplineNet
-from model.transformations import DVFTransform, MultiResBSplineFFDTransform
+from model.transform.transformations import DVFTransform, MultiResBSplineFFDTransform
 from model.loss import sim_loss, reg_loss
 from model.loss.mul_loss import MultiResLoss
 

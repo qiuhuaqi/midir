@@ -3,9 +3,9 @@ import hydra
 from omegaconf import DictConfig
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
-
-from lightning import LightningDLReg
 from pytorch_lightning import Trainer
+
+from model.lightning import LightningDLReg
 
 import random
 random.seed(7)

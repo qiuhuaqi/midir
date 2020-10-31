@@ -1,7 +1,9 @@
-""" Spatial differentiation functions """
-import torch
-import torch.nn.functional as F
 import numpy as np
+import torch
+from torch.nn import functional as F
+
+
+# Spatial derivatives by finite difference
 
 
 def finite_diff(x, mode="central", boundary="Neumann"):

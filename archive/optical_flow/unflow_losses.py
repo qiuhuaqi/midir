@@ -7,13 +7,11 @@ UnFlow losses with
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from model.transformations import spatial_transform
+from model.transform.transform_fn import spatial_transform
 
-from utils import image
 # Values for occlusion decision threshold
 ALPHA = 0.01
 BETA = 0.5
