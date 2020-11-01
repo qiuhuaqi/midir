@@ -1,9 +1,9 @@
 import torch.nn as nn
 
-from model.network.nets import UNet, MultiResUNet, CubicBSplineNet
-from model.transform.transformations import DVFTransform, MultiResBSplineFFDTransform
-from model.loss import sim_loss, reg_loss
-from model.loss.mul_loss import MultiResLoss
+from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
+from core_modules.transform.transformations import DVFTransform, MultiResBSplineFFDTransform
+from core_modules.loss import similarity, regularisation
+from core_modules.loss.multi_resolution import MultiResLoss
 
 
 def get_network(hparams):
@@ -55,16 +55,16 @@ def get_loss_fn(hparams):
         sim_loss_fn = nn.MSELoss()
 
     elif hparams.loss.sim_loss == 'LNCC':
-        sim_loss_fn = sim_loss.LNCCLoss(hparams.loss.window_size)
+        sim_loss_fn = similarity.LNCCLoss(hparams.loss.window_size)
 
     elif hparams.loss.sim_loss == 'NMI':
-        sim_loss_fn = sim_loss.MILossGaussian(**hparams.loss.mi_cfg)
+        sim_loss_fn = similarity.MILossGaussian(**hparams.loss.mi_cfg)
 
     else:
         raise ValueError(f'Similarity loss not recognised: {hparams.loss.sim_loss}.')
 
     # regularisation loss
-    reg_loss_fn = getattr(reg_loss, hparams.loss.reg_loss)
+    reg_loss_fn = getattr(regularisation, hparams.loss.reg_loss)
 
     # multi-resolution loss function
     loss_fn = MultiResLoss(sim_loss_fn,
