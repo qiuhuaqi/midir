@@ -195,7 +195,7 @@ class CubicBSplineNet(UNet):
                                                   nn.LeakyReLU(0.2)))
 
         # final prediction layer
-        self.out_layers = None
+        delattr(self, 'out_layers')
         self.out_layer = conv_Nd(ndim, resize_channels[-1], ndim)
 
     def forward(self, tar, src):

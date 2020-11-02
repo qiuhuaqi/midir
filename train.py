@@ -32,7 +32,8 @@ def main(cfg: DictConfig) -> None:
                                     mode='min',
                                     filepath=f'{logger.log_dir}/checkpoints/'
                                     + '{epoch}-{val_loss:.4f}-{mean_dice_mean:.4f}',
-                                    verbose=True
+                                    verbose=True,
+                                    save_top_k=3
                                     )
 
     trainer = Trainer(default_root_dir=model_dir,
