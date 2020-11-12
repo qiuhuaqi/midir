@@ -171,7 +171,8 @@ class CubicBSplineNet(UNet):
         for i, c in enumerate(cps):
             if c > 8 or c < 2:
                 raise ValueError(f"Control point spacing ({c}) at dim ({i}) not supported, must be within [1, 8]")
-        self.output_size = tuple([int(math.ceil((imsz-1) / c) + 1 + 2) for imsz, c in zip(img_size, cps)])
+        self.output_size = tuple([int(math.ceil((imsz-1) / c) + 1 + 2)
+                                  for imsz, c in zip(img_size, cps)])
 
         # Network:
         # same unet encoder

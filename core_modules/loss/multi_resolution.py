@@ -37,35 +37,35 @@ class MultiResLoss(nn.Module):
             ml_weights = (1.,) * ml_lvls
         self.ml_weights = ml_weights
 
-    def forward(self, tar, warped_src, dvf_pred):
+    def forward(self, tars, warped_srcs, flows):
+        assert len(tars) == len(flows)
+        assert len(warped_srcs) == len(flows)
+        assert len(flows) == self.ml_lvls
+
         # compute loss at multi-level
-        loss_val = 0
-        sim_loss_val = 0
-        reg_loss_val = 0
+        loss = 0
+        sim_loss = 0
+        reg_loss = 0
 
         losses = OrderedDict()
-        for l in range(self.ml_lvls):
-            tar_l = tar[l]
-            warped_src_l = warped_src[l]
+        for l, (tar, warped_src, flow, weight_l) in enumerate(zip(tars, warped_srcs, flows, self.ml_weights)):
+            sim_loss_l = self.sim_loss_fn(tar, warped_src)
+            reg_loss_l = self.reg_loss_fn(flow) * self.reg_weight
+            loss_l = sim_loss_l + reg_loss_l
 
-            sim_loss_val_l = self.sim_loss_fn(tar_l, warped_src_l)
-            reg_loss_val_l = self.reg_loss_fn(dvf_pred[-l - 1]) * self.reg_weight
-
-            loss_val_l = sim_loss_val_l + reg_loss_val_l
-
-            sim_loss_val = sim_loss_val + sim_loss_val_l * self.ml_weights[l]
-            reg_loss_val = reg_loss_val + reg_loss_val_l * self.ml_weights[l]
-            loss_val = loss_val + loss_val_l * self.ml_weights[l]
+            sim_loss = sim_loss + sim_loss_l * weight_l
+            reg_loss = reg_loss + reg_loss_l * weight_l
+            loss = loss + loss_l * weight_l
 
             # record losses for all resolution levels
-            losses_l = {f"loss_lv{l}": loss_val_l,
-                        f"{self.sim_loss_name}_lv{l}": sim_loss_val_l,
-                        f"{self.reg_loss_name}_lv{l}": reg_loss_val_l}
+            losses_l = {f"loss_lv{l}": loss_l,
+                        f"{self.sim_loss_name}_lv{l}": sim_loss_l,
+                        f"{self.reg_loss_name}_lv{l}": reg_loss_l}
             losses.update(losses_l)
 
         # add overall loss
-        losses.update({f"loss": loss_val,
-                      f"{self.sim_loss_name}": sim_loss_val,
-                      f"{self.reg_loss_name}": reg_loss_val})
+        losses.update({f"loss": loss,
+                      f"{self.sim_loss_name}": sim_loss,
+                      f"{self.reg_loss_name}": reg_loss})
 
         return losses

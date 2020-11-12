@@ -27,7 +27,7 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
 
     # keys must match metric_groups and params.metric_groups
     # (using groups to share pre-scripts)
-    metric_group_fns = {'dvf_metrics': measure_dvf_metrics,
+    metric_group_fns = {'disp_metrics': measure_disp_metrics,
                         'image_metrics': measure_image_metrics,
                         'seg_metrics': measure_seg_metrics}
 
@@ -42,7 +42,7 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
     return metric_results
 
 
-def measure_dvf_metrics(metric_data):
+def measure_disp_metrics(metric_data):
     """
     Calculate DVF-related metrics.
     If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
@@ -54,9 +54,9 @@ def measure_dvf_metrics(metric_data):
         metric_results: (dict)
     """
     # new object to avoid changing data in metric_data
-    dvf_pred = metric_data['dvf_pred']
-    if 'dvf_gt' in metric_data.keys():
-        dvf_gt = metric_data['dvf_gt']
+    disp_pred = metric_data['disp_pred']
+    if 'disp_gt' in metric_data.keys():
+        disp_gt = metric_data['disp_gt']
 
     # mask the DVF with roi mask if given
     if 'roi_mask' in metric_data.keys():
@@ -66,15 +66,15 @@ def measure_dvf_metrics(metric_data):
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
 
         # mask and bbox crop dvf gt and pred by roi_mask
-        dvf_pred = dvf_pred * roi_mask
-        dvf_pred = bbox_crop(dvf_pred, mask_bbox)
+        disp_pred = disp_pred * roi_mask
+        disp_pred = bbox_crop(disp_pred, mask_bbox)
 
         if 'dvf_gt' in metric_data.keys():
-            dvf_gt = dvf_gt * roi_mask
-            dvf_gt = bbox_crop(dvf_gt, mask_bbox)
+            disp_gt = disp_gt * roi_mask
+            disp_gt = bbox_crop(disp_gt, mask_bbox)
 
     # Regularity (Jacobian) metrics
-    folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(dvf_pred)
+    folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(disp_pred)
 
     dvf_metric_results = dict()
     dvf_metric_results.update({'folding_ratio': folding_ratio,
@@ -82,8 +82,8 @@ def measure_dvf_metrics(metric_data):
 
     # DVF accuracy metrics if ground truth is available
     if 'dvf_gt' in metric_data.keys():
-        dvf_metric_results.update({'aee': calculate_aee(dvf_pred, dvf_gt),
-                                   'rmse_dvf': calculate_rmse_dvf(dvf_pred, dvf_gt)})
+        dvf_metric_results.update({'aee': calculate_aee(disp_pred, disp_gt),
+                                   'rmse_dvf': calculate_rmse_dvf(disp_pred, disp_gt)})
     return dvf_metric_results
 
 

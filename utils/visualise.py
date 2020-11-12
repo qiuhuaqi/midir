@@ -130,11 +130,11 @@ def plot_result_fig(vis_data_dict, save_path=None, title_font_size=20, dpi=100, 
     # warped grid: ground truth
     ax = plt.subplot(2, 4, 7)
     bg_img = np.zeros_like(vis_data_dict["target"])
-    plot_warped_grid(ax, vis_data_dict["dvf_gt"], bg_img, interval=3, title="$\phi_{GT}$", fontsize=title_font_size)
+    plot_warped_grid(ax, vis_data_dict["disp_gt"], bg_img, interval=3, title="$\phi_{GT}$", fontsize=title_font_size)
 
     # warped grid: prediction
     ax = plt.subplot(2, 4, 8)
-    plot_warped_grid(ax, vis_data_dict["dvf_pred"], bg_img, interval=3, title="$\phi_{pred}$", fontsize=title_font_size)
+    plot_warped_grid(ax, vis_data_dict["disp_pred"], bg_img, interval=3, title="$\phi_{pred}$", fontsize=title_font_size)
 
     # adjust subplot placements and spacing
     plt.subplots_adjust(left=0.0001, right=0.99, top=0.9, bottom=0.1, wspace=0.001, hspace=0.1)
@@ -184,7 +184,7 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
         # visualise the middle slice of the chosen axis
         z = int(sizes[axis] // 2)
         for name, d in data_dict.items():
-            if name in ["dvf_pred", "dvf_gt"]:
+            if name in ["disp_pred", "disp_gt"]:
                 # dvf.yaml: choose the two axes/directions to visualise
                 axes = [0, 1, 2]
                 axes.remove(axis)
@@ -194,8 +194,8 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
                 vis_data_dict[name] = d[0, 0, ...].take(z, axis=axis)  # (X, X)
 
     # housekeeping: dummy dvf_gt for inter-subject case
-    if not "dvf_gt" in data_dict.keys():
-        vis_data_dict["dvf_gt"] = np.zeros_like(vis_data_dict["dvf_pred"])
+    if not "disp_gt" in data_dict.keys():
+        vis_data_dict["disp_gt"] = np.zeros_like(vis_data_dict["disp_pred"])
 
     # set up figure saving path
     if save_result_dir is not None:

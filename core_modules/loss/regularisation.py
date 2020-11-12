@@ -3,35 +3,36 @@ import torch
 from core_modules.loss.utils import finite_diff
 
 
-def l2reg(dvf):
+def l2reg(x):
     """
-    L2 regularisation of the spatial derivatives of DVF
+    L2 regularisation of the spatial derivatives of displacement or velocity field
 
     Args:
-        dvf: (torch.Tensor, size (N, dim, *sizes)) Dense displacement vector field
+        x: (torch.Tensor, size (N, dim, *sizes)) Dense vector field
 
     Returns:
         diffusion loss: (scalar) Diffusion (L2) regularisation loss
     """
-    dvf_dxyz = finite_diff(dvf, mode="forward")
-    return torch.cat(dvf_dxyz, dim=1).pow(2).sum(dim=1).mean()
+    x_dxyz = finite_diff(x, mode="forward")
+    return torch.cat(x_dxyz, dim=1).pow(2).sum(dim=1).mean()
 
 
-def bending_energy(dvf):
+def bending_energy(x):
     """
     Compute the Bending Energy regularisation loss (Rueckert et al., 1999)
 
     Args:
-        dvf: (torch.Tensor, size (N, dim, *sizes)) Dense displacement vector field
+        x: (torch.Tensor, size (N, dim, *sizes)) Dense vector field
 
     Returns:
         BE: (scalar) Bending Energy loss
     """
     # 1st order derivatives
-    dvf_d1 = finite_diff(dvf, mode="forward")
+    dvf_d1 = finite_diff(x, mode="forward")
 
     # 2nd order derivatives
-    dvf_d2 = [finite_diff(dvf_d, mode="forward") for dvf_d in dvf_d1]
+    dvf_d1 = torch.cat(dvf_d1, dim=1)
+    dvf_d2 = finite_diff(dvf_d1, mode="forward")
     return torch.cat(dvf_d2, dim=1).pow(2).sum(dim=1).mean()
 
 

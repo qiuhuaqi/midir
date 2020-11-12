@@ -33,16 +33,16 @@ def finite_diff_oneside(x, direction="forward", boundary="Neumann"):
         x_diff
     """
 
-    dim = x.ndim - 2
+    ndim = x.ndim - 2
     sizes = x.shape[2:]
 
     # initialise finite difference list
     x_diff = []  # [x_dx, x_dy, x_dz]
 
-    for i in range(dim):
+    for i in range(ndim):
         # configure padding of this dimension
         # (don't use []*dim as it just replicates pointers of the one array)
-        paddings = [[0, 0] for j in range(dim)]
+        paddings = [[0, 0] for j in range(ndim)]
 
         if direction == "forward":
             # forward difference: pad after

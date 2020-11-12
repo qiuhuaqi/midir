@@ -9,7 +9,7 @@ from torch.optim import Adam
 
 from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
 
-from core_modules.transform.utils import spatial_transform, ml_spatial_transform
+from core_modules.transform.utils import warp, multi_res_warp
 from model.utils import get_network, get_transformation, get_loss_fn
 
 from utils.image import create_img_pyramid
@@ -81,25 +81,28 @@ class LightningDLReg(pl.LightningModule):
 
     def forward(self, tar, src):
         net_out = self.network(tar, src)
-        dvf = self.transformation(net_out)
-        return dvf
+        out = self.transformation(net_out)
+        return out
 
     def _step(self, batch):
         """ Forward pass inference + compute loss """
-
-        dvf_preds = self.forward(batch['target'], batch['source'])
+        out = self.forward(batch['target'], batch['source'])
 
         # create image pyramids
         tar_pyr = create_img_pyramid(batch['target'], self.hparams.meta.ml_lvls)
         src_pyr = create_img_pyramid(batch['source'], self.hparams.meta.ml_lvls)
 
-        # warpe source image (pyramid)
-        warped_src_pyr = ml_spatial_transform(src_pyr, dvf_preds)
+        if self.hparams.transformation.config.svf:
+            flows, disps = out
+            warped_src_pyr = multi_res_warp(src_pyr, disps)
+            losses = self.loss_fn(tar_pyr, warped_src_pyr, flows)
 
-        # compute loss
-        losses = self.loss_fn(tar_pyr, warped_src_pyr, dvf_preds)
+        else:
+            disps = out
+            warped_src_pyr = multi_res_warp(src_pyr, disps)
+            losses = self.loss_fn(tar_pyr, warped_src_pyr, disps)
 
-        step_dict = {'dvf_pred': dvf_preds,
+        step_dict = {'disp_pred': disps,
                      'target': tar_pyr,
                      'source': src_pyr,
                      'warped_source': warped_src_pyr}
@@ -121,7 +124,7 @@ class LightningDLReg(pl.LightningModule):
         # reshape data from dataloader
         # TODO: hacky reshape data is not compatible with 3D when batch_size>1
         for k, x in batch.items():
-            if k == "dvf_gt":
+            if k == "disp_gt":
                 batch[k] = x[0, ...]  # (N, dim, *(sizes))
             else:
                 batch[k] = x.transpose(0, 1)  # (N, 1, *(dims))
@@ -136,13 +139,13 @@ class LightningDLReg(pl.LightningModule):
             metric_data[k] = step_dict[k][-1]
 
         if 'source_seg' in batch.keys():
-            metric_data['warped_source_seg'] = spatial_transform(batch['source_seg'], step_dict['dvf_pred'][-1],
-                                                                 interp_mode='nearest')
+            metric_data['warped_source_seg'] = warp(batch['source_seg'], step_dict['disp_pred'][-1],
+                                                    interp_mode='nearest')
         if 'target_original' in batch.keys():
-            # compute pyramid for visualisation
+            # create pyramids for visualisation and metrics measuring
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
             step_dict['target_original'] = target_original_pyr
-            target_pred_pyr = ml_spatial_transform(target_original_pyr, step_dict['dvf_pred'])
+            target_pred_pyr = multi_res_warp(target_original_pyr, step_dict['disp_pred'])
             step_dict['target_pred'] = target_pred_pyr
             metric_data['target_pred'] = target_pred_pyr[-1]
 

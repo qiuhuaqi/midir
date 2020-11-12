@@ -1,5 +1,7 @@
 # @package _group_
 type: BSPLINE
 config:
-  svf: False
   cps: 4
+  svf: True
+  svf_steps: 7
+  svf_scale: 1

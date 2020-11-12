@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
-from core_modules.transform.transformations import DVFTransform, MultiResBSplineFFDTransform
+from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
 from core_modules.loss import similarity, regularisation
 from core_modules.loss.multi_resolution import MultiResLoss
 
@@ -17,12 +17,6 @@ def get_network(hparams):
                                ml_lvls=hparams.meta.ml_lvls,
                                **hparams.network.net_config)
 
-    # elif hparams.network.name == "ffdnet":
-    #     network = FFDNet(dim=hparams.data.ndim,
-    #                      img_size=hparams.data.crop_size,
-    #                      cpt_spacing=hparams.transformation.sigma,
-    #                      **hparams.network.net_config)
-
     elif hparams.network.name == "bspline_net":
         network = CubicBSplineNet(ndim=hparams.data.ndim,
                                   img_size=hparams.data.crop_size,
@@ -36,14 +30,17 @@ def get_network(hparams):
 
 def get_transformation(hparams):
     """Configure transformation"""
-    if hparams.transformation.type == "DVF":
-        transformation = DVFTransform()
+    if hparams.transformation.type == "DENSE":
+        transformation = DenseTransform(lvls=hparams.meta.ml_lvls,
+                                        **hparams.transformation.config
+                                        )
 
-    elif hparams.transformation.type == "FFD":
-        transformation = MultiResBSplineFFDTransform(dim=hparams.data.ndim,
-                                                     img_size=hparams.data.crop_size,
-                                                     lvls=hparams.meta.ml_lvls,
-                                                     cps=hparams.transformation.cps)
+    elif hparams.transformation.type == "BSPLINE":
+        transformation = CubicBSplineFFDTransform(ndim=hparams.data.ndim,
+                                                  lvls=hparams.meta.ml_lvls,
+                                                  img_size=hparams.data.crop_size,
+                                                  **hparams.transformation.config
+                                                  )
     else:
         raise ValueError("Model config parsing: Transformation model not recognised")
     return transformation

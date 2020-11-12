@@ -1,0 +1,6 @@
+# @package _group_
+type: DENSE
+config:
+  svf: True
+  svf_steps: 7
+  svf_scale: 1

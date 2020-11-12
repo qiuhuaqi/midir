@@ -3,7 +3,7 @@ lr: 1e-4
 
 trainer:
     gpus: 1
-    max_epochs: 50
+    max_epochs: 100
     row_log_interval: 1
     check_val_every_n_epoch: 1
     fast_dev_run: False

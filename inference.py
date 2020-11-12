@@ -12,7 +12,7 @@ import torch
 from data.datasets import BrainInterSubject3DEval
 from model.lightning import LightningDLReg
 from model.baselines import Identity, MirtkFFD, AntsSyN
-from core_modules.transform.utils import spatial_transform
+from core_modules.transform.utils import warp
 
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
@@ -69,20 +69,21 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
 
         # model inference
         # TODO: models should produce a list of dvfs (to cope with multi-level)
+        # TODO: adjust for [flow(SVF), disp] or [disp]
         batch['dvf_pred'] = model(batch['target'], batch['source'])[-1]
 
         # deform source segmentation with predicted DVF
         if 'source_seg' in batch.keys():
             # apply estimated transformation to segmentation
-            batch['warped_source_seg'] = spatial_transform(batch['source_seg'], batch['dvf_pred'],
-                                                           interp_mode='nearest')
+            batch['warped_source_seg'] = warp(batch['source_seg'], batch['dvf_pred'],
+                                              interp_mode='nearest')
 
         # deform source image with predicted DVF
-        batch['warped_source'] = spatial_transform(batch['source'], batch['dvf_pred'])
+        batch['warped_source'] = warp(batch['source'], batch['dvf_pred'])
 
         # deform target original image with predicted DVF
         if 'target_original' in batch.keys():
-            batch['target_pred'] = spatial_transform(batch['target_original'], batch['dvf_pred'])
+            batch['target_pred'] = warp(batch['target_original'], batch['dvf_pred'])
 
         # save the outputs
         subj_id = inference_dataset.subject_list[idx]
