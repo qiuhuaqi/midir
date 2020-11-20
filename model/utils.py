@@ -20,7 +20,7 @@ def get_network(hparams):
     elif hparams.network.name == "bspline_net":
         network = CubicBSplineNet(ndim=hparams.data.ndim,
                                   img_size=hparams.data.crop_size,
-                                  cps=hparams.transformation.cps,
+                                  cps=hparams.transformation.config.cps,
                                   **hparams.network.net_config)
 
     else:
