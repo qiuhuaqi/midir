@@ -152,34 +152,35 @@ def dvf_line_integral(op_flow):
     return accum_flow
 
 
-def warp(x, dvf, interp_mode="bilinear"):
+def warp(x, disp, interp_mode="bilinear"):
     """
     Spatially transform an image by sampling at transformed locations (2D and 3D)
     Note that the dvf should not be spatially normalised.
 
     Args:
         x: (Tensor float, shape (N, ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
-        dvf: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
+        disp: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
         interp_mode: (string) mode of interpolation in grid_sample()
 
     Returns:
         deformed x, Tensor of the same shape as input
     """
-    dim = x.ndim - 2
+    ndim = x.ndim - 2
     size = x.size()[2:]
+    disp = disp.type_as(x)
 
-    # normalise DVF to [-1, 1]
-    dvf = normalise_dvf(dvf)
+    # cast and normalise disp to [-1, 1]
+    disp = normalise_dvf(disp)
 
     # generate standard mesh grid
-    grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(dvf) for i in range(dim)])
-    grid = [grid[i].requires_grad_(False) for i in range(dim)]
+    grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)])
+    grid = [grid[i].requires_grad_(False) for i in range(ndim)]
 
     # apply displacements to each direction (N, *size)
-    warped_grid = [grid[i] + dvf[:, i, ...] for i in range(dim)]
+    warped_grid = [grid[i] + disp[:, i, ...] for i in range(ndim)]
 
     # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
-    warped_grid = [warped_grid[dim - 1 - i] for i in range(dim)]
+    warped_grid = [warped_grid[ndim - 1 - i] for i in range(ndim)]
     warped_grid = torch.stack(warped_grid, -1)  # (N, *size, dim)
 
     return F.grid_sample(x, warped_grid, mode=interp_mode, align_corners=False)
@@ -225,6 +226,6 @@ def svf_exp(flow, scale=1, steps=5, sampling='bilinear'):
 
     disp = flow * (scale / (2 ** steps))
     for _ in range(steps):
-        disp = disp + warp(x=disp, dvf=disp,
+        disp = disp + warp(x=disp, disp=disp,
                            interp_mode=sampling)
     return disp
