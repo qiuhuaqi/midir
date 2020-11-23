@@ -77,7 +77,12 @@ class LightningDLReg(pl.LightningModule):
                           )
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.hparams.training.lr)
+        optimizer = Adam(self.parameters(), lr=self.hparams.training.lr)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                    step_size=self.hparams.training.lr_decay_step,
+                                                    gamma=0.1,
+                                                    last_epoch=-1)
+        return [optimizer], [scheduler]
 
     def forward(self, tar, src):
         net_out = self.network(tar, src)
@@ -116,7 +121,7 @@ class LightningDLReg(pl.LightningModule):
             for k, loss in train_losses.items():
                 # self.logger.experiment.add_scalars(k, {'train': loss}, global_step=self.global_step)
                 self.logger.experiment.add_scalar(f'train_loss/{k}',
-                                                  loss,
+                                                  loss.detach(),
                                                   global_step=self.global_step)
         return {'loss': train_losses['loss']}
 
@@ -132,21 +137,19 @@ class LightningDLReg(pl.LightningModule):
         # run inference, compute losses and outputs
         val_losses, step_dict = self._step(batch)
 
-        # collect data for metrics
-        metric_data = dict()
-        for k, x in step_dict.items():
-            # metrics are evaluated using the original resolution
-            metric_data[k] = step_dict[k][-1]
+        # metrics are evaluated using data of the original resolution
+        metric_data = {k: x[-1] for k, x in step_dict.items()}
 
         if 'source_seg' in batch.keys():
-            metric_data['warped_source_seg'] = warp(batch['source_seg'], step_dict['disp_pred'][-1],
+            # inference for segmentation metric
+            metric_data['warped_source_seg'] = warp(batch['source_seg'], metric_data['disp_pred'],
                                                     interp_mode='nearest')
         if 'target_original' in batch.keys():
-            # create pyramids for visualisation and metrics measuring
+            # for visualisation and metrics measuring
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
-            step_dict['target_original'] = target_original_pyr
+            step_dict['target_original'] = target_original_pyr  # for visualisation
             target_pred_pyr = multi_res_warp(target_original_pyr, step_dict['disp_pred'])
-            step_dict['target_pred'] = target_pred_pyr
+            step_dict['target_pred'] = target_pred_pyr  # for visualisation
             metric_data['target_pred'] = target_pred_pyr[-1]
 
         # measure metrics
@@ -167,31 +170,29 @@ class LightningDLReg(pl.LightningModule):
                                                   val_fig_l,
                                                   global_step=self.global_step,
                                                   close=True)
-        return val_losses, metric_result_step
 
     def _check_log_best_metric(self, val_loss, metric_result):
         """ Update the best metric results, called at validation_epoch_end """
-        # TODO: this should be in model checkpoint the checkpointing callback can access the Trainer's logger
+        # TODO: this should be in model checkpointing callback
 
-        current_metric = dict()
-        current_metric.update(val_loss)
-        current_metric.update(metric_result)
+        current_metric_result = dict()
+        current_metric_result.update(val_loss)
+        current_metric_result.update(metric_result)
 
-        # TODO: avoid hard coding best metrics
-        best_metric = 'loss'
+        best_metric = 'loss'  # log best metrics when validation loss is a new lowest
         if self.current_epoch == 0:
             # log the first metric as the best
             is_best = True
         else:
             # determine if the current metric result is the best
-            is_best = current_metric[best_metric] < self.best_metric_result[best_metric]
+            is_best = current_metric_result[best_metric] < self.best_metric_result[best_metric]
 
         if is_best:
             # update the best metric value and log the other best metrics at this step
             for m in self.hparams.meta.best_metrics:
-                self.best_metric_result[m] = current_metric[m]
+                self.best_metric_result[m] = current_metric_result[m]
                 self.logger.experiment.add_scalar(f'best/{m}',
-                                                  current_metric[m],
+                                                  current_metric_result[m],
                                                   global_step=self.global_step)
 
     def validation_epoch_end(self, outputs):
@@ -200,7 +201,7 @@ class LightningDLReg(pl.LightningModule):
         val_loss_list = [x[0] for x in outputs]
         val_loss_reduced = dict()
         for k in val_loss_list[0].keys():
-            val_loss_reduced[k] = torch.stack([x[k] for x in val_loss_list]).mean()
+            val_loss_reduced[k] = torch.stack([x[k].detach() for x in val_loss_list]).mean()
             self.logger.experiment.add_scalar(f'val_loss/{k}',
                                               val_loss_reduced[k],
                                               global_step=self.global_step)
