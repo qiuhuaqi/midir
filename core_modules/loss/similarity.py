@@ -51,8 +51,10 @@ class MILossGaussian(nn.Module):
         self.bins = self.bins.type_as(x)
 
         # calculate Parzen window function response (N, #bins, H*W*D)
-        win_x = torch.exp(-(x - self.bins) ** 2 / (2 * self.sigma ** 2)) / math.sqrt(2 * math.pi) * self.sigma
-        win_y = torch.exp(-(y - self.bins) ** 2 / (2 * self.sigma ** 2)) / math.sqrt(2 * math.pi) * self.sigma
+        win_x = torch.exp(-(x - self.bins) ** 2 / (2 * self.sigma ** 2))
+        win_x = win_x / (math.sqrt(2 * math.pi) * self.sigma)
+        win_y = torch.exp(-(y - self.bins) ** 2 / (2 * self.sigma ** 2))
+        win_y = win_y / (math.sqrt(2 * math.pi) * self.sigma)
 
         # calculate joint histogram batch
         hist_joint = win_x.bmm(win_y.transpose(1, 2))  # (N, #bins, #bins)
@@ -125,18 +127,18 @@ class LNCCLoss(nn.Module):
         tar_src = tar * src
 
         # set window size
-        dim = tar.ndim() - 2
-        window_size = param_ndim_setup(self.window_size, dim)
+        ndim = tar.dim() - 2
+        window_size = param_ndim_setup(self.window_size, ndim)
 
         # summation filter for convolution
         sum_filt = torch.ones(1, 1, *window_size).type_as(tar)
 
         # set stride and padding
-        stride = (1,) * dim
-        padding = tuple([math.floor(window_size[i]/2) for i in range(dim)])
+        stride = (1,) * ndim
+        padding = tuple([math.floor(window_size[i]/2) for i in range(ndim)])
 
         # get convolution function of the correct dimension
-        conv_fn = getattr(F, f'conv{dim}d')
+        conv_fn = getattr(F, f'conv{ndim}d')
 
         # summing over window by convolution
         tar_sum = conv_fn(tar, sum_filt, stride=stride, padding=padding)

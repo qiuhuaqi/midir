@@ -5,7 +5,7 @@ mi_cfg:
   vmin: 0.0
   vmax: 1.0
   num_bins: 64
-  roi: True
+  roi: False
   normalised: True
 
 sim_weight: 1.0
@@ -14,4 +14,4 @@ loss_roi: False
 reg_loss: l2reg
 reg_weight: 0.1
 
-ml_weights: [0.25, 0.5, 1.]
+ml_weights: [1.]

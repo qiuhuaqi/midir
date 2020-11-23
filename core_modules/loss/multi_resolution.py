@@ -31,15 +31,16 @@ class MultiResLoss(nn.Module):
         self.reg_loss_name = reg_loss_name
         self.reg_weight = reg_weight
 
-        # configure multi-resolutions
+        # configure multi-resolutions and weighting
         self.ml_lvls = ml_lvls
         if ml_weights is None:
             ml_weights = (1.,) * ml_lvls
         self.ml_weights = ml_weights
+        assert len(self.ml_weights) == self.ml_lvls
 
     def forward(self, tars, warped_srcs, flows):
-        assert len(tars) == len(flows)
-        assert len(warped_srcs) == len(flows)
+        assert len(tars) == self.ml_lvls
+        assert len(warped_srcs) == self.ml_lvls
         assert len(flows) == self.ml_lvls
 
         # compute loss at multi-level

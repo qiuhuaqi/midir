@@ -6,4 +6,4 @@ window_size: 7
 reg_loss: l2reg
 reg_weight: 0.1
 
-ml_weights: [0.25, 0.5, 1.]
+ml_weights: [1.]
