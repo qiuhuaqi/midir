@@ -1,0 +1,14 @@
+# @package _group_
+ndim: 2
+
+batch_size: 1
+num_workers: 4
+shuffle: False
+
+crop_size: [192, 192]
+
+# TODO: fill data path
+dataset:
+train_path:
+val_path:
+test_path:

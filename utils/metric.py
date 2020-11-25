@@ -45,10 +45,10 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
 def measure_disp_metrics(metric_data):
     """
     Calculate DVF-related metrics.
-    If roi_mask is given, the DVF is masked and only evaluate in the bounding box of the mask.
+    If roi_mask is given, the disp is masked and only evaluate in the bounding box of the mask.
 
     Args:
-        metric_data: (dict) DVF shapes (N, dim, *sizes), roi mask shape (N, 1, *sizes)
+        metric_data: (dict)
 
     Returns:
         metric_results: (dict)
@@ -60,7 +60,7 @@ def measure_disp_metrics(metric_data):
 
     # mask the DVF with roi mask if given
     if 'roi_mask' in metric_data.keys():
-        roi_mask = metric_data['roi_mask']  # (N, 1, *(dims))
+        roi_mask = metric_data['roi_mask']  # (N, 1, *(sizes))
 
         # find roi mask bbox mask
         mask_bbox, mask_bbox_mask = bbox_from_mask(roi_mask[:, 0, ...])
@@ -69,22 +69,22 @@ def measure_disp_metrics(metric_data):
         disp_pred = disp_pred * roi_mask
         disp_pred = bbox_crop(disp_pred, mask_bbox)
 
-        if 'dvf_gt' in metric_data.keys():
+        if 'disp_gt' in metric_data.keys():
             disp_gt = disp_gt * roi_mask
             disp_gt = bbox_crop(disp_gt, mask_bbox)
 
     # Regularity (Jacobian) metrics
     folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(disp_pred)
 
-    dvf_metric_results = dict()
-    dvf_metric_results.update({'folding_ratio': folding_ratio,
+    disp_metric_results = dict()
+    disp_metric_results.update({'folding_ratio': folding_ratio,
                                'mag_det_jac_det': mag_det_jac_det})
 
     # DVF accuracy metrics if ground truth is available
-    if 'dvf_gt' in metric_data.keys():
-        dvf_metric_results.update({'aee': calculate_aee(disp_pred, disp_gt),
-                                   'rmse_dvf': calculate_rmse_dvf(disp_pred, disp_gt)})
-    return dvf_metric_results
+    if 'disp_gt' in metric_data.keys():
+        disp_metric_results.update({'aee': calculate_aee(disp_pred, disp_gt),
+                                   'rmse_disp': calculate_rmse_disp(disp_pred, disp_gt)})
+    return disp_metric_results
 
 
 def measure_image_metrics(metric_data):
@@ -104,19 +104,17 @@ def measure_image_metrics(metric_data):
 
 def measure_seg_metrics(metric_data):
     """ Calculate segmentation """
-    # TODO: add 2D support (could use a dummy loop)
-
     seg_gt = metric_data['target_seg']
     seg_pred = metric_data['warped_source_seg']
+    assert seg_gt.ndim == seg_pred.ndim
 
     results = dict()
-
-    # calculate DICE score for each class
     for label_cls in np.unique(seg_gt):
+        # calculate DICE score for each class
         if label_cls == 0:
-            # ignore background
+            # skip background
             continue
-        results[f'dice_class_{label_cls}'] = calculate_dice_volume(seg_gt, seg_pred, label_class=label_cls)
+        results[f'dice_class_{label_cls}'] = calculate_dice(seg_gt, seg_pred, label_class=label_cls)
 
     # calculate mean dice
     results['mean_dice'] = np.mean([dice for k, dice in results.items()])
@@ -133,7 +131,7 @@ def calculate_aee(x, y):
     return np.sqrt(((x - y) ** 2).sum(axis=1)).mean()
 
 
-def calculate_rmse_dvf(x, y):
+def calculate_rmse_disp(x, y):
     """
     RMSE of DVF (square root over mean of sum squared)
     Input DVF shape: (N, dim, *(sizes))
@@ -148,12 +146,12 @@ def calculate_rmse(x, y):
     return np.sqrt(((x - y) ** 2).mean())
 
 
-def calculate_jacobian_metrics(dvf):
+def calculate_jacobian_metrics(disp):
     """
     Calculate Jacobian related regularity metrics.
 
     Args:
-        dvf: (numpy.ndarray, shape (N, dim, *sizes) Displacement field
+        disp: (numpy.ndarray, shape (N, ndim, *sizes) Displacement field
 
     Returns:
         folding_ratio: (scalar) Folding ratio (ratio of Jacobian determinant < 0 points)
@@ -161,49 +159,49 @@ def calculate_jacobian_metrics(dvf):
     """
     folding_ratio = []
     mag_grad_jac_det = []
-    for n in range(dvf.shape[0]):
-        dvf_n = np.moveaxis(dvf[n, ...], 0, -1)  # (*sizes, dim)
-        jac_det_n = calculate_jacobian_det(dvf_n)
-
+    for n in range(disp.shape[0]):
+        disp_n = np.moveaxis(disp[n, ...], 0, -1)  # (*sizes, ndim)
+        jac_det_n = calculate_jacobian_det(disp_n)
         folding_ratio += [(jac_det_n < 0).sum() / np.prod(jac_det_n.shape)]
         mag_grad_jac_det += [np.abs(np.gradient(jac_det_n)).mean()]
     return np.mean(folding_ratio), np.mean(mag_grad_jac_det)
 
 
-def calculate_jacobian_det(dvf):
+def calculate_jacobian_det(disp):
     """
     Calculate Jacobian determinant of displacement field of one image/volume (2D/3D)
 
     Args:
-        dvf: (numpy.ndarray, shape (*sizes, dim)) Displacement field
+        disp: (numpy.ndarray, shape (*sizes, ndim)) Displacement field
 
     Returns:
         jac_det: (numpy.adarray, shape (*sizes) Point-wise Jacobian determinant
     """
-    dvf_img = sitk.GetImageFromArray(dvf, isVector=True)
-    jac_det_img = sitk.DisplacementFieldJacobianDeterminant(dvf_img)
+    disp_img = sitk.GetImageFromArray(disp, isVector=True)
+    jac_det_img = sitk.DisplacementFieldJacobianDeterminant(disp_img)
     jac_det = sitk.GetArrayFromImage(jac_det_img)
     return jac_det
 
 
-def calculate_dice_volume(mask1, mask2, label_class=0):
+def calculate_dice(mask1, mask2, label_class=0):
     """
-    Dice score of a specified class between two volumes of label masks.
+    Dice score of a specified class between two label masks.
     (classes are encoded but by label class number not one-hot )
-    Note: stacks of 2D slices are considered volumes.
 
     Args:
-        mask1: N label masks, numpy array shaped (H, W, N)
-        mask2: N label masks, numpy array shaped (H, W, N)
-        label_class: the class over which to calculate dice scores
+        mask1: (numpy.array, shape (N, 1, *sizes)) segmentation mask 1
+        mask2: (numpy.array, shape (N, 1, *sizes)) segmentation mask 2
+        label_class: (int or float)
 
     Returns:
         volume_dice
     """
     mask1_pos = (mask1 == label_class).astype(np.float32)
     mask2_pos = (mask2 == label_class).astype(np.float32)
-    dice = 2 * np.sum(mask1_pos * mask2_pos) / (np.sum(mask1_pos) + np.sum(mask2_pos))
-    return dice
+    pos1and2 = np.sum(mask1_pos * mask2_pos, axis=(0, 1))
+    pos1 = np.sum(mask1_pos, axis=(0, 1))
+    pos2 = np.sum(mask2_pos, axis=(0, 1))
+    return np.mean(2 * pos1and2 / (pos1 + pos2 + 1e-7))
 
 
 def contour_distances_2d(image1, image2, dx=1):
@@ -291,30 +289,5 @@ def contour_distances_stack(stack1, stack2, label_class, dx=1):
     return np.mean(mcd_buffer), np.mean(hd_buffer)
 
 
-def calculate_dice_stack(mask1, mask2, label_class=0):
-    """
-    todo: this evaluation function should ignore slices that has empty masks at either ED or ES frame
-    Dice scores of a specified class between two masks or two 2D "stacks" of masks
-    If the inputs are stacks of multiple 2D slices, dice scores are averaged
-    (classes are encoded but by label class number not one-hot )
-
-    Args:
-        mask1: N label masks, numpy array shaped (H, W, N)
-        mask2: N label masks, numpy array shaped (H, W, N)
-        label_class: the class over which to calculate dice scores
-
-    Returns:
-        mean_dice: the mean dice score, scalar
-
-    """
-    mask1_pos = (mask1 == label_class).astype(np.float32)
-    mask2_pos = (mask2 == label_class).astype(np.float32)
-
-    pos1and2 = np.sum(mask1_pos * mask2_pos, axis=(0, 1))
-    pos1or2 = np.sum(mask1_pos + mask2_pos, axis=(0, 1))
-
-    # numerical stability is needed because of possible empty masks
-    dice = np.mean(2 * pos1and2 / (pos1or2 + 1e-3))
-    return dice
 
 

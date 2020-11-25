@@ -71,11 +71,10 @@ def dof_to_dvf(target_img, dofin, dvfout, output_dir):
     return dvf
 
 
-def normalise_dvf(dvf):
+def normalise_disp(dvf):
     """
     Spatially normalise DVF to [-1, 1] coordinate system used by Pytorch `grid_sample()`
     Assumes dvf.yaml size is the same as the corresponding image.
-    # TODO: allow passing image space size
 
     Args:
         dvf: (numpy.ndarray or torch.Tensor, shape (N, dim, *size)) Displacement Vector Field
@@ -158,8 +157,8 @@ def warp(x, disp, interp_mode="bilinear"):
     Note that the dvf should not be spatially normalised.
 
     Args:
-        x: (Tensor float, shape (N, ch, H, W) or (N, ch, H, W, D)) image to be spatially transformed
-        disp: (Tensor float, shape (N, 2, H, W) or (N, 3, H, W, D) dense displacement vector field (DVF) in i-j-k order
+        x: (Tensor float, shape (N, ndim, *sizes)) input image
+        disp: (Tensor float, shape (N, ndim, *sizes)) dense disp field in i-j-k order
         interp_mode: (string) mode of interpolation in grid_sample()
 
     Returns:
@@ -169,8 +168,8 @@ def warp(x, disp, interp_mode="bilinear"):
     size = x.size()[2:]
     disp = disp.type_as(x)
 
-    # cast and normalise disp to [-1, 1]
-    disp = normalise_dvf(disp)
+    # normalise DVF to [-1, 1]
+    disp = normalise_disp(disp)
 
     # generate standard mesh grid
     grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)])
@@ -186,12 +185,12 @@ def warp(x, disp, interp_mode="bilinear"):
     return F.grid_sample(x, warped_grid, mode=interp_mode, align_corners=False)
 
 
-def multi_res_warp(x_pyr, dvfs, interp_mode='bilinear'):
+def multi_res_warp(x_pyr, disps, interp_mode='bilinear'):
     """ Multi-resolution spatial transformation"""
-    assert len(x_pyr) == len(dvfs)
+    assert len(x_pyr) == len(disps)
     warped_x_pyr = []
-    for (x, dvf) in zip(x_pyr, dvfs):
-        warped_x = warp(x, dvf, interp_mode=interp_mode)
+    for (x, disp) in zip(x_pyr, disps):
+        warped_x = warp(x, disp, interp_mode=interp_mode)
         warped_x_pyr.append(warped_x)
     return warped_x_pyr
 

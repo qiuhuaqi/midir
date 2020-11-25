@@ -4,7 +4,7 @@ batch_size: 1
 num_workers: 2
 shuffle: True
 
-modality: mono
+modality: t1t1
 crop_size: [176, 192, 176]
 
 atlas_path:

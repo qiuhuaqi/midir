@@ -1,5 +1,8 @@
-import torch.nn as nn
+import os
+from data.brain import BrainInterSubject3DTrain, BrainInterSubject3DEval
+from data.cardiac import CardiacMR2DTrain, CardiacMR2DEval
 
+import torch.nn as nn
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
 from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
 from core_modules.loss import similarity, regularisation
@@ -24,7 +27,7 @@ def get_network(hparams):
                                   **hparams.network.net_config)
 
     else:
-        raise ValueError("Model config parsing: Network not recognised")
+        raise ValueError(f"Network config ({hparams.network.name}) not recognised.")
     return network
 
 
@@ -42,7 +45,7 @@ def get_transformation(hparams):
                                                   **hparams.transformation.config
                                                   )
     else:
-        raise ValueError("Model config parsing: Transformation model not recognised")
+        raise ValueError(f"Transformation config ({hparams.transformation.type}) not recognised.")
     return transformation
 
 
@@ -58,7 +61,7 @@ def get_loss_fn(hparams):
         sim_loss_fn = similarity.MILossGaussian(**hparams.loss.mi_cfg)
 
     else:
-        raise ValueError(f'Similarity loss not recognised: {hparams.loss.sim_loss}.')
+        raise ValueError(f'Similarity loss config ({hparams.loss.sim_loss}) not recognised.')
 
     # regularisation loss
     reg_loss_fn = getattr(regularisation, hparams.loss.reg_loss)
@@ -72,3 +75,33 @@ def get_loss_fn(hparams):
                            ml_lvls=hparams.meta.ml_lvls,
                            ml_weights=hparams.loss.ml_weights)
     return loss_fn
+
+
+def get_datasets(hparams):
+    assert os.path.exists(hparams.data.train_path), \
+        f"Training data path does not exist: {hparams.data.train_path}"
+    assert os.path.exists(hparams.data.val_path), \
+        f"Validation data path does not exist: {hparams.data.val_path}"
+
+    if hparams.data == 'camcan':
+        train_dataset = BrainInterSubject3DTrain(hparams.data.train_path,
+                                                 hparams.data.crop_size,
+                                                 modality=hparams.data.modality,
+                                                 atlas_path=hparams.data.atlas_path)
+
+        val_dataset = BrainInterSubject3DEval(hparams.data.val_path,
+                                              hparams.data.crop_size,
+                                              modality=hparams.data.modality,
+                                              atlas_path=hparams.data.atlas_path)
+    elif hparams.data == 'ukbb_cardiac':
+        # TODO: construct cardiac datasets
+        train_dataset = CardiacMR2DTrain(hparams.data.train_path,
+                                         crop_size=hparams.data.crop_size)
+        val_dataset = CardiacMR2DEval(hparams.data.train_path,
+                                      crop_size=hparams.data.crop_size)
+
+    else:
+        raise ValueError(f'Dataset config ({hparams.data}) not recognised.')
+
+    return train_dataset, val_dataset
+

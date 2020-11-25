@@ -1,4 +1,3 @@
-import os
 import random
 import numpy as np
 from omegaconf import DictConfig
@@ -7,10 +6,8 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
-
 from core_modules.transform.utils import warp, multi_res_warp
-from model.utils import get_network, get_transformation, get_loss_fn
+from model.utils import get_network, get_transformation, get_loss_fn, get_datasets
 
 from utils.image import create_img_pyramid
 from utils.metric import measure_metrics
@@ -31,6 +28,8 @@ class LightningDLReg(pl.LightningModule):
         super(LightningDLReg, self).__init__()
         self.hparams = hparams
 
+        self.train_dataset, self.val_dataset = get_datasets(self.hparams)
+
         self.network = get_network(self.hparams)
         self.transformation = get_transformation(self.hparams)
         self.loss_fn = get_loss_fn(self.hparams)
@@ -43,15 +42,7 @@ class LightningDLReg(pl.LightningModule):
         self.logger.log_hyperparams(self.hparams, metrics=self.best_metric_result)
 
     def train_dataloader(self):
-        assert os.path.exists(self.hparams.data.train_path), \
-            f"Training data path does not exist: {self.hparams.data.train_path}"
-
-        train_dataset = BrainInterSubject3DTrain(self.hparams.data.train_path,
-                                                 self.hparams.data.crop_size,
-                                                 modality=self.hparams.data.modality,
-                                                 atlas_path=self.hparams.data.atlas_path)
-
-        return DataLoader(train_dataset,
+        return DataLoader(self.train_dataset,
                           batch_size=self.hparams.data.batch_size,
                           shuffle=self.hparams.data.shuffle,
                           num_workers=self.hparams.data.num_workers,
@@ -60,15 +51,7 @@ class LightningDLReg(pl.LightningModule):
                           )
 
     def val_dataloader(self):
-        assert os.path.exists(self.hparams.data.val_path), \
-            f"Validation data path does not exist: {self.hparams.data.val_path}"
-
-        val_dataset = BrainInterSubject3DEval(self.hparams.data.val_path,
-                                              self.hparams.data.crop_size,
-                                              modality=self.hparams.data.modality,
-                                              atlas_path=self.hparams.data.atlas_path)
-
-        return DataLoader(val_dataset,
+        return DataLoader(self.val_dataset,
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.hparams.data.num_workers,
@@ -126,13 +109,17 @@ class LightningDLReg(pl.LightningModule):
         return {'loss': train_losses['loss']}
 
     def validation_step(self, batch, batch_idx):
-        # reshape data from dataloader
-        # TODO: hacky reshape data is not compatible with 3D when batch_size>1
-        for k, x in batch.items():
-            if k == "disp_gt":
-                batch[k] = x[0, ...]  # (N, dim, *(sizes))
-            else:
-                batch[k] = x.transpose(0, 1)  # (N, 1, *(dims))
+        # -- Note on data shape -- #
+        # 2d:
+        #   image data: (N, 1, H, W)
+        #   disp gt (synthetic): (N, 2, H, W)
+        #  Uses the same way in training and validation: extract one 2D slice from each subject.
+        #  This is valid as long as the model doesn't use batch statistics in validation or inference
+
+        # 3d:
+        #   image data: (N, 1, H, W, D),
+        #   disp gt (synthetic): (N, 3, H, W, D)
+        # ------------------------ #
 
         # run inference, compute losses and outputs
         val_losses, step_dict = self._step(batch)
@@ -149,10 +136,11 @@ class LightningDLReg(pl.LightningModule):
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
             step_dict['target_original'] = target_original_pyr  # for visualisation
             target_pred_pyr = multi_res_warp(target_original_pyr, step_dict['disp_pred'])
-            step_dict['target_pred'] = target_pred_pyr  # for visualisation
+            step_dict['target_pred'] = target_pred_pyr
             metric_data['target_pred'] = target_pred_pyr[-1]
 
         # measure metrics
+        # TODO: metric for 2d cardiac
         metric_data.update(batch)  # add input data to metric data
         metric_result_step = measure_metrics(metric_data,
                                              self.hparams.meta.metric_groups,
@@ -165,6 +153,7 @@ class LightningDLReg(pl.LightningModule):
                 vis_data_l = dict()
                 for k, x in step_dict.items():
                     vis_data_l[k] = x[l]
+                # TODO: visualisation for 2d cardiac
                 val_fig_l = visualise_result(vis_data_l, axis=2)
                 self.logger.experiment.add_figure(f'val_lvl{l}',
                                                   val_fig_l,
