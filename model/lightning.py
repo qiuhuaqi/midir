@@ -170,6 +170,7 @@ class LightningDLReg(pl.LightningModule):
                                                   val_fig_l,
                                                   global_step=self.global_step,
                                                   close=True)
+        return val_losses, metric_result_step
 
     def _check_log_best_metric(self, val_loss, metric_result):
         """ Update the best metric results, called at validation_epoch_end """

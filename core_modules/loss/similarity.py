@@ -6,7 +6,6 @@ from torch import nn as nn
 import torch.nn.functional as F
 
 from utils.misc import param_ndim_setup
-from utils.image import avg_filtering
 
 
 class MILossGaussian(nn.Module):
@@ -19,8 +18,9 @@ class MILossGaussian(nn.Module):
                  vmin=0.0,
                  vmax=1.0,
                  num_bins=64,
-                 roi=False,
-                 roi_threshold=0.0001,
+                 sample_ratio=0.1,
+                 threshold_roi=False,
+                 threshold=0.0001,
                  normalised=True
                  ):
         super(MILossGaussian, self).__init__()
@@ -36,16 +36,16 @@ class MILossGaussian(nn.Module):
         self.num_bins = num_bins
         self.bins = torch.linspace(self.vmin, self.vmax, self.num_bins, requires_grad=False).unsqueeze(1)
 
-        # roi masking
-        self.roi = roi
-        self.roi_threshold = roi_threshold
+        # self.threshold_roi = threshold_roi
+        # self.threshold = threshold
+        self.sample_ratio = sample_ratio
 
         self.normalised = normalised
 
     def _compute_joint_prob(self, x, y):
         """
         Compute joint distribution and entropy
-        Input shapes (N, 1, H*W*D)
+        Input shapes (N, 1, prod(sizes))
         """
         # cast bins
         self.bins = self.bins.type_as(x)
@@ -70,26 +70,25 @@ class MILossGaussian(nn.Module):
         Calculate (Normalised) Mutual Information Loss.
 
         Args:
-            x: (torch.Tensor, size (N, dim, *size)
-            y: (torch.Tensor, size (N, dim, *size)
+            x: (torch.Tensor, size (N, 1, *sizes))
+            y: (torch.Tensor, size (N, 1, *sizes))
 
         Returns:
             (Normalise)MI: (scalar)
         """
-        # Handle roi mask (each loss may handle roi masking differently, e.g. LNCC needs the spatial structure)
-        #  (NOTE: this doesn't work for 2D as each slice could have different number of elements selected,
-        #  use a bounding box mask to select the same region across slices instead)
-        if self.roi:
-            img_avg = (x + y) / 2
-            img_avg_smooth = avg_filtering(img_avg, filter_size=7)  # extend ROI
-            mask = img_avg_smooth > self.roi_threshold
-            x = torch.masked_select(x, mask).unsqueeze(0).unsqueeze(0)
-            y = torch.masked_select(y, mask).unsqueeze(0).unsqueeze(0)
+        if self.sample_ratio < 1.:
+            # random spatial sampling with the same number of pixels/voxels
+            # chosen for every sample in the batch
+            numel_ = np.prod(x.size()[2:])
+            idx_th = int(self.sample_ratio * numel_)
+            idx_choice = torch.randperm(int(numel_))[:idx_th]
 
-        else:
-            # same shape as masked
-            x = x.flatten(start_dim=2, end_dim=-1)
-            y = y.flatten(start_dim=2, end_dim=-1)
+            x = x.view(x.size()[0], 1, -1)[:, :, idx_choice]
+            y = y.view(y.size()[0], 1, -1)[:, :, idx_choice]
+
+        # make sure the sizes are (N, 1, prod(sizes))
+        x = x.flatten(start_dim=2, end_dim=-1)
+        y = y.flatten(start_dim=2, end_dim=-1)
 
         # compute joint distribution
         p_joint = self._compute_joint_prob(x, y)
