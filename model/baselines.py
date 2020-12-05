@@ -30,6 +30,20 @@ class MirtkFFD(object):
         if not os.path.exists(self.hparams.work_dir):
             os.makedirs(self.hparams.work_dir)
 
+    def register2d(self, tar, src):
+        # todo: save images
+        # todo: split volume
+        # todo: register slice-by-slice - can we parallelise this?
+
+        # todo: convert dof to disp
+            # todo: check if this conversion in 2d is correct? or do we have to use our hack function?
+        # todo: read back per slice and accumulate
+        pass
+
+    def register3d(self, tar, src):
+        # todo: move 3d code from __call__
+        pass
+
     def __call__(self, tar, src):
         """Execute MIRTK registration of a volume pair, input/return Tensors"""
 

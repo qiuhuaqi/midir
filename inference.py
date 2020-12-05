@@ -9,8 +9,8 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
-from data.brain import BrainInterSubject3DEval
-from data.cardiac import CardiacMR2DEval
+from datasets.brain import BrainInterSubject3DEval
+from datasets.cardiac import CardiacMR2DEval
 from model.lightning import LightningDLReg
 from model.baselines import Identity, MirtkFFD, AntsSyN
 from core_modules.transform.utils import warp

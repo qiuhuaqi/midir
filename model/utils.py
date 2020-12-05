@@ -1,6 +1,6 @@
 import os
-from data.brain import BrainInterSubject3DTrain, BrainInterSubject3DEval
-from data.cardiac import CardiacMR2DTrain, CardiacMR2DEval
+from datasets.brain import BrainInterSubject3DTrain, BrainInterSubject3DEval
+from datasets.cardiac import CardiacMR2DTrain, CardiacMR2DEval
 
 import torch.nn as nn
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
@@ -94,11 +94,12 @@ def get_datasets(hparams):
                                               modality=hparams.data.modality,
                                               atlas_path=hparams.data.atlas_path)
     elif hparams.data == 'ukbb_cardiac':
-        # TODO: construct cardiac datasets
         train_dataset = CardiacMR2DTrain(hparams.data.train_path,
-                                         crop_size=hparams.data.crop_size)
+                                         crop_size=hparams.data.crop_size,
+                                         batch_size=hparams.data.batch_size)
         val_dataset = CardiacMR2DEval(hparams.data.train_path,
-                                      crop_size=hparams.data.crop_size)
+                                      crop_size=hparams.data.crop_size,
+                                      batch_size=hparams.data.batch_size)
 
     else:
         raise ValueError(f'Dataset config ({hparams.data}) not recognised.')

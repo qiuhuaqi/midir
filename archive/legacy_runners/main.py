@@ -8,7 +8,7 @@ import utils.experiment
 import utils.experiment.experiment
 import utils.misc
 import utils.experiment.model
-from data.datasets import BrainData
+from datasets.datasets import BrainData
 from archive.legacy_model.models import DLRegModel, IdBaselineModel, MIRTKBaselineModel
 from model.loss import loss_fn
 
