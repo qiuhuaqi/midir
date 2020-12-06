@@ -25,6 +25,7 @@ def _normalise_intensity(data_dict, keys, vmin=0., vmax=1.):
         data_dict[name] = normalise_intensity(data_dict[name],
                                               min_out=vmin, max_out=vmax,
                                               mode="minmax", clip=True)
+    return data_dict
 
 
 def _load2d(data_path_dict, slice_range=None, random_slice=False):
