@@ -68,9 +68,11 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
                 batch[k] = x.unsqueeze(1).to(device=device)
 
         # model inference
-        # TODO: models should produce a list of dvfs (to cope with multi-level)
-        # TODO: adjust for [flow(SVF), disp] or [disp]
         batch['dvf_pred'] = model(batch['target'], batch['source'])[-1]
+        # TODO: models should produce a list of dvfs (to cope with multi-level)
+        # TODO: disp or svf (dvf name no longer used)
+
+
 
         # deform source segmentation with predicted DVF
         if 'source_seg' in batch.keys():
@@ -121,5 +123,3 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == '__main__':
     main()
-
-

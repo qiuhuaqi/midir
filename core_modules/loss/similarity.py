@@ -99,9 +99,9 @@ class MILossGaussian(nn.Module):
         p_y = torch.sum(p_joint, dim=1)
 
         # calculate entropy
-        ent_x = - torch.sum(p_x * torch.log(p_x + 1e-10), dim=1)  # (N,1)
-        ent_y = - torch.sum(p_y * torch.log(p_y + 1e-10), dim=1)  # (N,1)
-        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-10), dim=(1, 2))  # (N,1)
+        ent_x = - torch.sum(p_x * torch.log(p_x + 1e-5), dim=1)  # (N,1)
+        ent_y = - torch.sum(p_y * torch.log(p_y + 1e-5), dim=1)  # (N,1)
+        ent_joint = - torch.sum(p_joint * torch.log(p_joint + 1e-5), dim=(1, 2))  # (N,1)
 
         if self.normalised:
             return -torch.mean((ent_x + ent_y) / ent_joint)

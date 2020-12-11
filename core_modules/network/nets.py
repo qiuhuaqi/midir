@@ -29,7 +29,7 @@ class UNet(nn.Module):
             stride = 1 if i == 0 else 2
             self.enc.append(
                 nn.Sequential(
-                    conv_Nd(ndim, in_ch, enc_channels[i], stride=stride),
+                    conv_Nd(ndim, in_ch, enc_channels[i], stride=stride, a=0.2),
                     nn.LeakyReLU(0.2)
                 )
             )
@@ -40,7 +40,7 @@ class UNet(nn.Module):
             in_ch = enc_channels[-1] if i == 0 else dec_channels[i-1] + enc_channels[-i-1]
             self.dec.append(
                 nn.Sequential(
-                    conv_Nd(ndim, in_ch, dec_channels[i]),  # stride=1
+                    conv_Nd(ndim, in_ch, dec_channels[i], a=0.2),
                     nn.LeakyReLU(0.2)
                 )
             )
@@ -55,7 +55,7 @@ class UNet(nn.Module):
                 in_ch = dec_channels[-1] + enc_channels[0] if i == 0 else out_channels[i-1]
                 self.out_layers.append(
                     nn.Sequential(
-                        conv_Nd(ndim, in_ch, out_channels[i]),  # stride=1
+                        conv_Nd(ndim, in_ch, out_channels[i], a=0.2),  # stride=1
                         nn.LeakyReLU(0.2)
                     )
                 )
@@ -175,9 +175,8 @@ class CubicBSplineNet(UNet):
                                   for imsz, c in zip(img_size, cps)])
 
         # Network:
-        # same unet encoder
-        # # decoder (upsampling)
-        # # number of decoder layers / times of upsampling by 2 is decided by cps
+        # encoder: same u-net encoder
+        # decoder: number of decoder layers / times of upsampling by 2 is decided by cps
         num_dec_layers = 4 - int(math.ceil(math.log2(min(cps))))
         self.dec = self.dec[:num_dec_layers]
 
@@ -192,11 +191,11 @@ class CubicBSplineNet(UNet):
             else:
                 in_ch = resize_channels[i-1]
             out_ch = resize_channels[i]
-            self.resize_conv.append(nn.Sequential(conv_Nd(ndim, in_ch, out_ch),
+            self.resize_conv.append(nn.Sequential(conv_Nd(ndim, in_ch, out_ch, a=0.2),
                                                   nn.LeakyReLU(0.2)))
 
         # final prediction layer
-        delattr(self, 'out_layers')
+        delattr(self, 'out_layers')  # remove u-net output layers
         self.out_layer = conv_Nd(ndim, resize_channels[-1], ndim)
 
     def forward(self, tar, src):
@@ -206,9 +205,8 @@ class CubicBSplineNet(UNet):
         for enc in self.enc:
             fm_enc.append(enc(fm_enc[-1]))
 
-        # decoder
+        # decoder: conv + upsample + concatenate skip-connections
         if len(self.dec) > 0:
-            # decoder: conv + upsample + concatenate skip-connections
             dec_out = fm_enc[-1]
             for i, dec in enumerate(self.dec):
                 dec_out = dec(dec_out)
