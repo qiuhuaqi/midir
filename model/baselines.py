@@ -11,10 +11,10 @@ class Identity(object):
         self.dim = dim
 
     def __call__(self, tar, src):
-        # identity DVF (N, 2, H, W) or (1, 3, H, W, D)
+        # identity disp (N, 2, H, W) or (1, 3, H, W, D)
         img_size = tar.size()
-        dvf = torch.zeros((img_size[0], self.dim, *img_size[2:])).type_as(tar)
-        return dvf
+        disp = torch.zeros((img_size[0], self.dim, *img_size[2:])).type_as(tar)
+        return disp
 
 
 class MirtkFFD(object):
@@ -56,27 +56,15 @@ class MirtkFFD(object):
                        f'-padding -1 '
         subprocess.check_call(cmd_register, shell=True)
 
-        # convert dof to dvf
-        dvf_pred_path = self.hparams.work_dir + f'/dvf_pred.nii.gz'
-        cmd_dof_dvf = f'{MirtkFFD.MIRTK_PATH} convert-dof {dof_path} {dvf_pred_path} ' \
+        # convert dof to disp
+        disp_pred_path = self.hparams.work_dir + f'/disp_pred.nii.gz'
+        cmd_dof_disp = f'{MirtkFFD.MIRTK_PATH} convert-dof {dof_path} {disp_pred_path} ' \
                       f'-output-format disp_voxel ' \
                       f'-target {tar_path}'
-        subprocess.check_call(cmd_dof_dvf, shell=True)
+        subprocess.check_call(cmd_dof_disp, shell=True)
 
         # load converted dvf
-        dvf = load_nifti(dvf_pred_path)[..., 0, :]  # (H, W, D, 3)
-        dvf = np.moveaxis(dvf, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)
+        disp = load_nifti(disp_pred_path)[..., 0, :]  # (H, W, D, 3)
+        disp = np.moveaxis(disp, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)
 
-        return torch.from_numpy(dvf).type_as(tar)
-
-
-
-class AntsSyN(object):
-    def __init__(self, hparams):
-        self.hparams = hparams
-
-    def __call__(self, tar, src):
-        # dvf = ants_syn_reg(tar, src)
-        dvf = None
-        # dvf = dvf.type_as(tar)
-        return dvf
+        return torch.from_numpy(disp).type_as(tar)

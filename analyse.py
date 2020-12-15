@@ -22,6 +22,7 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
     for d in tqdm(os.listdir(inference_output_dir)):
         subj_output_dir = inference_output_dir + f'/{d}'
 
+        # load saved output data from inference
         file_names = os.listdir(subj_output_dir)
         data_dict = dict()
         for fn in file_names:
@@ -30,17 +31,17 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
 
         # reshape:
         #   images: (N, 1, H, W)  or (1, 1, H, W, D)
-        #   dvf: (N, 2, H, W) or (1, 3, H, W, D)
-        dim = data_dict['dvf_pred'].shape[-1]
+        #   disp: (N, 2, H, W) or (1, 3, H, W, D)
+        ndim = data_dict['disp_pred'].shape[-1]
         for k, x in data_dict.items():
-            if dim == 2:
-                if k == 'dvf_gt' or k == 'dvf_pred':
+            if ndim == 2:
+                if k == 'disp_gt' or k == 'disp_pred':
                     data_dict[k] = x.transpose(2, 3, 0, 1)
                 else:
                     data_dict[k] = x.transpose(2, 0, 1)[:, np.newaxis, ...]
 
-            if dim == 3:
-                if k == 'dvf_gt' or k == 'dvf_pred':
+            if ndim == 3:
+                if k == 'disp_gt' or k == 'disp_pred':
                     data_dict[k] = x.transpose(3, 0, 1, 2)[np.newaxis, ...]
                 else:
                     data_dict[k] = x[np.newaxis, np.newaxis, ...]
