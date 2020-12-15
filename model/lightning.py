@@ -117,7 +117,7 @@ class LightningDLReg(pl.LightningModule):
         train_losses, _ = self._step(batch)
 
         # training logs
-        if self.global_step % self.trainer.row_log_interval == 0:
+        if self.global_step % self.trainer.log_every_n_steps == 0:
             for k, loss in train_losses.items():
                 # self.logger.experiment.add_scalars(k, {'train': loss}, global_step=self.global_step)
                 self.logger.experiment.add_scalar(f'train_loss/{k}',

@@ -5,7 +5,7 @@ lr_decay_step: 50
 trainer:
     gpus: 1
     max_epochs: 75
-    row_log_interval: 1
+    log_every_n_steps: 1
     check_val_every_n_epoch: 1
     fast_dev_run: False
     limit_train_batches: 1.0
