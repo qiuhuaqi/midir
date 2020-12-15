@@ -7,7 +7,8 @@ def conv_Nd(dim,
             out_channels,
             kernel_size=3,
             stride=1,
-            padding=1):
+            padding=1,
+            a=0.):
     """
     Convolution of generic dimension
     Args:
@@ -17,22 +18,18 @@ def conv_Nd(dim,
         stride: (int) convolution stride (step size)
         padding: (int) outer padding
         dim: (int) dimension of the data/model
+        a: (float) leaky-relu negative slope for He initialisation
 
     Returns:
         (nn.Module instance) Instance of convolution module of the specified dimension
     """
-    _ConvNd = getattr(nn, f"Conv{dim}d")
-
-    # default initialisation is Kaiming uniform
-    # see doc of _ConvNd(): https://pytorch.org/docs/stable/_modules/torch/nn/modules/conv.html
-    return _ConvNd(in_channels=in_channels,
-                   out_channels=out_channels,
-                   kernel_size=kernel_size,
-                   stride=stride,
-                   padding=padding)
-
-
-# TODO: wrap conv + relu
+    _conv_nd = getattr(nn, f"Conv{dim}d")(in_channels=in_channels,
+                                          out_channels=out_channels,
+                                          kernel_size=kernel_size,
+                                          stride=stride,
+                                          padding=padding)
+    nn.init.kaiming_uniform(_conv_nd.weight, a=a)
+    return _conv_nd
 
 
 def avg_pool(dim, kernel_size=2):

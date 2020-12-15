@@ -1,17 +1,14 @@
 # @package _global_
-model_type: baseline  # 'baseline' or 'dl'
-gpu:
+ndim: 3
 analyse: True
-metric_groups: ["dvf_metrics", "image_metrics", "seg_metrics"]
-dim: 3
-model_dir:
+metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
+gpu:
 
 data:
-    data_dir_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/malpem_split/val
+    data_dir_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/malpem_split/test
     modality: mono
     crop_size: [176, 192, 176]
     atlas_path:
 
 defaults:
-    - baseline:
-      optional: True
+    - inference_model:

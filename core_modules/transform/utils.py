@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import os
 import nibabel as nib
+from torch import Tensor
 from torch.nn import functional as F
 
 
@@ -228,3 +229,84 @@ def svf_exp(flow, scale=1, steps=5, sampling='bilinear'):
         disp = disp + warp(x=disp, disp=disp,
                            interp_mode=sampling)
     return disp
+
+
+def cubic_bspline_value(x: float, derivative: int = 0) -> float:
+    r"""Evaluate 1-dimensional cubic B-spline."""
+    t = abs(x)
+    # outside local support region
+    if t >= 2:
+        return 0
+    # 0-th order derivative
+    if derivative == 0:
+        if t < 1:
+            return 2 / 3 + (0.5 * t - 1) * t ** 2
+        return -((t - 2) ** 3) / 6
+    # 1st order derivative
+    if derivative == 1:
+        if t < 1:
+            return (1.5 * t - 2.0) * x
+        if x < 0:
+            return 0.5 * (t - 2) ** 2
+        return -0.5 * (t - 2) ** 2
+    # 2nd oder derivative
+    if derivative == 2:
+        if t < 1:
+            return 3 * t - 2
+        return -t + 2
+
+
+def cubic_bspline1d(stride, derivative: int = 0, dtype=None, device= None) -> torch.Tensor:
+    r"""Cubic B-spline kernel for specified control point spacing.
+
+    Args:
+        stride: Spacing between control points with respect to original (upsampled) image grid.
+        derivative: Order of cubic B-spline derivative.
+
+    Returns:
+        Cubic B-spline convolution kernel.
+
+    """
+    if dtype is None:
+        dtype = torch.float
+    if not isinstance(stride, int):
+        (stride,) = stride
+    kernel = torch.ones(4 * stride - 1, dtype=torch.float)
+    radius = kernel.shape[0] // 2
+    for i in range(kernel.shape[0]):
+        kernel[i] = cubic_bspline_value((i - radius) / stride, derivative=derivative)
+    if device is None:
+        device = kernel.device
+    return kernel.to(device)
+
+
+def conv1d(
+        data: Tensor,
+        kernel: Tensor,
+        dim: int = -1,
+        stride: int = 1,
+        dilation: int = 1,
+        padding: int = 0,
+        transpose: bool = False
+) -> Tensor:
+    r"""Convolve data with 1-dimensional kernel along specified dimension."""
+    result = data.type(kernel.dtype)  # (n, ndim, h, w, d)
+    result = result.transpose(dim, -1)  # (n, ndim, ..., shape[dim])
+    shape_ = result.size()
+    # use native pytorch
+    groups = int(torch.prod(torch.tensor(shape_[1:-1])))
+    # groups = numel(shape_[1:-1])  # (n, nidim * shape[not dim], shape[dim])
+    weight = kernel.expand(groups, 1, kernel.shape[-1])  # 3*w*d, 1, kernel_size
+    result = result.reshape(shape_[0], groups, shape_[-1])  # n, 3*w*d, shape[dim]
+    conv_fn = F.conv_transpose1d if transpose else F.conv1d
+    result = conv_fn(
+        result,
+        weight,
+        stride=stride,
+        dilation=dilation,
+        padding=padding,
+        groups=groups,
+    )
+    result = result.reshape(shape_[0:-1] + result.shape[-1:])
+    result = result.transpose(-1, dim)
+    return result

@@ -9,6 +9,7 @@ from torch.nn import functional as F
 def finite_diff(x, mode="central", boundary="Neumann"):
     """Input shape (N, dim, *sizes), mode='foward', 'backward' or 'central'"""
     if mode == "central":
+        # TODO: this might be memory inefficient
         x_diff_forward = finite_diff_oneside(x, direction="forward", boundary=boundary)
         x_diff_backward = finite_diff_oneside(x, direction="backward", boundary=boundary)
         return [(x_diff_fw + x_diff_bw) / 2

@@ -1,9 +1,7 @@
 # Transformation models #
 from utils.misc import param_ndim_setup
 
-from core_modules.mirtk_torch import cubic_bspline1d
-from core_modules.mirtk_torch import conv1d
-from core_modules.transform.utils import svf_exp
+from core_modules.transform.utils import svf_exp, cubic_bspline1d, conv1d
 
 
 class _Transform(object):
