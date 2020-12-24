@@ -1,7 +1,6 @@
 astor==0.7.1
 bz2file==0.98
-cffi==1.12.2
-hydra-core==1.0.0rc2
+hydra-core==1.0.4
 imageio==2.4.1
 jupyter==1.0.0
 jupyter-contrib-nbextensions==0.5.1
@@ -9,12 +8,10 @@ Keras-Applications==1.0.6
 nibabel==3.1.1
 opencv-python==4.0.0.21
 pipdeptree==1.0.0
-pytorch-lightning==0.8.5
+pytorch-lightning==1.1.0
 seaborn==0.9.0
 SimpleITK==1.2.0
 tabulate==0.8.3
-#tensorflow==2.2.0
 torchsummary==1.5.1
-torch==1.5.1
 torchvision==0.6.1
 vtk==8.1.2
