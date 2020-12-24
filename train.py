@@ -38,7 +38,7 @@ def main(cfg: DictConfig) -> None:
 
     trainer = Trainer(default_root_dir=model_dir,
                       logger=logger,
-                      checkpoint_callback=ckpt_callback,
+                      callbacks=[ckpt_callback],
                       **cfg.training.trainer
                       )
 

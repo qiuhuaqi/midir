@@ -3,7 +3,7 @@ import torch.nn as nn
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
 from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
 from core_modules.loss import similarity, regularisation
-from core_modules.loss.multi_resolution import MultiResLoss
+from core_modules.loss.utils import MultiResLoss
 
 
 def get_network(hparams):

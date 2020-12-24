@@ -115,15 +115,9 @@ class LightningDLReg(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         train_losses, _ = self._step(batch)
-
-        # training logs
-        if self.global_step % self.trainer.log_every_n_steps == 0:
-            for k, loss in train_losses.items():
-                # self.logger.experiment.add_scalars(k, {'train': loss}, global_step=self.global_step)
-                self.logger.experiment.add_scalar(f'train_loss/{k}',
-                                                  loss.detach(),
-                                                  global_step=self.global_step)
-        return {'loss': train_losses['loss']}
+        self.log_dict({f'train_loss/{k}': loss
+                       for k, loss in train_losses.items()})
+        return train_losses['loss']
 
     def validation_step(self, batch, batch_idx):
         # reshape data from dataloader
@@ -201,6 +195,7 @@ class LightningDLReg(pl.LightningModule):
         # average validation loss and log
         val_loss_list = [x[0] for x in outputs]
         val_loss_reduced = dict()
+
         for k in val_loss_list[0].keys():
             val_loss_reduced[k] = torch.stack([x[k].detach() for x in val_loss_list]).mean()
             self.logger.experiment.add_scalar(f'val_loss/{k}',
