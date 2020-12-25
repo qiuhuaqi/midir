@@ -11,5 +11,5 @@ meta:
   gpu: 1
   ver: svf
   metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
-  best_metrics: ["loss", "mean_dice_mean", "folding_ratio_mean"]
+  hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
   ml_lvls: 1

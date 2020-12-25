@@ -1,4 +1,10 @@
+import random
+
+import numpy as np
 import torch.nn as nn
+
+from pytorch_lightning.callbacks import ModelCheckpoint
+from typing import Any, Dict
 
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
 from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
@@ -72,3 +78,26 @@ def get_loss_fn(hparams):
                            ml_lvls=hparams.meta.ml_lvls,
                            ml_weights=hparams.loss.ml_weights)
     return loss_fn
+
+
+def worker_init_fn(worker_id):
+    """ Callback function passed to DataLoader to initialise the workers """
+    # Randomly seed the workers
+    random_seed = random.randint(0, 2 ** 32 - 1)
+    np.random.seed(random_seed)
+
+
+class MyModelCheckpoint(ModelCheckpoint):
+    def __init__(self, *args, **kwargs):
+        super(MyModelCheckpoint, self).__init__(*args, **kwargs)
+
+    def on_save_checkpoint(self, trainer, pl_module) -> Dict[str, Any]:
+        # looks for `hparams` and `hparam_metrics` in `pl_module`
+        pl_module.logger.log_metrics(pl_module.hparam_metrics,
+                                     step=pl_module.global_step)
+        return {
+            "monitor": self.monitor,
+            "best_model_score": self.best_model_score,
+            "best_model_path": self.best_model_path,
+            "current_score": self.current_score,
+        }
