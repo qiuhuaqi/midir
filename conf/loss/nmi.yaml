@@ -11,7 +11,7 @@ mi_cfg:
 sim_weight: 1.0
 loss_roi: False
 
-reg_loss: l2reg
+reg_loss: l2reg_loss
 reg_weight: 0.0001
 
 ml_weights: [1.]

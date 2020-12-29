@@ -5,17 +5,15 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
+from pytorch_lightning import LightningModule
+from pytorch_lightning.loggers.base import merge_dicts
 
+from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
 from core_modules.transform.utils import warp, multi_res_warp
 from model.utils import get_network, get_transformation, get_loss_fn, worker_init_fn
-
 from utils.image import create_img_pyramid
 from utils.metric import measure_metrics
 from utils.visualise import visualise_result
-
-from pytorch_lightning import LightningModule
-from pytorch_lightning.loggers.base import merge_dicts
 
 
 class LightningDLReg(LightningModule):
