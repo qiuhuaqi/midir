@@ -14,7 +14,7 @@ class TestDiffusionLoss(unittest.TestCase):
         W = 64
 
         th_x = torch.randn(1, 1, H, W).cuda()
-        th_loss = archive.legacy_model.losses.reg_loss.l2reg(th_x)
+        th_loss = archive.legacy_model.losses.reg_loss.l2reg_loss(th_x)
 
         # optoth - cannot deal with [nBatch, nCh, H, W] yet
         nabla = Nabla(dim=2).cuda()

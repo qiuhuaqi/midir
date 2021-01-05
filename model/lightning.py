@@ -1,5 +1,4 @@
-import random
-import numpy as np
+import os
 from omegaconf import DictConfig
 
 import torch
@@ -7,23 +6,16 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 
 from core_modules.transform.utils import warp, multi_res_warp
-from model.utils import get_network, get_transformation, get_loss_fn, get_datasets
+from model.utils import get_network, get_transformation, get_loss_fn, get_datasets, worker_init_fn
+from pytorch_lightning import LightningModule
+from pytorch_lightning.loggers.base import merge_dicts
 
 from utils.image import create_img_pyramid
 from utils.metric import measure_metrics
 from utils.visualise import visualise_result
 
-import pytorch_lightning as pl
 
-
-def worker_init_fn(worker_id):
-    """ Callback function passed to DataLoader to initialise the workers """
-    # Randomly seed the workers
-    random_seed = random.randint(0, 2 ** 32 - 1)
-    np.random.seed(random_seed)
-
-
-class LightningDLReg(pl.LightningModule):
+class LightningDLReg(LightningModule):
     def __init__(self, hparams: DictConfig = None):
         super(LightningDLReg, self).__init__()
         self.hparams = hparams
@@ -35,11 +27,12 @@ class LightningDLReg(pl.LightningModule):
         self.loss_fn = get_loss_fn(self.hparams)
 
         # initialise dummy best metrics results for initial logging
-        self.best_metric_result = {f'best/{m}': 0.0 for m in self.hparams.meta.best_metrics}
+        self.hparam_metrics = {f'hparam_metrics_{m}': 0.0
+                               for m in self.hparams.meta.hparam_metrics}
 
     def on_fit_start(self):
         # log dummy initial hparams w/ best metrics (for tensorboard HPARAMS)
-        self.logger.log_hyperparams(self.hparams, metrics=self.best_metric_result)
+        self.logger.log_hyperparams(self.hparams, metrics=self.hparam_metrics)
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -90,23 +83,17 @@ class LightningDLReg(pl.LightningModule):
             warped_src_pyr = multi_res_warp(src_pyr, disps)
             losses = self.loss_fn(tar_pyr, warped_src_pyr, disps)
 
-        step_dict = {'disp_pred': disps,
-                     'target': tar_pyr,
-                     'source': src_pyr,
-                     'warped_source': warped_src_pyr}
-        return losses, step_dict
+        step_outputs = {'disp_pred': disps,
+                        'target': tar_pyr,
+                        'source': src_pyr,
+                        'warped_source': warped_src_pyr}
+        return losses, step_outputs
 
     def training_step(self, batch, batch_idx):
         train_losses, _ = self._step(batch)
-
-        # training logs
-        if self.global_step % self.trainer.row_log_interval == 0:
-            for k, loss in train_losses.items():
-                # self.logger.experiment.add_scalars(k, {'train': loss}, global_step=self.global_step)
-                self.logger.experiment.add_scalar(f'train_loss/{k}',
-                                                  loss.detach(),
-                                                  global_step=self.global_step)
-        return {'loss': train_losses['loss']}
+        self.log_dict({f'train_loss_{k}': loss
+                       for k, loss in train_losses.items()})
+        return train_losses['loss']
 
     def validation_step(self, batch, batch_idx):
         # -- Note on data shape -- #
@@ -122,11 +109,11 @@ class LightningDLReg(pl.LightningModule):
         # ------------------------ #
 
         # run inference, compute losses and outputs
-        val_losses, step_dict = self._step(batch)
+        val_losses, step_outputs = self._step(batch)
 
-        # metrics are evaluated using data of the original resolution
-        metric_data = {k: x[-1] for k, x in step_dict.items()}
-
+        # collect data for measuring metrics
+        metric_data = batch
+        metric_data.update({k: x[-1] for k, x in step_outputs.items()})
         if 'source_seg' in batch.keys():
             # inference for segmentation metric
             metric_data['warped_source_seg'] = warp(batch['source_seg'], metric_data['disp_pred'],
@@ -134,24 +121,22 @@ class LightningDLReg(pl.LightningModule):
         if 'target_original' in batch.keys():
             # for visualisation and metrics measuring
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
-            step_dict['target_original'] = target_original_pyr  # for visualisation
-            target_pred_pyr = multi_res_warp(target_original_pyr, step_dict['disp_pred'])
-            step_dict['target_pred'] = target_pred_pyr
+            step_outputs['target_original'] = target_original_pyr  # for visualisation
+            target_pred_pyr = multi_res_warp(target_original_pyr, step_outputs['disp_pred'])
+            step_outputs['target_pred'] = target_pred_pyr  # for visualisation
             metric_data['target_pred'] = target_pred_pyr[-1]
 
-        # measure metrics
         # TODO: metric for 2d cardiac
-        metric_data.update(batch)  # add input data to metric data
-        metric_result_step = measure_metrics(metric_data,
-                                             self.hparams.meta.metric_groups,
-                                             return_tensor=True)
+        # validation metrics
+        val_metrics = {k: float(loss.cpu()) for k, loss in val_losses.items()}
+        val_metrics.update(measure_metrics(metric_data, self.hparams.meta.metric_groups))
 
         # log visualisation figure to Tensorboard
         if batch_idx == 0:
             for l in range(self.hparams.meta.ml_lvls):
                 # get data for the current resolution level from step_dict
                 vis_data_l = dict()
-                for k, x in step_dict.items():
+                for k, x in step_outputs.items():
                     vis_data_l[k] = x[l]
                 # TODO: visualisation for 2d cardiac
                 val_fig_l = visualise_result(vis_data_l, axis=2)
@@ -159,60 +144,14 @@ class LightningDLReg(pl.LightningModule):
                                                   val_fig_l,
                                                   global_step=self.global_step,
                                                   close=True)
-        return val_losses, metric_result_step
+        return val_metrics
 
-    def _check_log_best_metric(self, val_loss, metric_result):
-        """ Update the best metric results, called at validation_epoch_end """
-        # TODO: this should be in model checkpointing callback
-
-        current_metric_result = dict()
-        current_metric_result.update(val_loss)
-        current_metric_result.update(metric_result)
-
-        best_metric = 'loss'  # log best metrics when validation loss is a new lowest
-        if self.current_epoch == 0:
-            # log the first metric as the best
-            is_best = True
-        else:
-            # determine if the current metric result is the best
-            is_best = current_metric_result[best_metric] < self.best_metric_result[best_metric]
-
-        if is_best:
-            # update the best metric value and log the other best metrics at this step
-            for m in self.hparams.meta.best_metrics:
-                self.best_metric_result[m] = current_metric_result[m]
-                self.logger.experiment.add_scalar(f'best/{m}',
-                                                  current_metric_result[m],
-                                                  global_step=self.global_step)
-
-    def validation_epoch_end(self, outputs):
+    def validation_epoch_end(self, val_metrics):
         """ Process and log accumulated validation results in one epoch """
-        # average validation loss and log
-        val_loss_list = [x[0] for x in outputs]
-        val_loss_reduced = dict()
-        for k in val_loss_list[0].keys():
-            val_loss_reduced[k] = torch.stack([x[k].detach() for x in val_loss_list]).mean()
-            self.logger.experiment.add_scalar(f'val_loss/{k}',
-                                              val_loss_reduced[k],
-                                              global_step=self.global_step)
+        val_metrics_epoch = merge_dicts(val_metrics)
+        self.log_dict({f'val_metrics_{k}': metric
+                       for k, metric in val_metrics_epoch.items()})
 
-        # reduce and log validation metric results (mean & std)
-        metric_result_list = [x[1] for x in outputs]
-        metric_result_reduced = dict()
-        for k in metric_result_list[0].keys():
-            stacked = torch.stack([x[k] for x in metric_result_list])
-            metric_result_reduced[f'{k}_mean'] = stacked.mean()
-            metric_result_reduced[f'{k}_std'] = stacked.std()
-            self.logger.experiment.add_scalar(f'metrics/{k}_mean',
-                                              metric_result_reduced[f'{k}_mean'],
-                                              global_step=self.global_step)
-            self.logger.experiment.add_scalar(f'metrics/{k}_std',
-                                              metric_result_reduced[f'{k}_std'],
-                                              global_step=self.global_step)
-
-        # log and update best metrics
-        self._check_log_best_metric(val_loss_reduced, metric_result_reduced)
-
-        # return callback metrics for checkpointing
-        return {'val_loss': val_loss_reduced['loss'],
-                'mean_dice_mean': metric_result_reduced['mean_dice_mean']}
+        # update hparams metrics
+        self.hparam_metrics = {f'hparam_metrics_{k}': val_metrics_epoch[k]
+                               for k in self.hparams.meta.hparam_metrics}
