@@ -47,6 +47,8 @@ class MirtkFFD(object):
     def __call__(self, tar, src):
         """Execute MIRTK registration of a volume pair, input/return Tensors"""
 
+        # TODO: set up work_dir
+
         # save the target and source image in work dir
         tar_path = self.hparams.work_dir + "/target.nii.gz"
         save_nifti(tar.cpu().numpy()[0, 0, ...], tar_path)
@@ -80,5 +82,7 @@ class MirtkFFD(object):
         # load converted dvf
         disp = load_nifti(disp_pred_path)[..., 0, :]  # (H, W, D, 3)
         disp = np.moveaxis(disp, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)
+
+        # TODO: remove work_dir
 
         return torch.from_numpy(disp).type_as(tar)

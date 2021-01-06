@@ -43,6 +43,7 @@ def inference(model, inference_dataset, output_dir, device=torch.device('cpu')):
 
         # model inference
         out = model(batch['target'], batch['source'])
+
         if isinstance(out, tuple):
             # (flows, disps), multi-level list
             batch['disp_pred'] = out[1][-1]

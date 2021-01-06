@@ -6,12 +6,12 @@ class CardiacMR2DTrain(_BaseDataset):
     def __init__(self,
                  data_dir_path,
                  crop_size=(192, 192),
-                 batch_size=1):
+                 ):
         super(CardiacMR2DTrain, self).__init__(data_dir_path)
         self.crop_size = crop_size
 
-        # replicate subject list by batch-size
-        self.subject_list = self.subject_list * batch_size
+        # # replicate subject list by batch-size so each epoch
+        # self.subject_list = self.subject_list * batch_size
 
         # tells which data points are images (to normalise intensity)
         self.image_keys = ['target', 'source']

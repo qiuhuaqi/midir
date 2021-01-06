@@ -53,7 +53,7 @@ class BrainInterSubject3DEval(BrainInterSubject3DTrain):
         super(BrainInterSubject3DEval, self)._set_path(index)
 
         # T1w image of source subject (for visualisation)
-        # TODO: the name 'target_original' is only a suitable for intra-subject setting
+        # TODO: the name 'target_original' is only suitable for intra-subject setting
         self.data_path_dict['target_original'] = f'{self.src_subj_path}/T1_brain.nii.gz'
 
         # segmentation
