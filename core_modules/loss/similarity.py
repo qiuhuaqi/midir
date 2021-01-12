@@ -60,7 +60,7 @@ class MILossGaussian(nn.Module):
         hist_joint = win_x.bmm(win_y.transpose(1, 2))  # (N, #bins, #bins)
 
         # normalise joint histogram to get joint distribution
-        hist_norm = hist_joint.flatten(start_dim=1, end_dim=-1).sum(dim=1) + 1e-10
+        hist_norm = hist_joint.flatten(start_dim=1, end_dim=-1).sum(dim=1) + 1e-5
         p_joint = hist_joint / hist_norm.view(-1, 1, 1)  # (N, #bins, #bins) / (N, 1, 1)
 
         return p_joint
