@@ -152,78 +152,8 @@ def dvf_line_integral(op_flow):
     return accum_flow
 
 
-def warp(x, disp, interp_mode="bilinear"):
-    """
-    Spatially transform an image by sampling at transformed locations (2D and 3D)
-    Note that the dvf should not be spatially normalised.
-
-    Args:
-        x: (Tensor float, shape (N, ndim, *sizes)) input image
-        disp: (Tensor float, shape (N, ndim, *sizes)) dense disp field in i-j-k order
-        interp_mode: (string) mode of interpolation in grid_sample()
-
-    Returns:
-        deformed x, Tensor of the same shape as input
-    """
-    ndim = x.ndim - 2
-    size = x.size()[2:]
-    disp = disp.type_as(x)
-
-    # normalise DVF to [-1, 1]
-    disp = normalise_disp(disp)
-
-    # generate standard mesh grid
-    grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)])
-    grid = [grid[i].requires_grad_(False) for i in range(ndim)]
-
-    # apply displacements to each direction (N, *size)
-    warped_grid = [grid[i] + disp[:, i, ...] for i in range(ndim)]
-
-    # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
-    warped_grid = [warped_grid[ndim - 1 - i] for i in range(ndim)]
-    warped_grid = torch.stack(warped_grid, -1)  # (N, *size, dim)
-
-    return F.grid_sample(x, warped_grid, mode=interp_mode, align_corners=False)
-
-
-def multi_res_warp(x_pyr, disps, interp_mode='bilinear'):
-    """ Multi-resolution spatial transformation"""
-    assert len(x_pyr) == len(disps)
-    warped_x_pyr = []
-    for (x, disp) in zip(x_pyr, disps):
-        warped_x = warp(x, disp, interp_mode=interp_mode)
-        warped_x_pyr.append(warped_x)
-    return warped_x_pyr
-
-
 def svf_exp(flow, scale=1, steps=5, sampling='bilinear'):
-    r"""Group exponential maps of flow fields computed using scaling and squaring.
-
-    Args:
-        flow: Batch of flow fields as tensor of shape ``(N, D, ..., X)``.
-        scale: Constant flow field scaling factor.
-        steps: Number of scaling and squaring steps.
-        sampling: interpolation mode in warping
-        padding: Flow field extrapolation mode.
-        align_corners: Whether ``flow`` vectors are defined with respect to
-            ``Domain.CUBE`` (False) or ``Domain.CUBE_CORNERS`` (True).
-
-    Returns:
-        Exponential map of input flow field. If ``steps=0``, a reference to ``flow`` is returned.
-
-    """
-    if scale is None:
-        scale = 1
-    if steps is None:
-        steps = 5
-    if not isinstance(steps, int):
-        raise TypeError("expv() 'steps' must be of type int")
-
-    if steps < 0:
-        raise ValueError("expv() 'steps' must be positive value")
-    if steps == 0:
-        return flow
-
+    """ Exponential of velocity field by Scaling and Squaring"""
     disp = flow * (scale / (2 ** steps))
     for _ in range(steps):
         disp = disp + warp(x=disp, disp=disp,
@@ -310,3 +240,47 @@ def conv1d(
     result = result.reshape(shape_[0:-1] + result.shape[-1:])
     result = result.transpose(-1, dim)
     return result
+
+
+def warp(x, disp, interp_mode="bilinear"):
+    """
+    Spatially transform an image by sampling at transformed locations (2D and 3D)
+    Note: disp should NOT be spatially normalised to [-1, 1] space
+
+    Args:
+        x: (Tensor float, shape (N, ndim, *sizes)) input image
+        disp: (Tensor float, shape (N, ndim, *sizes)) dense disp field in i-j-k order
+        interp_mode: (string) mode of interpolation in grid_sample()
+
+    Returns:
+        deformed x, Tensor of the same shape as input
+    """
+    ndim = x.ndim - 2
+    size = x.size()[2:]
+    disp = disp.type_as(x)
+
+    # normalise Disp to [-1, 1]
+    disp = normalise_disp(disp)
+
+    # generate standard mesh grid
+    grid = torch.meshgrid([torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)])
+    grid = [grid[i].requires_grad_(False) for i in range(ndim)]
+
+    # apply displacements to each direction (N, *size)
+    warped_grid = [grid[i] + disp[:, i, ...] for i in range(ndim)]
+
+    # swapping i-j-k order to x-y-z (k-j-i) order for grid_sample()
+    warped_grid = [warped_grid[ndim - 1 - i] for i in range(ndim)]
+    warped_grid = torch.stack(warped_grid, -1)  # (N, *size, dim)
+
+    return F.grid_sample(x, warped_grid, mode=interp_mode, align_corners=False)
+
+
+def multi_res_warp(x_pyr, disps, interp_mode='bilinear'):
+    """ Multi-resolution spatial transformation"""
+    assert len(x_pyr) == len(disps)
+    warped_x_pyr = []
+    for (x, disp) in zip(x_pyr, disps):
+        warped_x = warp(x, disp, interp_mode=interp_mode)
+        warped_x_pyr.append(warped_x)
+    return warped_x_pyr
