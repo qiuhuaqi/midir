@@ -6,19 +6,19 @@ import random
 from matplotlib import pyplot as plt
 
 
-def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=30, color='c'):
-    """dvf shape (2, H, W)"""
+def plot_warped_grid(ax, disp, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=30, color='c'):
+    """disp shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
     else:
-        background = np.zeros(dvf.shape[1:])
+        background = np.zeros(disp.shape[1:])
 
     id_grid_H, id_grid_W = np.meshgrid(range(0, background.shape[0] - 1, interval),
                                        range(0, background.shape[1] - 1, interval),
                                        indexing='ij')
 
-    new_grid_H = id_grid_H + dvf[0, id_grid_H, id_grid_W]
-    new_grid_W = id_grid_W + dvf[1, id_grid_H, id_grid_W]
+    new_grid_H = id_grid_H + disp[0, id_grid_H, id_grid_W]
+    new_grid_W = id_grid_W + disp[1, id_grid_H, id_grid_W]
 
     kwargs = {"linewidth": 1.5, "color": color}
     # matplotlib.plot() uses CV x-y indexing
@@ -83,9 +83,14 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 
 
 def plot_result_fig(vis_data_dict, save_path=None, title_font_size=20, dpi=100, show=False, close=False):
-    """Plot visual results in a single figure/subplots. DVF in vis_data_dict should be shaped (dim, *sizes)"""
+    """Plot visual results in a single figure/subplots.
+    Images should be shaped (*sizes)
+    Disp should be shaped (ndim, *sizes)
 
-    ## set up the figure
+    vis_data_dict.keys() = ['target', 'source', 'target_original',
+                            'target_pred', 'warped_source',
+                            'disp_gt', 'disp_pred']
+    """
     fig = plt.figure(figsize=(30, 18))
     title_pad = 10
 
@@ -158,7 +163,7 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
     - 3D: the middle slice on the chosen axis
 
     Args:
-        data_dict: (dict, data items shape (N, 1/dim, *sizes))
+        data_dict: (dict) images shape (N, 1, *sizes), disp shape (N, ndim, *sizes)
         save_result_dir: (string) Path to visualisation result directory
         epoch: (int) Epoch number (for naming when saving)
         axis: (int) Visualise the 2D plane orthogonal to this axis in 3D volume
@@ -169,12 +174,12 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
         if isinstance(d, torch.Tensor):
             data_dict[n] = d.cpu().numpy()
 
-    dim = data_dict["target"].ndim - 2
+    ndim = data_dict["target"].ndim - 2
     sizes = data_dict["target"].shape[2:]
 
     # put 2D slices into visualisation data dict
     vis_data_dict = {}
-    if dim == 2:
+    if ndim == 2:
         # randomly choose a slice for 2D
         z = random.randint(0, data_dict["target"].shape[0]-1)
         for name, d in data_dict.items():
