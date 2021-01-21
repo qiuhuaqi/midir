@@ -12,7 +12,6 @@ from utils.image import upsample_image
 
 def load_nifti(path, data_type=np.float32, nim=False):
     xnim = nib.load(path)
-    # x = xnim.get_data().astype(data_type)  # deprecated in nibabel>5.0
     x = np.asanyarray(xnim.dataobj).astype(data_type)
     if nim:
         return x, xnim
@@ -94,20 +93,21 @@ def split_volume(image_name, output_name):
         nib.save(nim2, '{0}{1:02d}.nii.gz'.format(output_name, z))
 
 
-def split_volume_idmat(image_name, output_name):
+def split_volume_idmat(image_path, output_prefix, data_type=np.float32):
     """ Split an image volume into slices with identity matrix as I2W transformation
     This is to by-pass the issue of not accumulating displacement in z-direction
      in MIRTK's `convert-dof` function
      """
-    nim = nib.load(image_name)
+    # image data saved in shape (H, W, N)
+    nim = nib.load(image_path)
     Z = nim.header['dim'][3]
-    image = nim.get_data()
+    image = np.asanyarray(nim.dataobj).astype(data_type)
 
     for z in range(Z):
         image_slice = image[:, :, z]
         image_slice = np.expand_dims(image_slice, axis=2)
         nim2 = nib.Nifti1Image(image_slice, np.eye(4))
-        nib.save(nim2, '{0}{1:02d}.nii.gz'.format(output_name, z))
+        nib.save(nim2, '{0}{1:02d}.nii.gz'.format(output_prefix, z))
 
 
 def split_sequence(image_name, output_name):

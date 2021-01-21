@@ -3,8 +3,6 @@ import os
 
 import numpy as np
 import pandas as pd
-# from tensorboardX import SummaryWriter
-from utils.misc import save_dict_to_json
 
 
 class MetricReporter(object):
@@ -105,26 +103,3 @@ def set_logger(log_path):
         stream_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
         logger.addHandler(stream_handler)
 
-#
-# def set_summary_writer(model_dir, run_name):
-#     """
-#     Returns a Tensorboard summary writer
-#     which writes to [model_dir]/tb_summary/[run_name]/
-#
-#     Args:
-#         model_dir: directory of the model
-#         run_name: sub name of the summary writer (usually 'train' or 'val')
-#
-#     Returns:
-#         summary writer
-#
-#     """
-#     summary_dir = os.path.join(model_dir, 'tb_summary', run_name)
-#     if not os.path.exists(summary_dir):
-#         print("TensorboardX summary directory does not exist...\n Making directory {}".format(summary_dir))
-#         os.makedirs(summary_dir)
-#     else:
-#         print("TensorboardX summary directory already exist at {}...\nOverwritting!".format(summary_dir))
-#         os.system("rm -rf {}".format(summary_dir))
-#         os.makedirs(summary_dir)
-#     return SummaryWriter(summary_dir)

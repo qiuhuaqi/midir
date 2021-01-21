@@ -98,15 +98,14 @@ class LightningDLReg(LightningModule):
     def validation_step(self, batch, batch_idx):
         # -- Note on data shape -- #
         # 2d:
-        #   image data: (N, 1, H, W)
-        #   disp gt (synthetic): (N, 2, H, W)
-        #  Uses the same way in training and validation: extract one 2D slice from each subject.
-        #  This is valid as long as the model doesn't use batch statistics in validation or inference
+        #   image data: (N, num_slices, H, W)
+        #   disp gt (synthetic setting only): (N, num_slices, 2, H, W)
 
         # 3d:
         #   image data: (N, 1, H, W, D),
-        #   disp gt (synthetic): (N, 3, H, W, D)
+        #   disp gt (synthetic setting only): (N, 3, H, W, D)
         # ------------------------ #
+        # todo: dev 17 Jan 2021, data shape is now changed
 
         # run inference, compute losses and outputs
         val_losses, step_outputs = self._step(batch)

@@ -1,0 +1,11 @@
+# @package _group_
+name: 'brain_camcan'
+dataset:
+  data_dir_path: /vol/biomedic2/hq615/PROJECTS/2_mutual_info/data/camcan/malpem_split/test
+  modality: t1t1
+  crop_size: [176, 192, 176]
+  evaluate: True
+
+dataloader:
+  batch_size: 1
+  num_workers: 2

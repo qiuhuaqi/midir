@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+  - data: cardiac_ukbb
+  - model: mirtk
+
+metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
+analyse: True
+gpu:

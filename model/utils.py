@@ -6,8 +6,8 @@ import torch.nn as nn
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from datasets.brain import BrainInterSubject3DTrain, BrainInterSubject3DEval
-from datasets.cardiac import CardiacMR2DTrain, CardiacMR2DEval
+from datasets.brain import BrainMRInterSubj3D
+from datasets.cardiac import CardiacMR2D
 from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
 from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
 from core_modules.loss import similarity, regularisation
@@ -83,26 +83,29 @@ def get_loss_fn(hparams):
 
 
 def get_datasets(hparams):
+    # todo: expose `hparams.data` level structure to caller instead of just `hparams`
     assert os.path.exists(hparams.data.train_path), \
         f"Training data path does not exist: {hparams.data.train_path}"
     assert os.path.exists(hparams.data.val_path), \
         f"Validation data path does not exist: {hparams.data.val_path}"
 
-    if hparams.data == 'camcan':
-        train_dataset = BrainInterSubject3DTrain(hparams.data.train_path,
+    if hparams.data == 'brain_camcan':
+        # todo: change to new dataset
+        train_dataset = BrainMRInterSubj3D(hparams.data.train_path,
                                                  hparams.data.crop_size,
                                                  modality=hparams.data.modality,
                                                  atlas_path=hparams.data.atlas_path)
 
-        val_dataset = BrainInterSubject3DEval(hparams.data.val_path,
+        val_dataset = BrainMRInterSubj3D(hparams.data.val_path,
                                               hparams.data.crop_size,
                                               modality=hparams.data.modality,
                                               atlas_path=hparams.data.atlas_path)
     elif hparams.data == 'ukbb_cardiac':
-        train_dataset = CardiacMR2DTrain(hparams.data.train_path,
-                                         crop_size=hparams.data.crop_size,
-                                         batch_size=hparams.data.batch_size)
-        val_dataset = CardiacMR2DEval(hparams.data.train_path,
+        # todo: change to new dataset
+        train_dataset = CardiacMR2D(hparams.data.train_path,
+                                    crop_size=hparams.data.crop_size,
+                                    batch_size=hparams.data.batch_size)
+        val_dataset = CardiacMR2D(hparams.data.train_path,
                                       crop_size=hparams.data.crop_size,
                                       batch_size=hparams.data.batch_size)
 

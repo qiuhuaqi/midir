@@ -1,14 +1,14 @@
 # @package _group_
 ndim: 2
 
-batch_size: 1
+batch_size: 10
 num_workers: 4
 shuffle: False
 
 crop_size: [192, 192]
+slice_range:
+slicing: 'random'
 
-# TODO: fill data path
-dataset:
-train_path:
-val_path:
-test_path:
+train_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/train
+val_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/val_autoseg
+test_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/test_autoseg

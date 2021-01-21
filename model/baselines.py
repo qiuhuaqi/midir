@@ -8,21 +8,21 @@ from utils.image_io import save_nifti, load_nifti, split_volume_idmat
 
 
 class Identity(object):
-    def __init__(self, ndim):
-        self.dim = ndim
+    def __init__(self):
+        pass
 
     def __call__(self, tar, src):
         # identity disp (N, 2, H, W) or (1, 3, H, W, D)
         img_size = tar.size()
-        disp = torch.zeros((img_size[0], self.dim, *img_size[2:])).type_as(tar)
-        return disp
+        ndim = tar.ndim - 2
+        disp = torch.zeros((img_size[0], ndim, *img_size[2:]))
+        return disp.type_as(tar)
 
 
 class MIRTK(object):
     """ MIRTK registration by calling $mirtk applications"""
     def __init__(self,
                  mirtk_path=None,
-                 ndim=3,
                  ds=6,
                  model='SVFFD',
                  sim='NMI',
@@ -31,7 +31,6 @@ class MIRTK(object):
                  work_dir=None,
                  debug=False
                  ):
-        self.ndim = ndim
         self.model = model
         self.sim = sim
         self.ds = ds
@@ -48,7 +47,7 @@ class MIRTK(object):
         else:
             self.work_dir = work_dir
 
-    def _register(self, tar_path, src_path, dof_path):
+    def _register(self, tar_path, src_path, dof_path, ndim):
         # Register
         cmd_register = f'{self.mirtk_path} register {tar_path} {src_path} ' \
                        f'-sim {self.sim} ' \
@@ -70,10 +69,10 @@ class MIRTK(object):
         subprocess.check_call(cmd_dof_disp, shell=True)
 
         # Load converted disp
-        if self.ndim == 2:
+        if ndim == 2:
             disp = load_nifti(disp_pred_path)[..., 0, 0, :2]  # (H, W, 2)
             disp = np.moveaxis(disp, -1, 0)  # (2, H, W)
-        elif self.ndim == 3:
+        elif ndim == 3:
             disp = load_nifti(disp_pred_path)[..., 0, :]  # (H, W, D, 3)
             disp = np.moveaxis(disp, -1, 0)[np.newaxis, ...]  # (1, 3, H, W, D)
         return disp
@@ -100,7 +99,7 @@ class MIRTK(object):
             tar_path_z = f'{self.work_dir}/tar_z{z:02d}.nii.gz'
             src_path_z = f'{self.work_dir}/src_z{z:02d}.nii.gz'
             dof_path_z = f'{self.work_dir}/dof_z{z:02d}.dof.gz'
-            disp_z = self._register(tar_path_z, src_path_z, dof_path_z)
+            disp_z = self._register(tar_path_z, src_path_z, dof_path_z, ndim=2)
             disp_stack += [disp_z]
         return np.array(disp_stack)
 
@@ -115,24 +114,23 @@ class MIRTK(object):
 
         # call MIRTK registration
         dof_path = self.work_dir + "/dof_out.dof.gz"
-        disp = self._register(tar_path, src_path, dof_path)
+        disp = self._register(tar_path, src_path, dof_path, ndim=3)
         return disp
 
     def __call__(self, tar, src):
-        assert tar.ndim-2 == self.ndim, \
-            f'Data ndim {tar.ndim-2} and module ndim {self.ndim} mismatch.'
+        ndim = tar.ndim - 2
 
         # set up work_dir
         if not os.path.exists(self.work_dir):
             os.makedirs(self.work_dir)
 
         # perform registration
-        if self.ndim == 2:
+        if ndim == 2:
             disp = self.register2d(tar, src)
-        elif self.ndim == 3:
+        elif ndim == 3:
             disp = self.register3d(tar, src)
         else:
-            raise RuntimeError(f'Unknown dimension {self.ndim}')
+            raise RuntimeError(f'Unknown dimension {ndim}')
 
         # clean up work_dir
         if not self.debug:

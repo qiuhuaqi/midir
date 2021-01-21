@@ -58,7 +58,7 @@ def measure_disp_metrics(metric_data):
     if 'disp_gt' in metric_data.keys():
         disp_gt = metric_data['disp_gt']
 
-    # mask the DVF with roi mask if given
+    # mask the disp with roi mask if given
     if 'roi_mask' in metric_data.keys():
         roi_mask = metric_data['roi_mask']  # (N, 1, *(sizes))
 
@@ -198,9 +198,12 @@ def calculate_dice(mask1, mask2, label_class=0):
     """
     mask1_pos = (mask1 == label_class).astype(np.float32)
     mask2_pos = (mask2 == label_class).astype(np.float32)
-    pos1and2 = np.sum(mask1_pos * mask2_pos, axis=(0, 1))
-    pos1 = np.sum(mask1_pos, axis=(0, 1))
-    pos2 = np.sum(mask2_pos, axis=(0, 1))
+
+    assert mask1.ndim == mask2.ndim
+    axes = tuple(range(2, mask1.ndim))
+    pos1and2 = np.sum(mask1_pos * mask2_pos, axis=axes)
+    pos1 = np.sum(mask1_pos, axis=axes)
+    pos2 = np.sum(mask2_pos, axis=axes)
     return np.mean(2 * pos1and2 / (pos1 + pos2 + 1e-7))
 
 

@@ -29,9 +29,11 @@ def analyse_output(inference_output_dir, save_dir, metric_groups):
             k = fn.split('.')[0]
             data_dict[k] = load_nifti(subj_output_dir + f'/{fn}')
 
-        # reshape:
-        #   images: (N, 1, H, W)  or (1, 1, H, W, D)
-        #   disp: (N, 2, H, W) or (1, 3, H, W, D)
+        # reshape from saved for analysis:
+        # 2D: img (H, W, N) -> (N=num_slice, 1, H, W)
+        #     disp (H, W, N, 2) -> (N=num_slice, 2, H, W)
+        # 3D: img (H, W, D) -> (N=1, 1, H, W, D)
+        #     disp (H, W, D, 3) -> (N=1, 3, H, W, D)
         ndim = data_dict['disp_pred'].shape[-1]
         for k, x in data_dict.items():
             if ndim == 2:
