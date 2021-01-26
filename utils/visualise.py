@@ -29,7 +29,11 @@ def plot_warped_grid(ax, disp, bg_img=None, interval=3, title="$\mathcal{T}_\phi
 
     ax.set_title(title, fontsize=fontsize)
     ax.imshow(background, cmap='gray')
-    ax.axis('off')
+    # ax.axis('off')
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_frame_on(False)
 
 
 # TODO: adapt quiver plot
