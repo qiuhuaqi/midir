@@ -19,14 +19,14 @@ class MILossGaussian(nn.Module):
                  vmax=1.0,
                  num_bins=64,
                  sample_ratio=0.1,
-                 threshold_roi=False,
-                 threshold=0.0001,
                  normalised=True
                  ):
         super(MILossGaussian, self).__init__()
 
         self.vmin = vmin
         self.vmax = vmax
+        self.sample_ratio = sample_ratio
+        self.normalised = normalised
 
         # set the std of Gaussian kernel so that FWHM is one bin width
         bin_width = (vmax - vmin) / num_bins
@@ -35,12 +35,6 @@ class MILossGaussian(nn.Module):
         # set bin edges
         self.num_bins = num_bins
         self.bins = torch.linspace(self.vmin, self.vmax, self.num_bins, requires_grad=False).unsqueeze(1)
-
-        # self.threshold_roi = threshold_roi
-        # self.threshold = threshold
-        self.sample_ratio = sample_ratio
-
-        self.normalised = normalised
 
     def _compute_joint_prob(self, x, y):
         """

@@ -43,19 +43,19 @@ def get_inference_model(cfg, device=torch.device('cpu')):
         model = MIRTK(**cfg.model.mirtk_params)
 
     elif cfg.model.name == 'dl':
-        assert os.path.exists(cfg.inference_model.ckpt_path)
-        model = LightningDLReg.load_from_checkpoint(cfg.inference_model.ckpt_path)
+        assert os.path.exists(cfg.model.ckpt_path)
+        model = LightningDLReg.load_from_checkpoint(cfg.model.ckpt_path)
         model = model.to(device=device)
-        model.evaluate()
+        model.eval()
 
     else:
-        raise ValueError(f"Unknown inference model type: {cfg.inference_model.type}")
+        raise ValueError(f"Unknown inference model type: {cfg.model.name}")
     return model
 
 
 def inference(model, dataloader, output_dir, device=torch.device('cpu')):
     for idx, batch in enumerate(tqdm(dataloader)):
-        # -- Note on data shape and reshape -- #
+        # -- Note on data shapes -- #
         # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
         # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
         # -------------------------------------#

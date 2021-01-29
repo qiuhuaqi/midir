@@ -1,4 +1,3 @@
-import os
 from omegaconf import DictConfig
 
 import torch
@@ -96,37 +95,38 @@ class LightningDLReg(LightningModule):
         return train_losses['loss']
 
     def validation_step(self, batch, batch_idx):
-        # -- Note on data shape -- #
-        # 2d:
-        #   image data: (N, num_slices, H, W)
-        #   disp gt (synthetic setting only): (N, num_slices, 2, H, W)
-
-        # 3d:
-        #   image data: (N, 1, H, W, D),
-        #   disp gt (synthetic setting only): (N, 3, H, W, D)
-        # ------------------------ #
-        # todo: dev 17 Jan 2021, data shape is now changed
+        # -- Note on data shapes -- #
+        # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
+        # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
+        # -------------------------------------#
+        # reshape data for inference
+        for k, x in batch.items():
+            batch[k] = x.transpose(0, 1)
 
         # run inference, compute losses and outputs
         val_losses, step_outputs = self._step(batch)
 
-        # collect data for measuring metrics
+        # collect data for measuring metrics and validation visualisation
         metric_data = batch
         metric_data.update({k: x[-1] for k, x in step_outputs.items()})
+        vis_data = step_outputs
+
         if 'source_seg' in batch.keys():
-            # inference for segmentation metric
+            # for segmentation metric
             metric_data['warped_source_seg'] = warp(batch['source_seg'], metric_data['disp_pred'],
                                                     interp_mode='nearest')
         if 'target_original' in batch.keys():
-            # for visualisation and metrics measuring
+            # for visualisation
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
-            step_outputs['target_original'] = target_original_pyr  # for visualisation
+            vis_data['target_original'] = target_original_pyr  # for visualisation
             target_pred_pyr = multi_res_warp(target_original_pyr, step_outputs['disp_pred'])
-            step_outputs['target_pred'] = target_pred_pyr  # for visualisation
+            vis_data['target_pred'] = target_pred_pyr  # for visualisation
+
+            # for image metrics
+            metric_data['target_original'] = batch['target_original']
             metric_data['target_pred'] = target_pred_pyr[-1]
 
-        # TODO: metric for 2d cardiac
-        # validation metrics
+        # calculate validation metrics
         val_metrics = {k: float(loss.cpu()) for k, loss in val_losses.items()}
         val_metrics.update(measure_metrics(metric_data, self.hparams.meta.metric_groups))
 
@@ -134,10 +134,7 @@ class LightningDLReg(LightningModule):
         if batch_idx == 0:
             for l in range(self.hparams.meta.ml_lvls):
                 # get data for the current resolution level from step_dict
-                vis_data_l = dict()
-                for k, x in step_outputs.items():
-                    vis_data_l[k] = x[l]
-                # TODO: visualisation for 2d cardiac
+                vis_data_l = {k: x[l] for k, x in vis_data.items()}
                 val_fig_l = visualise_result(vis_data_l, axis=2)
                 self.logger.experiment.add_figure(f'val_lvl{l}',
                                                   val_fig_l,

@@ -8,17 +8,16 @@ class CardiacMR2D(_BaseDataset):
                  evaluate=False,
                  slice_range=None,
                  slicing=None,
-                 crop_size=(172, 172),
+                 crop_size=(192, 192),
+                 batch_size=None,
                  ):
         super(CardiacMR2D, self).__init__(data_dir_path)
-
-        # tells which data points are images (to normalise intensity)
-        self.image_keys = ['target', 'source']
-
         self.evaluate = evaluate
         self.slice_range = slice_range
         self.slicing = slicing
         self.crop_size = crop_size
+        if batch_size is not None:
+            self.subject_list = self.subject_list * batch_size
 
     def _set_path(self, index):
         self.subj_id = self.subject_list[index]
@@ -35,8 +34,5 @@ class CardiacMR2D(_BaseDataset):
         data_dict = _load2d(self.data_path_dict)
         data_dict = _magic_slicer(data_dict, slice_range=self.slice_range, slicing=self.slicing)
         data_dict = _crop_and_pad(data_dict, self.crop_size)
-        data_dict = _normalise_intensity(data_dict, self.image_keys)
+        data_dict = _normalise_intensity(data_dict)
         return _to_tensor(data_dict)
-
-import omegaconf
-x = omegaconf.listconfig.ListConfig

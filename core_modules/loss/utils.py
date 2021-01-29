@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 
 def finite_diff(x, dim, mode="forward", boundary="Neumann"):
-    """Input shape (N, dim, *sizes), mode='foward', 'backward' or 'central'"""
+    """Input shape (N, ndim, *sizes), mode='foward', 'backward' or 'central'"""
     assert type(x) is torch.Tensor
     ndim = x.ndim - 2
     sizes = x.shape[2:]

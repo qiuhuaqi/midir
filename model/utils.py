@@ -83,34 +83,39 @@ def get_loss_fn(hparams):
 
 
 def get_datasets(hparams):
-    # todo: expose `hparams.data` level structure to caller instead of just `hparams`
     assert os.path.exists(hparams.data.train_path), \
         f"Training data path does not exist: {hparams.data.train_path}"
     assert os.path.exists(hparams.data.val_path), \
         f"Validation data path does not exist: {hparams.data.val_path}"
 
-    if hparams.data == 'brain_camcan':
-        # todo: change to new dataset
+    if hparams.data.name == 'brain_camcan':
         train_dataset = BrainMRInterSubj3D(hparams.data.train_path,
-                                                 hparams.data.crop_size,
-                                                 modality=hparams.data.modality,
-                                                 atlas_path=hparams.data.atlas_path)
+                                           hparams.data.crop_size,
+                                           modality=hparams.data.modality,
+                                           atlas_path=hparams.data.atlas_path)
 
         val_dataset = BrainMRInterSubj3D(hparams.data.val_path,
-                                              hparams.data.crop_size,
-                                              modality=hparams.data.modality,
-                                              atlas_path=hparams.data.atlas_path)
-    elif hparams.data == 'ukbb_cardiac':
-        # todo: change to new dataset
+                                         hparams.data.crop_size,
+                                         evaluate=True,
+                                         modality=hparams.data.modality,
+                                         atlas_path=hparams.data.atlas_path)
+
+    elif hparams.data.name == 'cardiac_ukbb':
         train_dataset = CardiacMR2D(hparams.data.train_path,
                                     crop_size=hparams.data.crop_size,
-                                    batch_size=hparams.data.batch_size)
-        val_dataset = CardiacMR2D(hparams.data.train_path,
-                                      crop_size=hparams.data.crop_size,
-                                      batch_size=hparams.data.batch_size)
+                                    slice_range=hparams.data.slice_range,
+                                    slicing=hparams.data.train_slicing,
+                                    batch_size=hparams.data.batch_size
+                                    )
+        val_dataset = CardiacMR2D(hparams.data.val_path,
+                                  evaluate=True,
+                                  crop_size=hparams.data.crop_size,
+                                  slice_range=hparams.data.slice_range,
+                                  slicing=hparams.data.val_slicing
+                                  )
 
     else:
-        raise ValueError(f'Dataset config ({hparams.data}) not recognised.')
+        raise ValueError(f'Dataset config ({hparams.data.name}) not recognised.')
 
     return train_dataset, val_dataset
 

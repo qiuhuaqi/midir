@@ -170,7 +170,7 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
         data_dict: (dict) images shape (N, 1, *sizes), disp shape (N, ndim, *sizes)
         save_result_dir: (string) Path to visualisation result directory
         epoch: (int) Epoch number (for naming when saving)
-        axis: (int) Visualise the 2D plane orthogonal to this axis in 3D volume
+        axis: (int) For 3D only, choose the 2D plane orthogonal to this axis in 3D volume
         dpi: (int) Image resolution of saved figure
     """
     # check cast to Numpy array

@@ -1,5 +1,7 @@
 # @package _group_
+name: brain_camcan
 ndim: 3
+
 batch_size: 1
 num_workers: 2
 shuffle: True

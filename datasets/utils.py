@@ -21,12 +21,16 @@ def _crop_and_pad(data_dict, crop_size):
     return data_dict
 
 
-def _normalise_intensity(data_dict, keys, vmin=0., vmax=1.):
+def _normalise_intensity(data_dict, keys=None, vmin=0., vmax=1.):
     # normalise intensity of data in `data_dict` with `keys`
-    for name in keys:
-        data_dict[name] = normalise_intensity(data_dict[name],
-                                              min_out=vmin, max_out=vmax,
-                                              mode="minmax", clip=True)
+    if keys is None:
+        keys = {'target', 'source', 'target_original'}
+
+    for k, x in data_dict.items():
+        if k in keys:
+            data_dict[k] = normalise_intensity(x,
+                                               min_out=vmin, max_out=vmax,
+                                               mode="minmax", clip=True)
     return data_dict
 
 
@@ -68,7 +72,7 @@ def _magic_slicer(data_dict, slice_range=None, slicing=None):
 
     elif slicing == 'random':
         # randomly choose one slice within range
-        z = random.randint(slice_range[0], slice_range[1])
+        z = random.randint(slice_range[0], slice_range[1]-1)
         slicer = slice(z, z + 1)  # use slicer to keep dim
 
     elif isinstance(slicing, (list, tuple, ListConfig)):
