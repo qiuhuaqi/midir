@@ -66,7 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--metric_groups',
                         nargs='*',
                         type=str,
-                        default=["dvf_metrics", "image_metrics", "seg_metrics"])
+                        default=["disp_metrics", "image_metrics", "seg_metrics"])
     args = parser.parse_args()
 
     # default inference output directory
