@@ -1,4 +1,3 @@
-"""Visualisation"""
 import numpy as np
 import torch
 import os
@@ -6,19 +5,19 @@ import random
 from matplotlib import pyplot as plt
 
 
-def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=30, color='c'):
-    """dvf shape (2, H, W)"""
+def plot_warped_grid(ax, disp, bg_img=None, interval=3, title="$\mathcal{T}_\phi$", fontsize=30, color='c'):
+    """disp shape (2, H, W)"""
     if bg_img is not None:
         background = bg_img
     else:
-        background = np.zeros(dvf.shape[1:])
+        background = np.zeros(disp.shape[1:])
 
     id_grid_H, id_grid_W = np.meshgrid(range(0, background.shape[0] - 1, interval),
                                        range(0, background.shape[1] - 1, interval),
                                        indexing='ij')
 
-    new_grid_H = id_grid_H + dvf[0, id_grid_H, id_grid_W]
-    new_grid_W = id_grid_W + dvf[1, id_grid_H, id_grid_W]
+    new_grid_H = id_grid_H + disp[0, id_grid_H, id_grid_W]
+    new_grid_W = id_grid_W + disp[1, id_grid_H, id_grid_W]
 
     kwargs = {"linewidth": 1.5, "color": color}
     # matplotlib.plot() uses CV x-y indexing
@@ -29,63 +28,22 @@ def plot_warped_grid(ax, dvf, bg_img=None, interval=3, title="$\mathcal{T}_\phi$
 
     ax.set_title(title, fontsize=fontsize)
     ax.imshow(background, cmap='gray')
-    ax.axis('off')
-
-
-# TODO: adapt quiver plot
-# def plot_quiver(ax, dvf.yaml):
-#     # quiver, or "Displacement Vector Field" (DVF)
-#     # todo: DVF shape change to (2, H, W) to be applied
-#     interval = 3  # interval between points on the grid
-#     background = source
-#     quiver_flow = np.zeros_like(dvf.yaml)
-#     quiver_flow[:, :, 0] = dvf.yaml[:, :, 0]
-#     quiver_flow[:, :, 1] = dvf.yaml[:, :, 1]
-#     mesh_x, mesh_y = np.meshgrid(range(0, dvf.yaml.shape[1] - 1, interval),
-#                                  range(0, dvf.yaml.shape[0] - 1, interval))
-#     plt.imshow(background[:, :], cmap='gray')
-#     plt.quiver(mesh_x, mesh_y,
-#                quiver_flow[mesh_y, mesh_x, 1], quiver_flow[mesh_y, mesh_x, 0],
-#                angles='xy', scale_units='xy', scale=1, color='g')
-#     plt.axis('off')
-#     ax.set_title('DVF', fontsize=title_font_size, pad=title_pad)
-
-
-# TODO: adapt Jacobian visualisation code
-# def plot_det_jac(ax, dvf.yaml)
-#     # todo: DVF shape change to (2, H, W) to be applied
-#     jac_det, mean_grad_detJ, negative_detJ = computeJacobianDeterminant2D(dvf.yaml)
-#     spec = [(0, (0.0, 0.0, 0.0)), (0.000000001, (0.0, 0.2, 0.2)),
-#             (0.12499999999, (0.0, 1.0, 1.0)), (0.125, (0.0, 0.0, 1.0)),
-#             (0.25, (1.0, 1.0, 1.0)), (0.375, (1.0, 0.0, 0.0)),
-#             (1, (0.94509803921568625, 0.41176470588235292, 0.07450980392156863))]
-#     cmap = matplotlib.colors.LinearSegmentedColormap.from_list('detjac', spec)
-#     plt.imshow(jac_det, vmin=-1, vmax=7, cmap=cmap)
-#     plt.axis('off')
-#     ax.set_title('Jacobian (Grad: {0:.2f}, Neg: {1:.2f}%)'.format(mean_grad_detJ, negative_detJ * 100),
-#                  fontsize=int(title_font_size*0.9), pad=title_pad)
-#     # split and extend this axe for the colorbar
-#     from mpl_toolkits.axes_grid1 import make_axes_locatable
-#     divider = make_axes_locatable(ax)
-#     cax1 = divider.append_axes("right", size="5%", pad=0.05)
-#     cb = plt.colorbar(cax=cax1)
-#     cb.ax.tick_params(labelsize=20)
-
-
-# def plot_hsv_dvf(ax, dvf.yaml):
-#     # convert flow into HSV flow with white background
-#     hsv_flow = flow_to_hsv(vis_data_dict["dvf.yaml"], max_mag=0.15, white_bg=True)
-#     # todo: DVF shape change to be applied
-#     ax = plt.subplot(2, 4, 7)
-#     plt.imshow(hsv_flow)
-#     plt.axis('off')
-#     ax.set_title('HSV', fontsize=title_font_size, pad=title_pad)
+    # ax.axis('off')
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_frame_on(False)
 
 
 def plot_result_fig(vis_data_dict, save_path=None, title_font_size=20, dpi=100, show=False, close=False):
-    """Plot visual results in a single figure/subplots. DVF in vis_data_dict should be shaped (dim, *sizes)"""
+    """Plot visual results in a single figure/subplots.
+    Images should be shaped (*sizes)
+    Disp should be shaped (ndim, *sizes)
 
-    ## set up the figure
+    vis_data_dict.keys() = ['target', 'source', 'target_original',
+                            'target_pred', 'warped_source',
+                            'disp_gt', 'disp_pred']
+    """
     fig = plt.figure(figsize=(30, 18))
     title_pad = 10
 
@@ -158,10 +116,10 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
     - 3D: the middle slice on the chosen axis
 
     Args:
-        data_dict: (dict, data items shape (N, 1/dim, *sizes))
+        data_dict: (dict) images shape (N, 1, *sizes), disp shape (N, ndim, *sizes)
         save_result_dir: (string) Path to visualisation result directory
         epoch: (int) Epoch number (for naming when saving)
-        axis: (int) Visualise the 2D plane orthogonal to this axis in 3D volume
+        axis: (int) For 3D only, choose the 2D plane orthogonal to this axis in 3D volume
         dpi: (int) Image resolution of saved figure
     """
     # check cast to Numpy array
@@ -169,12 +127,12 @@ def visualise_result(data_dict, axis=0, save_result_dir=None, epoch=None, dpi=50
         if isinstance(d, torch.Tensor):
             data_dict[n] = d.cpu().numpy()
 
-    dim = data_dict["target"].ndim - 2
+    ndim = data_dict["target"].ndim - 2
     sizes = data_dict["target"].shape[2:]
 
     # put 2D slices into visualisation data dict
     vis_data_dict = {}
-    if dim == 2:
+    if ndim == 2:
         # randomly choose a slice for 2D
         z = random.randint(0, data_dict["target"].shape[0]-1)
         for name, d in data_dict.items():

@@ -14,7 +14,7 @@ random.seed(7)
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
 
-    # model_dir set via CLI hydra.run.dir
+    # set via CLI hydra.run.dir
     model_dir = os.getcwd()
 
     # use only one GPU
@@ -31,9 +31,6 @@ def main(cfg: DictConfig) -> None:
     # model checkpoint callback with ckpt metric logging
     ckpt_callback = MyModelCheckpoint(save_last=True,
                                       dirpath=f'{model_dir}/checkpoints/',
-                                      # filename='{epoch}_{val_metrics_loss:.4f}'
-                                      #          '_{val_metrics_mean_dice:.4f}'
-                                      #          '_{val_metrics_folding_ratio:4f}',
                                       verbose=True
                                       )
 

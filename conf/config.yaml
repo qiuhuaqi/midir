@@ -1,15 +1,15 @@
 # @package _global_
 defaults:
-  - data: camcan
+  - data: brain_camcan
   - network: unet
-  - transformation: disp
+  - transformation: dense
   - loss: mse
   - training: training
 
 meta:
   model_dir:
-  gpu: 1
-  ver: svf
+  gpu:
+  ver:
   metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
   hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
   ml_lvls: 1

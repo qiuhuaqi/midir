@@ -1,6 +1,6 @@
 # @package _group_
 lr: 1e-4
-lr_decay_step: 50
+lr_decay_step: 100
 
 trainer:
     gpus: 1

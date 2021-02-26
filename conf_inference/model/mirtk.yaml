@@ -2,8 +2,9 @@
 type: mirtk
 mirtk_params:
   work_dir:
+  mirtk_path: "/vol/biomedic2/hq615/softwares/mirtk_2.1-pre1/mirtk"
   sim: NMI
-  model: FFD
+  model: SVFFD
   ds: 8
   be: 1e-4
   bins: 64

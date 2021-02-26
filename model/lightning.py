@@ -1,25 +1,23 @@
-import os
-from omegaconf import DictConfig
-
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
+from model.transformation import warp, multi_res_warp
+from model.utils import get_network, get_transformation, get_loss_fn, get_datasets, worker_init_fn
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.base import merge_dicts
 
-from data.datasets import BrainInterSubject3DTrain, BrainInterSubject3DEval
-from core_modules.transform.utils import warp, multi_res_warp
-from model.utils import get_network, get_transformation, get_loss_fn, worker_init_fn
 from utils.image import create_img_pyramid
 from utils.metric import measure_metrics
 from utils.visualise import visualise_result
 
 
 class LightningDLReg(LightningModule):
-    def __init__(self, hparams: DictConfig = None):
+    def __init__(self, hparams):
         super(LightningDLReg, self).__init__()
         self.hparams = hparams
+
+        self.train_dataset, self.val_dataset = get_datasets(self.hparams)
 
         self.network = get_network(self.hparams)
         self.transformation = get_transformation(self.hparams)
@@ -34,15 +32,7 @@ class LightningDLReg(LightningModule):
         self.logger.log_hyperparams(self.hparams, metrics=self.hparam_metrics)
 
     def train_dataloader(self):
-        assert os.path.exists(self.hparams.data.train_path), \
-            f"Training data path does not exist: {self.hparams.data.train_path}"
-
-        train_dataset = BrainInterSubject3DTrain(self.hparams.data.train_path,
-                                                 self.hparams.data.crop_size,
-                                                 modality=self.hparams.data.modality,
-                                                 atlas_path=self.hparams.data.atlas_path)
-
-        return DataLoader(train_dataset,
+        return DataLoader(self.train_dataset,
                           batch_size=self.hparams.data.batch_size,
                           shuffle=self.hparams.data.shuffle,
                           num_workers=self.hparams.data.num_workers,
@@ -51,15 +41,7 @@ class LightningDLReg(LightningModule):
                           )
 
     def val_dataloader(self):
-        assert os.path.exists(self.hparams.data.val_path), \
-            f"Validation data path does not exist: {self.hparams.data.val_path}"
-
-        val_dataset = BrainInterSubject3DEval(self.hparams.data.val_path,
-                                              self.hparams.data.crop_size,
-                                              modality=self.hparams.data.modality,
-                                              atlas_path=self.hparams.data.atlas_path)
-
-        return DataLoader(val_dataset,
+        return DataLoader(self.val_dataset,
                           batch_size=1,
                           shuffle=False,
                           num_workers=self.hparams.data.num_workers,
@@ -111,33 +93,36 @@ class LightningDLReg(LightningModule):
         return train_losses['loss']
 
     def validation_step(self, batch, batch_idx):
-        # reshape data from dataloader
-        # TODO: hacky reshape data is not compatible with 3D when batch_size>1
         for k, x in batch.items():
-            if k == "disp_gt":
-                batch[k] = x[0, ...]  # (N, dim, *(sizes))
-            else:
-                batch[k] = x.transpose(0, 1)  # (N, 1, *(dims))
+            # reshape data for inference
+            # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
+            # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
+            batch[k] = x.transpose(0, 1)
 
         # run inference, compute losses and outputs
         val_losses, step_outputs = self._step(batch)
 
-        # collect data for measuring metrics
+        # collect data for measuring metrics and validation visualisation
         metric_data = batch
         metric_data.update({k: x[-1] for k, x in step_outputs.items()})
+        vis_data = step_outputs
+
         if 'source_seg' in batch.keys():
-            # inference for segmentation metric
+            # for segmentation metric
             metric_data['warped_source_seg'] = warp(batch['source_seg'], metric_data['disp_pred'],
                                                     interp_mode='nearest')
         if 'target_original' in batch.keys():
-            # for visualisation and metrics measuring
+            # for visualisation
             target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
-            step_outputs['target_original'] = target_original_pyr  # for visualisation
+            vis_data['target_original'] = target_original_pyr  # for visualisation
             target_pred_pyr = multi_res_warp(target_original_pyr, step_outputs['disp_pred'])
-            step_outputs['target_pred'] = target_pred_pyr  # for visualisation
+            vis_data['target_pred'] = target_pred_pyr  # for visualisation
+
+            # for image metrics
+            metric_data['target_original'] = batch['target_original']
             metric_data['target_pred'] = target_pred_pyr[-1]
 
-        # validation metrics
+        # calculate validation metrics
         val_metrics = {k: float(loss.cpu()) for k, loss in val_losses.items()}
         val_metrics.update(measure_metrics(metric_data, self.hparams.meta.metric_groups))
 
@@ -145,9 +130,7 @@ class LightningDLReg(LightningModule):
         if batch_idx == 0:
             for l in range(self.hparams.meta.ml_lvls):
                 # get data for the current resolution level from step_dict
-                vis_data_l = dict()
-                for k, x in step_outputs.items():
-                    vis_data_l[k] = x[l]
+                vis_data_l = {k: x[l] for k, x in vis_data.items()}
                 val_fig_l = visualise_result(vis_data_l, axis=2)
                 self.logger.experiment.add_figure(f'val_lvl{l}',
                                                   val_fig_l,

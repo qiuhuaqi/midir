@@ -1,0 +1,16 @@
+# @package _group_
+name: cardiac_ukbb
+ndim: 2
+
+batch_size: 10
+num_workers: 4
+shuffle: False
+
+crop_size: [160, 160]
+slice_range:
+train_slicing: 'random'
+val_slicing: [0.25, 0.5, 0.75]
+
+train_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/train
+val_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/val_autoseg
+test_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/test_autoseg

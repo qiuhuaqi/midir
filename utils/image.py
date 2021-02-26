@@ -1,7 +1,6 @@
 """Image/Array utils"""
 import torch
 import numpy as np
-from PIL import Image
 from utils.misc import param_ndim_setup
 import torch.nn.functional as F
 
@@ -229,10 +228,6 @@ def bbox_from_mask(mask, pad_ratio=0.2):
         slicer.append(slice(*bbox[i]))
     bbox_mask[tuple(slicer)] = 1.0
     return bbox, bbox_mask
-
-
-def upsample_image(image, size):
-    return np.array(Image.fromarray(image).resize((size, size)))
 
 
 def roi_crop(x, mask, dim):
