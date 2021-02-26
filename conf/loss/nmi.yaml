@@ -1,5 +1,5 @@
 # @package _group_
-sim_loss: NMI
+sim_loss: nmi
 
 mi_cfg:
   vmin: 0.0

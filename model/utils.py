@@ -6,26 +6,25 @@ import torch.nn as nn
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from datasets.brain import BrainMRInterSubj3D
-from datasets.cardiac import CardiacMR2D
-from core_modules.network.nets import UNet, MultiResUNet, CubicBSplineNet
-from core_modules.transform.transformations import DenseTransform, CubicBSplineFFDTransform
-from core_modules.loss import similarity, regularisation
-from core_modules.loss.utils import MultiResLoss
+from data.datasets import BrainMRInterSubj3D, CardiacMR2D
+from model.network import UNet, MultiResUNet, CubicBSplineNet
+from model.transformation import DenseTransform, CubicBSplineFFDTransform
+from model import loss
+from model.loss import MultiResLoss
 
 
 def get_network(hparams):
     """Configure network"""
-    if hparams.network.name == "unet":
+    if hparams.network.type == "unet":
         network = UNet(ndim=hparams.data.ndim,
                        **hparams.network.net_config)
 
-    elif hparams.network.name == "mulunet":
+    elif hparams.network.type == "mulunet":
         network = MultiResUNet(ndim=hparams.data.ndim,
                                ml_lvls=hparams.meta.ml_lvls,
                                **hparams.network.net_config)
 
-    elif hparams.network.name == "bspline_net":
+    elif hparams.network.type == "bspline_net":
         network = CubicBSplineNet(ndim=hparams.data.ndim,
                                   img_size=hparams.data.crop_size,
                                   cps=hparams.transformation.config.cps,
@@ -38,12 +37,12 @@ def get_network(hparams):
 
 def get_transformation(hparams):
     """Configure transformation"""
-    if hparams.transformation.type == "DENSE":
+    if hparams.transformation.type == "dense":
         transformation = DenseTransform(lvls=hparams.meta.ml_lvls,
                                         **hparams.transformation.config
                                         )
 
-    elif hparams.transformation.type == "BSPLINE":
+    elif hparams.transformation.type == "bspline":
         transformation = CubicBSplineFFDTransform(ndim=hparams.data.ndim,
                                                   lvls=hparams.meta.ml_lvls,
                                                   img_size=hparams.data.crop_size,
@@ -56,20 +55,20 @@ def get_transformation(hparams):
 
 def get_loss_fn(hparams):
     # similarity loss
-    if hparams.loss.sim_loss == 'MSE':
+    if hparams.loss.sim_loss == 'mse':
         sim_loss_fn = nn.MSELoss()
 
-    elif hparams.loss.sim_loss == 'LNCC':
-        sim_loss_fn = similarity.LNCCLoss(hparams.loss.window_size)
+    elif hparams.loss.sim_loss == 'lncc':
+        sim_loss_fn = loss.LNCCLoss(hparams.loss.window_size)
 
-    elif hparams.loss.sim_loss == 'NMI':
-        sim_loss_fn = similarity.MILossGaussian(**hparams.loss.mi_cfg)
+    elif hparams.loss.sim_loss == 'nmi':
+        sim_loss_fn = loss.MILossGaussian(**hparams.loss.mi_cfg)
 
     else:
         raise ValueError(f'Similarity loss config ({hparams.loss.sim_loss}) not recognised.')
 
     # regularisation loss
-    reg_loss_fn = getattr(regularisation, hparams.loss.reg_loss)
+    reg_loss_fn = getattr(loss, hparams.loss.reg_loss)
 
     # multi-resolution loss function
     loss_fn = MultiResLoss(sim_loss_fn,
@@ -132,6 +131,7 @@ class MyModelCheckpoint(ModelCheckpoint):
         super(MyModelCheckpoint, self).__init__(*args, **kwargs)
 
     def on_save_checkpoint(self, trainer, pl_module) -> Dict[str, Any]:
+        """Log best metrics whenever a checkpoint is saved"""
         # looks for `hparams` and `hparam_metrics` in `pl_module`
         pl_module.logger.log_metrics(pl_module.hparam_metrics,
                                      step=pl_module.global_step)

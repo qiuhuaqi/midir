@@ -1,13 +1,8 @@
-"""
-Utility functions to handle image io.
-Huaqi Qiu, Jan 2019.
-"""
-
 import nibabel as nib
 import imageio
 import os
 import numpy as np
-from utils.image import upsample_image
+from PIL import Image
 
 
 def load_nifti(path, data_type=np.float32, nim=False):
@@ -42,6 +37,10 @@ def save_nifti(x, path, nim=None, verbose=False):
         print("Nifti saved to: {}".format(path))
 
 
+def upsample_image(image, size):
+    return np.array(Image.fromarray(image).resize((size, size)))
+
+
 def save_gif(images, path, fps=20):
     """
     Save numpy array to gif
@@ -71,9 +70,6 @@ def save_png(images, path_dir):
         image = upsample_image(images[..., fr], 300)
         imageio.imwrite(os.path.join(path_dir, 'frame_{}.png'.format(fr)), image)
 
-
-
-""" Split NIFTI images into time-frames or 2D slices """
 
 def split_volume(image_name, output_name):
     """ Split an image volume into a number of slices. """

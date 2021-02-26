@@ -8,24 +8,22 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from datasets.brain import BrainMRInterSubj3D
-from datasets.cardiac import CardiacMR2D
-
+from data.datasets import BrainMRInterSubj3D, CardiacMR2D
 from model.lightning import LightningDLReg
 from model.baselines import Identity, MIRTK
-from core_modules.transform.utils import warp
+from model.transformation import warp
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
-from analyse import analyse_output
+from utils.analyse import analyse_output
 
 import random
 random.seed(7)
 
 
 def get_inference_dataloader(cfg, pin_memory=False):
-    if cfg.data.name == 'brain_camcan':
+    if cfg.data.type == 'brain_camcan':
         dataset = BrainMRInterSubj3D(**cfg.data.dataset)
-    elif cfg.data.name == 'cardiac_ukbb':
+    elif cfg.data.type == 'cardiac_ukbb':
         dataset = CardiacMR2D(**cfg.data.dataset)
     else:
         raise ValueError(f'Dataset config ({cfg.data.dataset}) not recognised.')
@@ -36,13 +34,13 @@ def get_inference_dataloader(cfg, pin_memory=False):
 
 
 def get_inference_model(cfg, device=torch.device('cpu')):
-    if cfg.model.name == 'id':
+    if cfg.model.type == 'id':
         model = Identity()
 
-    elif cfg.model.name == 'mirtk':
+    elif cfg.model.type == 'mirtk':
         model = MIRTK(**cfg.model.mirtk_params)
 
-    elif cfg.model.name == 'dl':
+    elif cfg.model.type == 'dl':
         assert os.path.exists(cfg.model.ckpt_path)
         model = LightningDLReg.load_from_checkpoint(cfg.model.ckpt_path)
         model = model.to(device=device)
@@ -55,12 +53,10 @@ def get_inference_model(cfg, device=torch.device('cpu')):
 
 def inference(model, dataloader, output_dir, device=torch.device('cpu')):
     for idx, batch in enumerate(tqdm(dataloader)):
-        # -- Note on data shapes -- #
-        # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
-        # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
-        # -------------------------------------#
-        # reshape data for inference
         for k, x in batch.items():
+            # reshape data for inference
+            # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
+            # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
             batch[k] = x.transpose(0, 1).to(device=device)
 
         # model inference

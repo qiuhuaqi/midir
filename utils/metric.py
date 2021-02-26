@@ -1,16 +1,17 @@
 import numpy as np
+import pandas as pd
 import torch
 import cv2
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
 from utils.image import bbox_from_mask, bbox_crop
 
+from utils.misc import save_dict_to_csv
 
-# Wrapper functions #
 
 def measure_metrics(metric_data, metric_groups, return_tensor=False):
     """
-    Wrapper function for calculating all metrics in Numpy
+    Wrapper function for calculating all metrics
     Args:
         metric_data: (dict) data used for calculation of metrics, could be Tensor or Numpy Array
         metric_groups: (list of strings) name of metric groups
@@ -35,11 +36,17 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
     for group in metric_groups:
         metric_results.update(metric_group_fns[group](metric_data))
 
+    # cast Numpy arrary to Tensor if needed
     if return_tensor:
         for k, x in metric_results.items():
             metric_results[k] = torch.tensor(x)
 
     return metric_results
+
+
+"""
+Functions calculating groups of metrics
+"""
 
 
 def measure_disp_metrics(metric_data):
@@ -121,7 +128,10 @@ def measure_seg_metrics(metric_data):
     return results
 
 
-# Individual metrics #
+"""
+Functions calculating individual metrics
+"""
+
 
 def calculate_aee(x, y):
     """
@@ -292,5 +302,60 @@ def contour_distances_stack(stack1, stack2, label_class, dx=1):
     return np.mean(mcd_buffer), np.mean(hd_buffer)
 
 
+class MetricReporter(object):
+    """
+    Collect and report values
+        self.collect_value() collects value in `report_data_dict`, which is structured as:
+            self.report_data_dict = {'value_name_A': [A1, A2, ...], ... }
 
+        self.summarise() construct the report dictionary if called, which is structured as:
+            self.report = {'value_name_A': {'mean': A_mean,
+                                            'std': A_std,
+                                            'list': [A1, A2, ...]}
+                            }
+    """
+    def __init__(self, id_list, save_dir, save_name='analysis_results'):
+        self.id_list = id_list
+        self.save_dir = save_dir
+        self.save_name = save_name
 
+        self.report_data_dict = {}
+        self.report = {}
+
+    def reset(self):
+        self.report_data_dict = {}
+        self.report = {}
+
+    def collect(self, x):
+        for name, value in x.items():
+            if name not in self.report_data_dict.keys():
+                self.report_data_dict[name] = []
+            self.report_data_dict[name].append(value)
+
+    def summarise(self):
+        # summarise aggregated results to form the report dict
+        for name in self.report_data_dict:
+            self.report[name] = {
+                'mean': np.mean(self.report_data_dict[name]),
+                'std': np.std(self.report_data_dict[name]),
+                'list': self.report_data_dict[name]
+            }
+
+    def save_mean_std(self):
+        report_mean_std = {}
+        for metric_name in self.report:
+            report_mean_std[metric_name + '_mean'] = self.report[metric_name]['mean']
+            report_mean_std[metric_name + '_std'] = self.report[metric_name]['std']
+        # save to CSV
+        csv_path = self.save_dir + f'/{self.save_name}.csv'
+        save_dict_to_csv(report_mean_std, csv_path)
+
+    def save_df(self):
+        # method_column = [str(model_name)] * len(self.id_list)
+        # df_dict = {'Method': method_column, 'ID': self.id_list}
+        df_dict = {'ID': self.id_list}
+        for metric_name in self.report:
+            df_dict[metric_name] = self.report[metric_name]['list']
+
+        df = pd.DataFrame(data=df_dict)
+        df.to_pickle(self.save_dir + f'/{self.save_name}_df.pkl')

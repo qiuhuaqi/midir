@@ -1,5 +1,0 @@
-# @package _group_
-type: BSPLINE
-config:
-  svf: False
-  cps: 4

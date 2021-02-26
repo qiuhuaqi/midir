@@ -1,10 +1,8 @@
-from omegaconf import DictConfig
-
 import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from core_modules.transform.utils import warp, multi_res_warp
+from model.transformation import warp, multi_res_warp
 from model.utils import get_network, get_transformation, get_loss_fn, get_datasets, worker_init_fn
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.base import merge_dicts
@@ -15,7 +13,7 @@ from utils.visualise import visualise_result
 
 
 class LightningDLReg(LightningModule):
-    def __init__(self, hparams: DictConfig = None):
+    def __init__(self, hparams):
         super(LightningDLReg, self).__init__()
         self.hparams = hparams
 
@@ -95,12 +93,10 @@ class LightningDLReg(LightningModule):
         return train_losses['loss']
 
     def validation_step(self, batch, batch_idx):
-        # -- Note on data shapes -- #
-        # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
-        # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
-        # -------------------------------------#
-        # reshape data for inference
         for k, x in batch.items():
+            # reshape data for inference
+            # 2d: (N=1, num_slices, H, W) -> (num_slices, N=1, H, W)
+            # 3d: (N=1, 1, H, W, D) -> (1, N=1, H, W, D)
             batch[k] = x.transpose(0, 1)
 
         # run inference, compute losses and outputs

@@ -1,9 +1,62 @@
 import math
+
 import torch
 from torch import nn as nn
+from torch.nn import functional as F
 
-from core_modules.network.base import conv_Nd, interpolate_
 from utils.misc import param_ndim_setup
+
+
+def convNd(ndim,
+           in_channels,
+           out_channels,
+           kernel_size=3,
+           stride=1,
+           padding=1,
+           a=0.):
+    """
+    Convolution of generic dimension
+    Args:
+        in_channels: (int) number of input channels
+        out_channels: (int) number of output channels
+        kernel_size: (int) size of the convolution kernel
+        stride: (int) convolution stride (step size)
+        padding: (int) outer padding
+        ndim: (int) model dimension
+        a: (float) leaky-relu negative slope for He initialisation
+
+    Returns:
+        (nn.Module instance) Instance of convolution module of the specified dimension
+    """
+    conv_nd = getattr(nn, f"Conv{ndim}d")(in_channels=in_channels,
+                                          out_channels=out_channels,
+                                          kernel_size=kernel_size,
+                                          stride=stride,
+                                          padding=padding)
+    nn.init.kaiming_uniform_(conv_nd.weight, a=a)
+    return conv_nd
+
+
+def interpolate_(x, scale_factor=None, size=None, mode=None):
+    """ Wrapper for torch.nn.functional.interpolate """
+    if mode == 'nearest':
+        mode = mode
+    else:
+        ndim = x.ndim - 2
+        if ndim == 1:
+            mode = 'linear'
+        elif ndim == 2:
+            mode = 'bilinear'
+        elif ndim == 3:
+            mode = 'trilinear'
+        else:
+            raise ValueError(f'Data dimension ({ndim}) must be 2 or 3')
+    y = F.interpolate(x,
+                      scale_factor=scale_factor,
+                      size=size,
+                      mode=mode,
+                      )
+    return y
 
 
 class UNet(nn.Module):
@@ -29,7 +82,7 @@ class UNet(nn.Module):
             stride = 1 if i == 0 else 2
             self.enc.append(
                 nn.Sequential(
-                    conv_Nd(ndim, in_ch, enc_channels[i], stride=stride, a=0.2),
+                    convNd(ndim, in_ch, enc_channels[i], stride=stride, a=0.2),
                     nn.LeakyReLU(0.2)
                 )
             )
@@ -40,7 +93,7 @@ class UNet(nn.Module):
             in_ch = enc_channels[-1] if i == 0 else dec_channels[i-1] + enc_channels[-i-1]
             self.dec.append(
                 nn.Sequential(
-                    conv_Nd(ndim, in_ch, dec_channels[i], a=0.2),
+                    convNd(ndim, in_ch, dec_channels[i], a=0.2),
                     nn.LeakyReLU(0.2)
                 )
             )
@@ -55,14 +108,14 @@ class UNet(nn.Module):
                 in_ch = dec_channels[-1] + enc_channels[0] if i == 0 else out_channels[i-1]
                 self.out_layers.append(
                     nn.Sequential(
-                        conv_Nd(ndim, in_ch, out_channels[i], a=0.2),  # stride=1
+                        convNd(ndim, in_ch, out_channels[i], a=0.2),  # stride=1
                         nn.LeakyReLU(0.2)
                     )
                 )
 
             # final prediction layer with additional conv layers
             self.out_layers.append(
-                conv_Nd(ndim, out_channels[-1], ndim)
+                convNd(ndim, out_channels[-1], ndim)
             )
 
         else:
@@ -70,7 +123,7 @@ class UNet(nn.Module):
             # final prediction layer without additional conv layers
             self.out_layers = nn.ModuleList()
             self.out_layers.append(
-                conv_Nd(ndim, dec_channels[-1] + enc_channels[0], ndim)
+                convNd(ndim, dec_channels[-1] + enc_channels[0], ndim)
             )
 
     def forward(self, tar, src):
@@ -114,7 +167,7 @@ class MultiResUNet(UNet):
         delattr(self, 'out_layers')  # remove original single-resolution output layers
         self.ml_out_layers = nn.ModuleList()
         for l in range(self.ml_lvls):
-            out_layer_l = conv_Nd(ndim, enc_channels[self.ml_lvls - l - 1] + dec_channels[l - self.ml_lvls], ndim)
+            out_layer_l = convNd(ndim, enc_channels[self.ml_lvls - l - 1] + dec_channels[l - self.ml_lvls], ndim)
             self.ml_out_layers.append(out_layer_l)
 
     def forward(self, tar, src):
@@ -191,12 +244,12 @@ class CubicBSplineNet(UNet):
             else:
                 in_ch = resize_channels[i-1]
             out_ch = resize_channels[i]
-            self.resize_conv.append(nn.Sequential(conv_Nd(ndim, in_ch, out_ch, a=0.2),
+            self.resize_conv.append(nn.Sequential(convNd(ndim, in_ch, out_ch, a=0.2),
                                                   nn.LeakyReLU(0.2)))
 
         # final prediction layer
         delattr(self, 'out_layers')  # remove u-net output layers
-        self.out_layer = conv_Nd(ndim, resize_channels[-1], ndim)
+        self.out_layer = convNd(ndim, resize_channels[-1], ndim)
 
     def forward(self, tar, src):
         x = torch.cat((tar, src), dim=1)
@@ -223,6 +276,8 @@ class CubicBSplineNet(UNet):
             x = resize_layer(x)
         y = self.out_layer(x)
         return [y]
+
+
 
 
 # class MultiResBSplineNet(UNet):

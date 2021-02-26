@@ -1,7 +1,6 @@
 # @package _group_
-type: BSPLINE
+type: dense
 config:
-  cps: 4
   svf: True
   svf_steps: 7
   svf_scale: 1

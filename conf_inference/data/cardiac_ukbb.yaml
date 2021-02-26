@@ -1,5 +1,5 @@
 # @package _group_
-name: 'cardiac_ukbb'
+type: 'cardiac_ukbb'
 dataset:
   data_dir_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/test_autoseg
   evaluate: True
