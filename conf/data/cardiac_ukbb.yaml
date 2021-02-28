@@ -11,6 +11,6 @@ slice_range:
 train_slicing: 'random'
 val_slicing: [0.25, 0.5, 0.75]
 
-train_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/train
-val_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/val_autoseg
-test_path: /vol/biomedic2/hq615/data/cardiac/ukbb/stacom19/test_autoseg
+train_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/cardiac_ukbb_stacom19/train
+val_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/cardiac_ukbb_stacom19/val_autoseg
+test_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/cardiac_ukbb_stacom19/test_autoseg
