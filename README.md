@@ -124,7 +124,7 @@ We cannot share the data we use in the paper directly. But you can apply to down
 - [UK Biobank](https://www.ukbiobank.ac.uk/enable-your-research) 
 
 
-## Contact
+## Contact Us
 If you have any question or need any help running the code, feel free to open an issue or email us at:
 [huaqi.qiu15@imperial.ac.uk](mailto:huaqi.qiu15@imperial.ac.uk)
 
