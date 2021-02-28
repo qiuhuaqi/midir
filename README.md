@@ -4,7 +4,7 @@ Welcome!
 This repository contains code for the Modality-Invariant Diffeomorphic Deep Learning Image Registration (MIDIR) framework 
 presented in the paper:
 
-> Paper TBD
+> Paper in review
 
 Please consider citing the paper if you use the code in this repository.
 
@@ -115,8 +115,6 @@ python inference.py hydra.run.dir=<output_dir> \
     gpu=<gpu_num>
 ```
 A different set of configuration files are used for inference (see `conf_inference/`)
-
-
 
 
 
