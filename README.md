@@ -7,7 +7,7 @@ presented in the paper:
 
 Please consider citing the paper if you use the code in this repository.
 
-![Example T1-T2 registration result]()
+![Example T1-T2 registration result](example_image.png)
 
 
 ## Installation
