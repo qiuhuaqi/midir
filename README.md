@@ -14,7 +14,7 @@ Please consider citing the paper if you use the code in this repository.
 1. Clone this repository
 2. In a fresh Python 3.7.x virtual environment, install dependencies via:
     ```
-    pip install -r /[path_to_cloned_repository]/requirements.txt
+    pip install -r <path_to_cloned_repository>/requirements.txt
     ```
 
 ### Using GPU
@@ -31,7 +31,7 @@ pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pyto
 - `conf`: Hydra configuration for training deep learning models
 - `conf_inference`: Hydra configuration for inference
 - `data`:  data loading
-- `model`
+- `model`:
     - `lightning.py`: the LightningModule which puts everything together
     - `loss.py`: image similarity loss and transformation regularity loss
     - `network.py`: dense and b-spline model networks
