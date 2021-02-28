@@ -245,20 +245,6 @@ def roi_crop(x, mask, dim):
     return x
 
 
-def create_img_pyramid(x, lvls):
-    """ Create image pyramid, low-resolution to high-resolution"""
-    for l in range(lvls):
-        if l == 0:
-            x_pyr = [x]
-        else:
-            if x.ndim == 4:
-                x_pyr.append(F.interpolate(x, scale_factor=0.5 ** l, mode='bilinear'))
-            elif x.ndim == 5:
-                x_pyr.append(F.interpolate(x, scale_factor=0.5 ** l, mode='trilinear'))
-    x_pyr.reverse()
-    return x_pyr
-
-
 def avg_filtering(x, filter_size=7):
     """ Applies average filtering to Tensor of size (N, 1, *sizes)"""
     dim = x.ndim - 2

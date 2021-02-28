@@ -2,12 +2,10 @@ import torch
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 
-from model.transformation import warp, multi_res_warp
+from model.transformation import warp
 from model.utils import get_network, get_transformation, get_loss_fn, get_datasets, worker_init_fn
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.base import merge_dicts
-
-from utils.image import create_img_pyramid
 from utils.metric import measure_metrics
 from utils.visualise import visualise_result
 
@@ -24,7 +22,7 @@ class LightningDLReg(LightningModule):
         self.loss_fn = get_loss_fn(self.hparams)
 
         # initialise dummy best metrics results for initial logging
-        self.hparam_metrics = {f'hparam_metrics_{m}': 0.0
+        self.hparam_metrics = {f'hparam_metrics/{m}': 0.0
                                for m in self.hparams.meta.hparam_metrics}
 
     def on_fit_start(self):
@@ -64,31 +62,29 @@ class LightningDLReg(LightningModule):
 
     def _step(self, batch):
         """ Forward pass inference + compute loss """
-        out = self.forward(batch['target'], batch['source'])
-
-        # create image pyramids
-        tar_pyr = create_img_pyramid(batch['target'], self.hparams.meta.ml_lvls)
-        src_pyr = create_img_pyramid(batch['source'], self.hparams.meta.ml_lvls)
+        tar = batch['target']
+        src = batch['source']
+        out = self.forward(tar, src)
 
         if self.hparams.transformation.config.svf:
-            flows, disps = out
-            warped_src_pyr = multi_res_warp(src_pyr, disps)
-            losses = self.loss_fn(tar_pyr, warped_src_pyr, flows)
+            # output the flow field and disp field
+            flow, disp = out
+            warped_src = warp(src, disp)
+            losses = self.loss_fn(tar, warped_src, flow)
 
         else:
-            disps = out
-            warped_src_pyr = multi_res_warp(src_pyr, disps)
-            losses = self.loss_fn(tar_pyr, warped_src_pyr, disps)
+            # only output disp field
+            disp = out
+            warped_src = warp(src, disp)
+            losses = self.loss_fn(tar, warped_src, disp)
 
-        step_outputs = {'disp_pred': disps,
-                        'target': tar_pyr,
-                        'source': src_pyr,
-                        'warped_source': warped_src_pyr}
+        step_outputs = {'disp_pred': disp,
+                        'warped_source': warped_src}
         return losses, step_outputs
 
     def training_step(self, batch, batch_idx):
         train_losses, _ = self._step(batch)
-        self.log_dict({f'train_loss_{k}': loss
+        self.log_dict({f'train_loss/{k}': loss
                        for k, loss in train_losses.items()})
         return train_losses['loss']
 
@@ -103,47 +99,34 @@ class LightningDLReg(LightningModule):
         val_losses, step_outputs = self._step(batch)
 
         # collect data for measuring metrics and validation visualisation
-        metric_data = batch
-        metric_data.update({k: x[-1] for k, x in step_outputs.items()})
-        vis_data = step_outputs
-
+        val_data = batch
+        val_data.update(step_outputs)
         if 'source_seg' in batch.keys():
-            # for segmentation metric
-            metric_data['warped_source_seg'] = warp(batch['source_seg'], metric_data['disp_pred'],
-                                                    interp_mode='nearest')
+            val_data['warped_source_seg'] = warp(batch['source_seg'], val_data['disp_pred'],
+                                                 interp_mode='nearest')
         if 'target_original' in batch.keys():
-            # for visualisation
-            target_original_pyr = create_img_pyramid(batch['target_original'], lvls=self.hparams.meta.ml_lvls)
-            vis_data['target_original'] = target_original_pyr  # for visualisation
-            target_pred_pyr = multi_res_warp(target_original_pyr, step_outputs['disp_pred'])
-            vis_data['target_pred'] = target_pred_pyr  # for visualisation
-
-            # for image metrics
-            metric_data['target_original'] = batch['target_original']
-            metric_data['target_pred'] = target_pred_pyr[-1]
+            val_data['target_pred'] = warp(val_data['target_original'], val_data['disp_pred'])
 
         # calculate validation metrics
-        val_metrics = {k: float(loss.cpu()) for k, loss in val_losses.items()}
-        val_metrics.update(measure_metrics(metric_data, self.hparams.meta.metric_groups))
+        val_metrics = {k: float(loss.cpu())
+                       for k, loss in val_losses.items()}
+        val_metrics.update(measure_metrics(val_data, self.hparams.meta.metric_groups))
 
         # log visualisation figure to Tensorboard
         if batch_idx == 0:
-            for l in range(self.hparams.meta.ml_lvls):
-                # get data for the current resolution level from step_dict
-                vis_data_l = {k: x[l] for k, x in vis_data.items()}
-                val_fig_l = visualise_result(vis_data_l, axis=2)
-                self.logger.experiment.add_figure(f'val_lvl{l}',
-                                                  val_fig_l,
-                                                  global_step=self.global_step,
-                                                  close=True)
+            val_fig = visualise_result(val_data, axis=2)
+            self.logger.experiment.add_figure(f'val_fig',
+                                              val_fig,
+                                              global_step=self.global_step,
+                                              close=True)
         return val_metrics
 
     def validation_epoch_end(self, val_metrics):
         """ Process and log accumulated validation results in one epoch """
         val_metrics_epoch = merge_dicts(val_metrics)
-        self.log_dict({f'val_metrics_{k}': metric
+        self.log_dict({f'val_metrics/{k}': metric
                        for k, metric in val_metrics_epoch.items()})
 
         # update hparams metrics
-        self.hparam_metrics = {f'hparam_metrics_{k}': val_metrics_epoch[k]
+        self.hparam_metrics = {f'hparam_metrics/{k}': val_metrics_epoch[k]
                                for k in self.hparams.meta.hparam_metrics}

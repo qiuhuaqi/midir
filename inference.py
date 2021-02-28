@@ -61,15 +61,7 @@ def inference(model, dataloader, output_dir, device=torch.device('cpu')):
 
         # model inference
         out = model(batch['target'], batch['source'])
-
-        if isinstance(out, tuple):
-            # (flows, disps), multi-level list
-            batch['disp_pred'] = out[1][-1]
-        elif isinstance(out, list):
-            # disps only, multi-level list
-            batch['disp_pred'] = out[-1]
-        else:
-            batch['disp_pred'] = out
+        batch['disp_pred'] = out[1] if len(out) == 2 else out  # (flow, disp) or disp
 
         # warp images and segmentation using predicted disp
         batch['warped_source'] = warp(batch['source'], batch['disp_pred'])

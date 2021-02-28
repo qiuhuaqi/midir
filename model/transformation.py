@@ -31,21 +31,21 @@ class _Transform(object):
             return disp
 
 
-class _DenseTransform(_Transform):
+class DenseTransform(_Transform):
     """ Dense field transformation """
     def __init__(self,
                  svf=False,
                  svf_steps=7,
                  svf_scale=1):
-        super(_DenseTransform, self).__init__(svf=svf,
-                                              svf_steps=svf_steps,
-                                              svf_scale=svf_scale)
+        super(DenseTransform, self).__init__(svf=svf,
+                                             svf_steps=svf_steps,
+                                             svf_scale=svf_scale)
 
     def compute_flow(self, x):
         return x
 
 
-class _CubicBSplineTransform(_Transform):
+class CubicBSplineFFDTransform(_Transform):
     def __init__(self,
                  ndim,
                  img_size=192,
@@ -63,9 +63,9 @@ class _CubicBSplineTransform(_Transform):
             cps: (int or tuple) control point spacing in number of intervals between pixel/voxel centres
             svf: (bool) stationary velocity field formulation if True
         """
-        super(_CubicBSplineTransform, self).__init__(svf=svf,
-                                                     svf_steps=svf_steps,
-                                                     svf_scale=svf_scale)
+        super(CubicBSplineFFDTransform, self).__init__(svf=svf,
+                                                       svf_steps=svf_steps,
+                                                       svf_scale=svf_scale)
         self.ndim = ndim
         self.img_size = param_ndim_setup(img_size, self.ndim)
         self.stride = param_ndim_setup(cps, self.ndim)
@@ -101,89 +101,13 @@ class _CubicBSplineTransform(_Transform):
         return flow
 
 
-class _MultiResTransform(object):
-    """ Multi-resolution transformation base class """
-    def __init__(self,
-                 lvls=1,
-                 svf=False):
-        self.lvls = lvls
-        self.svf = svf
-        self.transforms = list()  # needs to implement
-
-    def __call__(self, x):
-        assert len(x) == self.lvls
-        assert len(self.transforms) == self.lvls
-
-        disps = list()
-        if self.svf:
-            flows = list()
-            for x_l, transform in zip(x, self.transforms):
-                flow, disp = transform(x_l)
-                flows.append(flow)
-                disps.append(disp)
-            return flows, disps
-        else:
-            for x_l, transform in zip(x, self.transforms):
-                disp = transform(x_l)
-                disps.append(disp)
-            return disps
-
-
-class DenseTransform(_MultiResTransform):
-    """ Multi-resolution dense field model """
-    def __init__(self,
-                 lvls=1,
-                 svf=False,
-                 svf_steps=7,
-                 svf_scale=1):
-        super(DenseTransform, self).__init__(lvls=lvls, svf=svf)
-        self.transforms = [_DenseTransform(svf=svf,
-                                           svf_steps=svf_steps,
-                                           svf_scale=svf_scale)
-                           for _ in range(self.lvls)]
-
-
-class CubicBSplineFFDTransform(_MultiResTransform):
-    def __init__(self,
-                 ndim,
-                 img_size,
-                 cps,
-                 lvls=1,
-                 svf=False,
-                 svf_steps=7,
-                 svf_scale=1):
-        """
-        Multi-resolution B-spline transformation
-
-        Args:
-            ndim: (int) transformation model dimension
-            lvls: (int) number of multi-resolution levels
-            img_size: (int or tuple) image size at original resolution
-            cps: (int) control point spacing at the original resolution
-        """
-        super(CubicBSplineFFDTransform, self).__init__(lvls=lvls,
-                                                       svf=svf)
-        for l in range(self.lvls):
-            img_size_l = [imsz // (2 ** l) for imsz in img_size]
-            # note: the control point spacing is effectively doubled
-            #  as the image size halves
-            transform = _CubicBSplineTransform(ndim,
-                                               img_size=img_size_l,
-                                               cps=cps,
-                                               svf=svf,
-                                               svf_steps=svf_steps,
-                                               svf_scale=svf_scale)
-            self.transforms.append(transform)
-        self.transforms.reverse()
-
-
 def normalise_disp(disp):
     """
     Spatially normalise DVF to [-1, 1] coordinate system used by Pytorch `grid_sample()`
-    Assumes dvf.yaml size is the same as the corresponding image.
+    Assumes disp size is the same as the corresponding image.
 
     Args:
-        disp: (numpy.ndarray or torch.Tensor, shape (N, ndim, *size)) Displacement Vector Field
+        disp: (numpy.ndarray or torch.Tensor, shape (N, ndim, *size)) Displacement field
 
     Returns:
         disp: (normalised disp)
@@ -310,7 +234,7 @@ def warp(x, disp, interp_mode="bilinear"):
     size = x.size()[2:]
     disp = disp.type_as(x)
 
-    # normalise Disp to [-1, 1]
+    # normalise disp to [-1, 1]
     disp = normalise_disp(disp)
 
     # generate standard mesh grid
@@ -325,13 +249,3 @@ def warp(x, disp, interp_mode="bilinear"):
     warped_grid = torch.stack(warped_grid, -1)  # (N, *size, dim)
 
     return F.grid_sample(x, warped_grid, mode=interp_mode, align_corners=False)
-
-
-def multi_res_warp(x_pyr, disps, interp_mode='bilinear'):
-    """ Multi-resolution spatial transformation"""
-    assert len(x_pyr) == len(disps)
-    warped_x_pyr = []
-    for (x, disp) in zip(x_pyr, disps):
-        warped_x = warp(x, disp, interp_mode=interp_mode)
-        warped_x_pyr.append(warped_x)
-    return warped_x_pyr

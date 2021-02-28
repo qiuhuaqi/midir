@@ -7,10 +7,10 @@ import torch.nn as nn
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from data.datasets import BrainMRInterSubj3D, CardiacMR2D
-from model.network import UNet, MultiResUNet, CubicBSplineNet
+from model.network import UNet, CubicBSplineNet
 from model.transformation import DenseTransform, CubicBSplineFFDTransform
 from model import loss
-from model.loss import MultiResLoss
+from model.loss import LossFn
 
 
 def get_network(hparams):
@@ -18,11 +18,6 @@ def get_network(hparams):
     if hparams.network.type == "unet":
         network = UNet(ndim=hparams.data.ndim,
                        **hparams.network.net_config)
-
-    elif hparams.network.type == "mulunet":
-        network = MultiResUNet(ndim=hparams.data.ndim,
-                               ml_lvls=hparams.meta.ml_lvls,
-                               **hparams.network.net_config)
 
     elif hparams.network.type == "bspline_net":
         network = CubicBSplineNet(ndim=hparams.data.ndim,
@@ -38,13 +33,10 @@ def get_network(hparams):
 def get_transformation(hparams):
     """Configure transformation"""
     if hparams.transformation.type == "dense":
-        transformation = DenseTransform(lvls=hparams.meta.ml_lvls,
-                                        **hparams.transformation.config
-                                        )
+        transformation = DenseTransform(**hparams.transformation.config)
 
     elif hparams.transformation.type == "bspline":
         transformation = CubicBSplineFFDTransform(ndim=hparams.data.ndim,
-                                                  lvls=hparams.meta.ml_lvls,
                                                   img_size=hparams.data.crop_size,
                                                   **hparams.transformation.config
                                                   )
@@ -70,15 +62,9 @@ def get_loss_fn(hparams):
     # regularisation loss
     reg_loss_fn = getattr(loss, hparams.loss.reg_loss)
 
-    # multi-resolution loss function
-    loss_fn = MultiResLoss(sim_loss_fn,
-                           hparams.loss.sim_loss,
-                           reg_loss_fn,
-                           hparams.loss.reg_loss,
-                           reg_weight=hparams.loss.reg_weight,
-                           ml_lvls=hparams.meta.ml_lvls,
-                           ml_weights=hparams.loss.ml_weights)
-    return loss_fn
+    return LossFn(sim_loss_fn,
+                  reg_loss_fn,
+                  reg_loss_weight=hparams.loss.reg_weight)
 
 
 def get_datasets(hparams):
