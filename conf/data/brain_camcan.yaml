@@ -11,5 +11,4 @@ crop_size: [176, 192, 176]
 
 train_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/train
 val_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/val
-test_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/test
 atlas_path:
