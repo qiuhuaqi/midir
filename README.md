@@ -7,8 +7,7 @@ presented in the paper:
 
 Please consider citing the paper if you use the code in this repository.
 
-![Example T1-T2 registration result](example_image.png)
-
+<img src="example_image.png" width="600" height="600">
 
 ## Installation
 1. Clone this repository
