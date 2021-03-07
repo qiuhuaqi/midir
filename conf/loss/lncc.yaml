@@ -5,5 +5,3 @@ window_size: 7
 
 reg_loss: l2reg_loss
 reg_weight: 0.1
-
-ml_weights: [1.]

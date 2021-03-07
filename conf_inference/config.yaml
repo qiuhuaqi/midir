@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
-  - data: cardiac_ukbb
-  - model: mirtk
+  - data: brain_camcan
+  - model: dl
 
 metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
 analyse: True

@@ -17,13 +17,13 @@ def get_network(hparams):
     """Configure network"""
     if hparams.network.type == "unet":
         network = UNet(ndim=hparams.data.ndim,
-                       **hparams.network.net_config)
+                       **hparams.network.config)
 
     elif hparams.network.type == "bspline_net":
         network = CubicBSplineNet(ndim=hparams.data.ndim,
                                   img_size=hparams.data.crop_size,
                                   cps=hparams.transformation.config.cps,
-                                  **hparams.network.net_config)
+                                  **hparams.network.config)
 
     else:
         raise ValueError(f"Network config ({hparams.network.name}) not recognised.")
@@ -54,7 +54,7 @@ def get_loss_fn(hparams):
         sim_loss_fn = loss.LNCCLoss(hparams.loss.window_size)
 
     elif hparams.loss.sim_loss == 'nmi':
-        sim_loss_fn = loss.MILossGaussian(**hparams.loss.mi_cfg)
+        sim_loss_fn = loss.MILossGaussian(**hparams.loss.mi_config)
 
     else:
         raise ValueError(f'Similarity loss config ({hparams.loss.sim_loss}) not recognised.')

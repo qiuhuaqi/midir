@@ -1,6 +1,6 @@
 # @package _group_
 type: bspline_net
-net_config:
+config:
     enc_channels: [16, 32, 32, 32, 32]
     dec_channels: [32, 32, 32, 32]
     resize_channels: [32, 16]
