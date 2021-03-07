@@ -109,7 +109,7 @@ class MILossGaussian(nn.Module):
         p_joint = self._compute_joint_prob(x, y)
 
         # marginalise the joint distribution to get marginal distributions
-        # batch size in dim0, target bins in dim1, source bins in dim2
+        # batch size in dim0, x bins in dim1, y bins in dim2
         p_x = torch.sum(p_joint, dim=2)
         p_y = torch.sum(p_joint, dim=1)
 
@@ -134,18 +134,18 @@ class LNCCLoss(nn.Module):
         super(LNCCLoss, self).__init__()
         self.window_size = window_size
 
-    def forward(self, tar, src):
+    def forward(self, x, y):
         # products and squares
-        tar2 = tar * tar
-        src2 = src * src
-        tar_src = tar * src
+        xsq = x * x
+        ysq = y * y
+        xy = x * y
 
         # set window size
-        ndim = tar.dim() - 2
+        ndim = x.dim() - 2
         window_size = param_ndim_setup(self.window_size, ndim)
 
         # summation filter for convolution
-        sum_filt = torch.ones(1, 1, *window_size).type_as(tar)
+        sum_filt = torch.ones(1, 1, *window_size).type_as(x)
 
         # set stride and padding
         stride = (1,) * ndim
@@ -155,21 +155,21 @@ class LNCCLoss(nn.Module):
         conv_fn = getattr(F, f'conv{ndim}d')
 
         # summing over window by convolution
-        tar_sum = conv_fn(tar, sum_filt, stride=stride, padding=padding)
-        src_sum = conv_fn(src, sum_filt, stride=stride, padding=padding)
-        tar2_sum = conv_fn(tar2, sum_filt, stride=stride, padding=padding)
-        src2_sum = conv_fn(src2, sum_filt, stride=stride, padding=padding)
-        tar_src_sum = conv_fn(tar_src, sum_filt, stride=stride, padding=padding)
+        x_sum = conv_fn(x, sum_filt, stride=stride, padding=padding)
+        y_sum = conv_fn(y, sum_filt, stride=stride, padding=padding)
+        xsq_sum = conv_fn(xsq, sum_filt, stride=stride, padding=padding)
+        ysq_sum = conv_fn(ysq, sum_filt, stride=stride, padding=padding)
+        xy_sum = conv_fn(xy, sum_filt, stride=stride, padding=padding)
 
         window_num_points = np.prod(window_size)
-        mu_tar = tar_sum / window_num_points
-        mu_src = src_sum / window_num_points
+        x_mu = x_sum / window_num_points
+        y_mu = y_sum / window_num_points
 
-        cov = tar_src_sum - mu_src * tar_sum - mu_tar * src_sum + mu_tar * mu_src * window_num_points
-        tar_var = tar2_sum - 2 * mu_tar * tar_sum + mu_tar * mu_tar * window_num_points
-        src_var = src2_sum - 2 * mu_src * src_sum + mu_src * mu_src * window_num_points
+        cov = xy_sum - y_mu * x_sum - x_mu * y_sum + x_mu * y_mu * window_num_points
+        x_var = xsq_sum - 2 * x_mu * x_sum + x_mu * x_mu * window_num_points
+        y_var = ysq_sum - 2 * y_mu * y_sum + y_mu * y_mu * window_num_points
 
-        lncc = cov * cov / (tar_var * src_var + 1e-5)
+        lncc = cov * cov / (x_var * y_var + 1e-5)
 
         return -torch.mean(lncc)
 
