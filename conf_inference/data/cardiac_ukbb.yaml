@@ -1,7 +1,7 @@
 # @package _group_
 type: 'cardiac_ukbb'
 dataset:
-  data_dir_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/cardiac_ukbb_stacom19/test_autoseg
+  data_dir_path:
   evaluate: True
   crop_size: [160, 160]
   slice_range:
