@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-p', '--parent_dir')
     parser.add_argument('-f', '--suffix',
-                        help='File path ithin model_dir',
+                        help='File path within model_dir',
                         default='analysis/analysis_results.csv')
     parser.add_argument('-s', '--save_path',
                         help='Path to save table CSV')
