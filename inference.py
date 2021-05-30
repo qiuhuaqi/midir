@@ -14,7 +14,7 @@ from model.baselines import Identity, MIRTK
 from model.transformation import warp
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
-from utils.analyse import analyse_output
+from analyse import analyse_output
 
 import random
 random.seed(7)

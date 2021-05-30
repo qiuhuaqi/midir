@@ -1,6 +1,11 @@
 import os
+import random
+from typing import Dict, Any
+
+import numpy as np
 import omegaconf
 import pandas as pd
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 
 def setup_dir(dir_path):
@@ -37,3 +42,27 @@ def save_dict_to_csv(d, csv_path, model_name='modelX'):
         if not isinstance(x, list):
             d[k] = [x]
     pd.DataFrame(d, index=[model_name]).to_csv(csv_path)
+
+
+def worker_init_fn(worker_id):
+    """ Callback function passed to DataLoader to initialise the workers """
+    # Randomly seed the workers
+    random_seed = random.randint(0, 2 ** 32 - 1)
+    np.random.seed(random_seed)
+
+
+class MyModelCheckpoint(ModelCheckpoint):
+    def __init__(self, *args, **kwargs):
+        super(MyModelCheckpoint, self).__init__(*args, **kwargs)
+
+    def on_save_checkpoint(self, trainer, pl_module) -> Dict[str, Any]:
+        """Log best metrics whenever a checkpoint is saved"""
+        # looks for `hparams` and `hparam_metrics` in `pl_module`
+        pl_module.logger.log_metrics(pl_module.hparam_metrics,
+                                     step=pl_module.global_step)
+        return {
+            "monitor": self.monitor,
+            "best_model_score": self.best_model_score,
+            "best_model_path": self.best_model_path,
+            "current_score": self.current_score,
+        }

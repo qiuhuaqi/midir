@@ -3,7 +3,8 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 
 from model.transformation import warp
-from model.utils import get_network, get_transformation, get_loss_fn, get_datasets, worker_init_fn
+from model.utils import get_network, get_transformation, get_loss_fn, get_datasets
+from utils.misc import worker_init_fn
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.base import merge_dicts
 from utils.metric import measure_metrics

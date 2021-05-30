@@ -5,7 +5,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer
 
 from model.lightning import LightningDLReg
-from model.utils import MyModelCheckpoint
+from utils.misc import MyModelCheckpoint
 
 import random
 random.seed(7)

@@ -1,10 +1,5 @@
 import os
-import random
-from typing import Any, Dict
-import numpy as np
 import torch.nn as nn
-
-from pytorch_lightning.callbacks import ModelCheckpoint
 
 from data.datasets import BrainMRInterSubj3D, CardiacMR2D
 from model.network import UNet, CubicBSplineNet
@@ -105,25 +100,3 @@ def get_datasets(hparams):
     return train_dataset, val_dataset
 
 
-def worker_init_fn(worker_id):
-    """ Callback function passed to DataLoader to initialise the workers """
-    # Randomly seed the workers
-    random_seed = random.randint(0, 2 ** 32 - 1)
-    np.random.seed(random_seed)
-
-
-class MyModelCheckpoint(ModelCheckpoint):
-    def __init__(self, *args, **kwargs):
-        super(MyModelCheckpoint, self).__init__(*args, **kwargs)
-
-    def on_save_checkpoint(self, trainer, pl_module) -> Dict[str, Any]:
-        """Log best metrics whenever a checkpoint is saved"""
-        # looks for `hparams` and `hparam_metrics` in `pl_module`
-        pl_module.logger.log_metrics(pl_module.hparam_metrics,
-                                     step=pl_module.global_step)
-        return {
-            "monitor": self.monitor,
-            "best_model_score": self.best_model_score,
-            "best_model_path": self.best_model_path,
-            "current_score": self.current_score,
-        }
