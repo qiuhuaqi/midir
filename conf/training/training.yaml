@@ -3,7 +3,6 @@ lr: 1e-4
 lr_decay_step: 100
 
 trainer:
-    gpus: 1
     max_epochs: 100
     log_every_n_steps: 5
     check_val_every_n_epoch: 5

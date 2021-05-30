@@ -18,9 +18,9 @@ def main(cfg: DictConfig) -> None:
     model_dir = os.getcwd()
 
     # use only one GPU
-    gpus = 1 if cfg.gpu else None
-    if isinstance(cfg.gpu, int):
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(cfg.gpu)
+    gpus = 1 if cfg.meta.gpu else None
+    if isinstance(cfg.meta.gpu, int):
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(cfg.meta.gpu)
 
     # lightning model
     model = LightningDLReg(hparams=cfg)
