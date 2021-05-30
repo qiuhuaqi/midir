@@ -22,13 +22,18 @@ def _crop_and_pad(data_dict, crop_size):
 
 
 def _normalise_intensity(data_dict, keys=None, vmin=0., vmax=1.):
-    # normalise intensity of data in `data_dict` with `keys`
+    """ Normalise intensity of data in `data_dict` with `keys` """
     if keys is None:
         keys = {'target', 'source', 'target_original'}
+
+    # images in one pairing should be normalised using the same scaling
+    vmin_in = np.amin(np.array([data_dict[k] for k in keys]))
+    vmax_in = np.amax(np.array([data_dict[k] for k in keys]))
 
     for k, x in data_dict.items():
         if k in keys:
             data_dict[k] = normalise_intensity(x,
+                                               min_in=vmin_in, max_in=vmax_in,
                                                min_out=vmin, max_out=vmax,
                                                mode="minmax", clip=True)
     return data_dict

@@ -12,7 +12,6 @@ class _BaseDataset(Dataset):
         self.data_dir = data_dir_path
         assert os.path.exists(data_dir_path), f"Data dir does not exist: {data_dir_path}"
         self.subject_list = sorted(os.listdir(self.data_dir))
-
         self.data_path_dict = dict()
 
     def _set_path(self, index):
@@ -35,10 +34,12 @@ class BrainMRInterSubj3D(_BaseDataset):
                  modality='t1t1',
                  atlas_path=None):
         super(BrainMRInterSubj3D, self).__init__(data_dir_path)
-        self.crop_size = crop_size
-        self.atlas_path = atlas_path
-        self.modality = modality
         self.evaluate = evaluate
+        self.crop_size = crop_size
+        self.img_keys = ['target', 'source']
+
+        self.modality = modality
+        self.atlas_path = atlas_path
 
     def _set_path(self, index):
         # choose the target and source subjects/paths
@@ -65,7 +66,7 @@ class BrainMRInterSubj3D(_BaseDataset):
         if self.evaluate:
             # T1w image of source subject for visualisation
             self.data_path_dict['target_original'] = f'{self.src_subj_path}/T1_brain.nii.gz'
-
+            self.img_keys.append('target_original')
             # segmentation
             self.data_path_dict['target_seg'] = f'{self.tar_subj_path}/T1_brain_MALPEM_tissues.nii.gz'
             self.data_path_dict['source_seg'] = f'{self.src_subj_path}/T1_brain_MALPEM_tissues.nii.gz'
@@ -74,7 +75,7 @@ class BrainMRInterSubj3D(_BaseDataset):
         self._set_path(index)
         data_dict = _load3d(self.data_path_dict)
         data_dict = _crop_and_pad(data_dict, self.crop_size)
-        data_dict = _normalise_intensity(data_dict)
+        data_dict = _normalise_intensity(data_dict, self.img_keys)
         return _to_tensor(data_dict)
 
 
@@ -89,9 +90,11 @@ class CardiacMR2D(_BaseDataset):
                  ):
         super(CardiacMR2D, self).__init__(data_dir_path)
         self.evaluate = evaluate
+        self.crop_size = crop_size
+        self.img_keys = ['target', 'source']
+
         self.slice_range = slice_range
         self.slicing = slicing
-        self.crop_size = crop_size
         if batch_size is not None:
             self.subject_list = self.subject_list * batch_size
 
@@ -102,6 +105,7 @@ class CardiacMR2D(_BaseDataset):
         self.data_path_dict['source'] = f'{self.subj_path}/sa_ES.nii.gz'
         if self.evaluate:
             self.data_path_dict['target_original'] = self.data_path_dict['source']
+            self.img_keys.append('target_original')
             self.data_path_dict['target_seg'] = f'{self.subj_path}/label_sa_ED.nii.gz'
             self.data_path_dict['source_seg'] = f'{self.subj_path}/label_sa_ES.nii.gz'
 
@@ -110,5 +114,5 @@ class CardiacMR2D(_BaseDataset):
         data_dict = _load2d(self.data_path_dict)
         data_dict = _magic_slicer(data_dict, slice_range=self.slice_range, slicing=self.slicing)
         data_dict = _crop_and_pad(data_dict, self.crop_size)
-        data_dict = _normalise_intensity(data_dict)
+        data_dict = _normalise_intensity(data_dict, self.img_keys)
         return _to_tensor(data_dict)
