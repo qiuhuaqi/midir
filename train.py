@@ -18,9 +18,9 @@ def main(cfg: DictConfig) -> None:
     model_dir = os.getcwd()
 
     # use only one GPU
-    gpu = cfg.meta.gpu
-    if gpu is not None and isinstance(gpu, int):
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
+    gpus = 1 if cfg.gpu else None
+    if isinstance(cfg.gpu, int):
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(cfg.gpu)
 
     # lightning model
     model = LightningDLReg(hparams=cfg)
@@ -37,6 +37,7 @@ def main(cfg: DictConfig) -> None:
     trainer = Trainer(default_root_dir=model_dir,
                       logger=logger,
                       callbacks=[ckpt_callback],
+                      gpus=gpus,
                       **cfg.training.trainer
                       )
 
