@@ -4,8 +4,16 @@ Welcome!
 This repository contains code for the Modality-Invariant Diffeomorphic Deep Learning Image Registration (MIDIR) framework 
 presented in the paper:
 
-> Paper in review
-
+```
+@inproceedings{
+qiu2021learning,
+title={Learning Diffeomorphic and Modality-invariant Registration using B-splines},
+author={Huaqi Qiu and Chen Qin and Andreas Schuh and Kerstin Hammernik and Daniel Rueckert},
+booktitle={Medical Imaging with Deep Learning},
+year={2021},
+url={https://openreview.net/forum?id=eSI9Qh2DJhN}
+}
+```
 Please consider citing the paper if you use the code in this repository.
 
 <img src="example_image.png" width="600">
