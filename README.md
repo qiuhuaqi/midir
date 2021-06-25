@@ -2,7 +2,7 @@
 Welcome!
 
 This repository contains code for the Modality-Invariant Diffeomorphic Deep Learning Image Registration (MIDIR) framework 
-presented in the paper:
+presented in the paper [[OpenReview](https://openreview.net/forum?id=eSI9Qh2DJhN)]:
 
 ```
 @inproceedings{
