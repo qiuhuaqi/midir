@@ -1,4 +1,4 @@
-# Learning Diffeomorphic and Modality-invariant Registration using B-splines
+# Learning Diffeomorphic and Modality-invariant Registration using B-splines (MIDL 2021)
 Welcome!
 
 This repository contains code for the Modality-Invariant Diffeomorphic Deep Learning Image Registration (MIDIR) framework 
