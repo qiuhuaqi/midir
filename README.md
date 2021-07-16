@@ -127,9 +127,11 @@ A different set of configuration files are used for inference (see `conf_inferen
 
 
 ## Data
-We cannot share the data we use in the paper directly. But you can apply to download at:
+We believe in reproducibility and open datasets in research. Unfortunately, we are not allowed to share the original or processed data that we used in the paper directly due to limitations on redistribution put in place by the original data distributor. But you can apply to download these data at:
 - [CamCAN](https://camcan-archive.mrc-cbu.cam.ac.uk/dataaccess/)
 - [UK Biobank](https://www.ukbiobank.ac.uk/enable-your-research) 
+
+We also encourage you to try our framework on other applicable and accessible open datasets, and share your findings! 
 
 
 ## Contact Us
