@@ -20,24 +20,24 @@ Please consider citing the paper if you use the code in this repository.
 
 ## Installation
 1. Clone this repository
-2. In a fresh Python 3.7.x virtual environment, install dependencies via:
+2. In a fresh Python 3.7.x virtual environment, install dependencies by running:
     ```
     pip install -r <path_to_cloned_repository>/requirements.txt
     ```
 
 ### Using GPU
-If you want to run the code on GPU (which is recommended), you should check your CUDA and CuDNN installations. 
-This code has been tested on CUDA 10.1 and CuDNN 7.6.5. Later versions should be backward-competible. 
+If you want to run the code on GPU (which is recommended), please check your CUDA and CuDNN installations. 
+This code has been tested on CUDA 10.1 and CuDNN 7.6.5. Later versions should be backward-competible but not guaranteed. 
 
-To install the exact CUDA and CuDNN versions with the corresponding Pytorch build:
+To install the exact CUDA and CuDNN versions with the corresponding Pytorch build we used:
 ```
 pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
 
 ## File structure
-- `conf`: Hydra configuration for training deep learning models
-- `conf_inference`: Hydra configuration for inference
+- `conf`: [Hydra configuration](#configurations) for training deep learning models
+- `conf_inference`: [Hydra configuration](#configurations) for inference
 - `data`:  data loading
 - `model`:
     - `lightning.py`: the LightningModule which puts everything together
