@@ -6,7 +6,7 @@ defaults:
   - loss: nmi
   - training: training
 
-meta:
-  gpu:
-  metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
-  hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
+metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
+hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
+
+gpu: 0

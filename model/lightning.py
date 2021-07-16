@@ -24,7 +24,7 @@ class LightningDLReg(LightningModule):
 
         # initialise dummy best metrics results for initial logging
         self.hparam_metrics = {f'hparam_metrics/{m}': 0.0
-                               for m in self.hparams.meta.hparam_metrics}
+                               for m in self.hparams.hparam_metrics}
 
     def on_fit_start(self):
         # log dummy initial hparams w/ best metrics (for tensorboard HPARAMS)
@@ -111,7 +111,7 @@ class LightningDLReg(LightningModule):
         # calculate validation metrics
         val_metrics = {k: float(loss.cpu())
                        for k, loss in val_losses.items()}
-        val_metrics.update(measure_metrics(val_data, self.hparams.meta.metric_groups))
+        val_metrics.update(measure_metrics(val_data, self.hparams.metric_groups))
 
         # log visualisation figure to Tensorboard
         if batch_idx == 0:
@@ -130,4 +130,4 @@ class LightningDLReg(LightningModule):
 
         # update hparams metrics
         self.hparam_metrics = {f'hparam_metrics/{k}': val_metrics_epoch[k]
-                               for k in self.hparams.meta.hparam_metrics}
+                               for k in self.hparams.hparam_metrics}
