@@ -6,7 +6,7 @@ jupyterlab-pygments==0.1.2
 nbclient==0.5.1
 nbzip==0.1.0
 nibabel==3.1.1
-opencv-python==4.0.0.21
+opencv-python==4.2.0.32
 pipdeptree==1.0.0
 pytorch-lightning==1.1.0
 torch==1.5.1
