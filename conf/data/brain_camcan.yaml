@@ -9,6 +9,6 @@ shuffle: True
 modality: t1t1
 crop_size: [176, 192, 176]
 
-train_path:
-val_path:
+train_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/train
+val_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/val
 atlas_path:
