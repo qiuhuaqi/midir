@@ -1,8 +1,15 @@
 # @package _global_
 defaults:
-  - data: brain_camcan
+  - data: cardiac_ukbb
   - model: dl
 
 metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
-analyse: True
+evaluate: True
 gpu:
+
+model_dir:
+test_dir: test
+
+hydra:
+  run:
+    dir: ${model_dir}/${test_dir}

@@ -8,7 +8,7 @@ from utils.image_io import load_nifti
 from utils.metric import measure_metrics, MetricReporter
 
 
-def analyse_output(inference_output_dir, save_dir, metric_groups):
+def evaluate_output(inference_output_dir, save_dir, metric_groups):
     print("Running output analysis:")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -85,4 +85,4 @@ if __name__ == '__main__':
 
     # run analysis
     delattr(args, 'model_dir')
-    analyse_output(**args.__dict__)
+    evaluate_output(**args.__dict__)

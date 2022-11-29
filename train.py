@@ -11,7 +11,7 @@ import random
 random.seed(7)
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="conf/train", config_name="config")
 def main(cfg: DictConfig) -> None:
 
     # set via CLI hydra.run.dir

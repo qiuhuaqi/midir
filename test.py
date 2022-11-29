@@ -14,7 +14,7 @@ from model.baselines import Identity, MIRTK
 from model.transformation import warp
 from utils.image_io import save_nifti
 from utils.misc import setup_dir
-from analyse import analyse_output
+from evaluate import evaluate_output
 
 import random
 random.seed(7)
@@ -41,8 +41,12 @@ def get_inference_model(cfg, device=torch.device('cpu')):
         model = MIRTK(**cfg.model.mirtk_params)
 
     elif cfg.model.type == 'dl':
-        assert os.path.exists(cfg.model.ckpt_path)
-        model = LightningDLReg.load_from_checkpoint(cfg.model.ckpt_path)
+        if not os.path.exists(cfg.model.ckpt_path):
+            model_ckpt_path = f'{cfg.model_dir}/checkpoints/{cfg.model.ckpt_path}'
+        else:
+            model_ckpt_path = cfg.model.ckpt_path
+        assert os.path.exists(model_ckpt_path)
+        model = LightningDLReg.load_from_checkpoint(model_ckpt_path)
         model = model.to(device=device)
         model.eval()
 
@@ -85,7 +89,7 @@ def inference(model, dataloader, output_dir, device=torch.device('cpu')):
             save_nifti(x, path=output_id_dir + f'/{k}.nii.gz')
 
 
-@hydra.main(config_path="conf_inference", config_name="config")
+@hydra.main(config_path="conf/test", config_name="config")
 def main(cfg: DictConfig) -> None:
     print(cfg.pretty())
 
@@ -106,8 +110,8 @@ def main(cfg: DictConfig) -> None:
     inference(model, dataloader, output_dir, device=device)
 
     # (optional) run analysis on the current inference outputs
-    if cfg.analyse:
-        analyse_output(output_dir, os.getcwd() + '/analysis', cfg.metric_groups)
+    if cfg.evaluate:
+        evaluate_output(output_dir, os.getcwd() + '/analysis', cfg.metric_groups)
 
 
 if __name__ == '__main__':
