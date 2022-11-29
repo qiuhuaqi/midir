@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - data: brain_camcan
+  - data: cardiac_ukbb
   - network: bspline_net
   - transformation: bspline
   - loss: nmi
@@ -10,3 +10,19 @@ metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
 hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
 
 gpu: 0
+
+experiment_root: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/experiments
+run_dir:
+
+hydra:
+  run:
+    dir: ${experiment_root}/${run_dir}/${hydra.job.override_dirname}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${experiment_root}/${run_dir}
+    subdir: ${hydra.job.override_dirname}/${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    config:
+      override_dirname:
+        exclude_keys:
+          - run_dir
+          - gpu
