@@ -1,6 +1,10 @@
 """Run model inference and save outputs for analysis"""
 import os
+from glob import glob
+from omegaconf import OmegaConf
 import hydra
+from hydra.core.hydra_config import HydraConfig
+
 from omegaconf import DictConfig
 from tqdm import tqdm
 import numpy as np
@@ -89,9 +93,23 @@ def inference(model, dataloader, output_dir, device=torch.device('cpu')):
             save_nifti(x, path=output_id_dir + f'/{k}.nii.gz')
 
 
+def hydra_version_resolver(model_dir):
+    model_dirs = sorted(glob(f'{model_dir}/*'))
+    if len(model_dirs) > 0:
+        # newest version
+        run_dir = model_dirs[-1]
+    else:
+        # no version
+        run_dir = model_dir
+    return run_dir
+
+
+OmegaConf.register_new_resolver('version_resolver', hydra_version_resolver)
+
+
 @hydra.main(config_path="conf/test", config_name="config")
 def main(cfg: DictConfig) -> None:
-    print(cfg.pretty())
+    test_dir = HydraConfig.get().run.dir
 
     # configure GPU
     gpu = cfg.gpu
@@ -106,12 +124,13 @@ def main(cfg: DictConfig) -> None:
     model = get_inference_model(cfg, device=device)
 
     # run inference
-    output_dir = setup_dir(os.getcwd() + '/outputs')  # cwd = hydra.run.dir
+    output_dir = setup_dir(f'{test_dir}/outputs')
     inference(model, dataloader, output_dir, device=device)
 
     # (optional) run analysis on the current inference outputs
     if cfg.evaluate:
-        evaluate_output(output_dir, os.getcwd() + '/analysis', cfg.metric_groups)
+        eval_dir = setup_dir(f'{test_dir}/analysis')
+        evaluate_output(output_dir, eval_dir, cfg.metric_groups)
 
 
 if __name__ == '__main__':

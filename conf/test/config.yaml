@@ -7,9 +7,10 @@ metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
 evaluate: True
 gpu:
 
-model_dir:
-test_dir: test
+base_dir:
+model_base_dir:
+model_dir: ${version_resolver:${base_dir}/${model_base_dir}}
 
 hydra:
   run:
-    dir: ${model_dir}/${test_dir}
+    dir: ${model_dir}/test
