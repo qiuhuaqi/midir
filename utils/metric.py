@@ -4,8 +4,9 @@ import torch
 import cv2
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
-from utils.image import bbox_from_mask, bbox_crop
+from deepali.losses.functional import bending_energy
 
+from utils.image import bbox_from_mask, bbox_crop
 from utils.misc import save_dict_to_csv
 
 
@@ -84,10 +85,15 @@ def measure_disp_metrics(metric_data):
 
     # Regularity (Jacobian) metrics
     folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(disp_pred)
+    be = bending_energy(torch.from_numpy(disp_pred)).numpy() * 100
 
     disp_metric_results = dict()
     disp_metric_results.update(
-        {"folding_ratio": folding_ratio, "mag_det_jac_det": mag_det_jac_det}
+        {
+            "folding_ratio": folding_ratio,
+            "mag_det_jac_det": mag_det_jac_det,
+            "bending_energy": be,
+        }
     )
 
     # DVF accuracy metrics if ground truth is available
