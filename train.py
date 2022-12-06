@@ -1,11 +1,10 @@
 import os
 import hydra
 from omegaconf import DictConfig
-from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning import Trainer
-
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
 from model.lightning import LightningDLReg
-from utils.misc import MyModelCheckpoint
 
 import random
 
@@ -27,23 +26,32 @@ def main(cfg: DictConfig) -> None:
     model = LightningDLReg(**cfg)
 
     # configure logger
-    logger = TensorBoardLogger(model_dir, name="log")
+    logger = TensorBoardLogger(model_dir, name="log", default_hp_metric=False)
 
     # model checkpoint callback with ckpt metric logging
-    ckpt_callback = MyModelCheckpoint(
-        save_last=True, dirpath=f"{model_dir}/checkpoints/", verbose=True
+    ckpt_callback = ModelCheckpoint(
+        dirpath=f"{model_dir}/checkpoints/",
+        filename="epoch_{epoch}-val_mean_dice_{val_metrics/mean_dice:.3f}",
+        save_last=True,
+        monitor="val_metrics/mean_dice",
+        mode="max",
+        save_top_k=2,
+        auto_insert_metric_name=False,
+        verbose=True,
     )
 
     trainer = Trainer(
         default_root_dir=model_dir,
         logger=logger,
         callbacks=[ckpt_callback],
-        gpus=gpus,
+        accelerator="gpu",
+        devices=1,
         **cfg.training.trainer,
     )
 
-    # run training
     trainer.fit(model)
+    # run validation after the last epoch which should reflect the last checkpoint
+    trainer.validate(model)
 
 
 if __name__ == "__main__":
