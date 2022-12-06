@@ -8,6 +8,7 @@ from model.lightning import LightningDLReg
 from utils.misc import MyModelCheckpoint
 
 import random
+
 random.seed(7)
 
 
@@ -20,26 +21,26 @@ def main(cfg: DictConfig) -> None:
     # use only one GPU
     gpus = None if cfg.gpu is None else 1
     if isinstance(cfg.gpu, int):
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(cfg.gpu)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu)
 
     # lightning model
-    model = LightningDLReg(hparams=cfg)
+    model = LightningDLReg(**cfg)
 
     # configure logger
-    logger = TensorBoardLogger(model_dir, name='log')
+    logger = TensorBoardLogger(model_dir, name="log")
 
     # model checkpoint callback with ckpt metric logging
-    ckpt_callback = MyModelCheckpoint(save_last=True,
-                                      dirpath=f'{model_dir}/checkpoints/',
-                                      verbose=True
-                                      )
+    ckpt_callback = MyModelCheckpoint(
+        save_last=True, dirpath=f"{model_dir}/checkpoints/", verbose=True
+    )
 
-    trainer = Trainer(default_root_dir=model_dir,
-                      logger=logger,
-                      callbacks=[ckpt_callback],
-                      gpus=gpus,
-                      **cfg.training.trainer
-                      )
+    trainer = Trainer(
+        default_root_dir=model_dir,
+        logger=logger,
+        callbacks=[ckpt_callback],
+        gpus=gpus,
+        **cfg.training.trainer,
+    )
 
     # run training
     trainer.fit(model)

@@ -29,15 +29,14 @@ def param_ndim_setup(param, ndim):
     if isinstance(param, (int, float)):
         param = (param,) * ndim
     elif isinstance(param, (tuple, list, omegaconf.listconfig.ListConfig)):
-        assert len(param) == ndim, \
-            f"Dimension ({ndim}) mismatch with data"
+        assert len(param) == ndim, f"Dimension ({ndim}) mismatch with data"
         param = tuple(param)
     else:
         raise TypeError("Parameter type not int, tuple or list")
     return param
 
 
-def save_dict_to_csv(d, csv_path, model_name='modelX'):
+def save_dict_to_csv(d, csv_path, model_name="modelX"):
     for k, x in d.items():
         if not isinstance(x, list):
             d[k] = [x]
@@ -45,9 +44,9 @@ def save_dict_to_csv(d, csv_path, model_name='modelX'):
 
 
 def worker_init_fn(worker_id):
-    """ Callback function passed to DataLoader to initialise the workers """
+    """Callback function passed to DataLoader to initialise the workers"""
     # Randomly seed the workers
-    random_seed = random.randint(0, 2 ** 32 - 1)
+    random_seed = random.randint(0, 2**32 - 1)
     np.random.seed(random_seed)
 
 
@@ -55,14 +54,17 @@ class MyModelCheckpoint(ModelCheckpoint):
     def __init__(self, *args, **kwargs):
         super(MyModelCheckpoint, self).__init__(*args, **kwargs)
 
-    def on_save_checkpoint(self, trainer, pl_module) -> Dict[str, Any]:
+    def on_save_checkpoint(self, trainer, pl_module, checkpoint) -> None:
         """Log best metrics whenever a checkpoint is saved"""
         # looks for `hparams` and `hparam_metrics` in `pl_module`
-        pl_module.logger.log_metrics(pl_module.hparam_metrics,
-                                     step=pl_module.global_step)
-        return {
-            "monitor": self.monitor,
-            "best_model_score": self.best_model_score,
-            "best_model_path": self.best_model_path,
-            "current_score": self.current_score,
-        }
+        pl_module.logger.log_metrics(
+            pl_module.hparam_metrics, step=pl_module.global_step
+        )
+        self.state_dict().update(
+            {
+                "monitor": self.monitor,
+                "best_model_score": self.best_model_score,
+                "best_model_path": self.best_model_path,
+                "current_score": self.current_score,
+            }
+        )
