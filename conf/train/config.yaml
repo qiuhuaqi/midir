@@ -4,7 +4,7 @@ defaults:
   - network: bspline_net
   - transformation: bspline
   - loss: nmi
-  - training: training
+  - training: cardiac_training
 
 metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
 hparam_metrics: ["loss", "mean_dice", "folding_ratio"]
@@ -24,5 +24,6 @@ hydra:
     config:
       override_dirname:
         exclude_keys:
+          - data
           - run_dir
           - gpu
