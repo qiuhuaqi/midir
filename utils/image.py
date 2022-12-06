@@ -32,26 +32,27 @@ def crop_and_pad(x, new_size=192, mode="constant", **kwargs):
     # For each dimensions except the dim 0, set crop slicers or paddings
     for i in range(dim):
         if sizes[i] < new_size[i]:
-            to_padding[i+1][0] = (new_size[i] - sizes[i]) // 2
-            to_padding[i+1][1] = new_size[i] - sizes[i] - to_padding[i+1][0]
+            to_padding[i + 1][0] = (new_size[i] - sizes[i]) // 2
+            to_padding[i + 1][1] = new_size[i] - sizes[i] - to_padding[i + 1][0]
         else:
             # Create slicer object to crop each dimension
-            crop_start = int(np.floor((sizes[i] - new_size[i]) / 2.))
+            crop_start = int(np.floor((sizes[i] - new_size[i]) / 2.0))
             crop_end = crop_start + new_size[i]
-            slicer[i+1] = slice(crop_start, crop_end)
+            slicer[i + 1] = slice(crop_start, crop_end)
 
     return np.pad(x[tuple(slicer)], to_padding, mode=mode, **kwargs)
 
 
-def normalise_intensity(x,
-                        mode="minmax",
-                        min_in=0.0,
-                        max_in=255.0,
-                        min_out=0.0,
-                        max_out=1.0,
-                        clip=False,
-                        clip_range_percentile=(0.05, 99.95),
-                        ):
+def normalise_intensity(
+    x,
+    mode="minmax",
+    min_in=0.0,
+    max_in=255.0,
+    min_out=0.0,
+    max_out=1.0,
+    clip=False,
+    clip_range_percentile=(0.05, 99.95),
+):
     """
     Intensity normalisation (& optional percentile clipping)
     for both Numpy Array and Pytorch Tensor of arbitrary dimensions.
@@ -84,7 +85,9 @@ def normalise_intensity(x,
         # Clipping
         if clip:
             # intensity clipping
-            clip_min, clip_max = np.percentile(x, clip_range_percentile, axis=image_axes, keepdims=True)
+            clip_min, clip_max = np.percentile(
+                x, clip_range_percentile, axis=image_axes, keepdims=True
+            )
             x = np.clip(x, clip_min, clip_max)
 
         # Normalise meanstd
@@ -97,15 +100,19 @@ def normalise_intensity(x,
         elif mode == "minmax":
             min_in = np.amin(x, axis=image_axes, keepdims=True)  # (N, *range(dim))
             max_in = np.amax(x, axis=image_axes, keepdims=True)  # (N, *range(dim)))
-            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
+            x = (
+                (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
+            )  # (!) multiple broadcasting)
 
         # Fixed ratio
         elif mode == "fixed":
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
 
         else:
-            raise ValueError("Intensity normalisation mode not understood."
-                             "Expect either one of: 'meanstd', 'minmax', 'fixed'")
+            raise ValueError(
+                "Intensity normalisation mode not understood."
+                "Expect either one of: 'meanstd', 'minmax', 'fixed'"
+            )
 
         # cast to float 32
         x = x.astype(np.float32)
@@ -114,32 +121,39 @@ def normalise_intensity(x,
     elif type(x) is torch.Tensor:
         # todo: clipping not supported at the moment (requires Pytorch version of the np.percentile()
 
-        # Normalise meanstd
-        if mode is "meanstd":
+        if mode == "meanstd":
             mean = torch.mean(x, dim=image_axes, keepdim=True)  # (N, *range(dim))
             std = torch.std(x, dim=image_axes, keepdim=True)  # (N, *range(dim))
             x = (x - mean) / std  # axis should match & broadcast
 
-        # Normalise minmax
-        elif mode is "minmax":
+        elif mode == "minmax":
             # get min/max across dims by flattening first
-            min_in = x.flatten(start_dim=1, end_dim=-1).min(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
-            max_in = x.flatten(start_dim=1, end_dim=-1).max(dim=1)[0].view(-1, *(1,)*dim)  # (N, (1,)*dim)
-            x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)  # (!) multiple broadcasting)
+            min_in = (
+                x.flatten(start_dim=1, end_dim=-1).min(dim=1)[0].view(-1, *(1,) * dim)
+            )  # (N, (1,)*dim)
+            max_in = (
+                x.flatten(start_dim=1, end_dim=-1).max(dim=1)[0].view(-1, *(1,) * dim)
+            )  # (N, (1,)*dim)
+            x = (
+                (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
+            )  # (!) multiple broadcasting)
 
-        # Fixed ratio
-        elif mode is "fixed":
+        elif mode == "fixed":
             x = (x - min_in) * (max_out - min_out) / (max_in - min_in + 1e-12)
 
         else:
-            raise ValueError("Intensity normalisation mode not recognised."
-                             "Expect: 'meanstd', 'minmax', 'fixed'")
+            raise ValueError(
+                "Intensity normalisation mode not recognised."
+                "Expect: 'meanstd', 'minmax', 'fixed'"
+            )
 
         # cast to float32
         x = x.float()
 
     else:
-        raise TypeError("Input data type not recognised, support numpy.ndarray or torch.Tensor")
+        raise TypeError(
+            "Input data type not recognised, support numpy.ndarray or torch.Tensor"
+        )
     return x
 
 
@@ -206,8 +220,9 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 
     # find non-zero locations in the mask
     nonzero_indices = np.nonzero(mask > 0)
-    bbox = [(nonzero_indices[i + 1].min(), nonzero_indices[i + 1].max())
-            for i in range(dim)]
+    bbox = [
+        (nonzero_indices[i + 1].min(), nonzero_indices[i + 1].max()) for i in range(dim)
+    ]
 
     # pad pad_ratio of the minimum distance
     #  from mask bounding box to the image boundaries (half each side)
@@ -215,11 +230,14 @@ def bbox_from_mask(mask, pad_ratio=0.2):
         if pad_ratio[i] > 1:
             print(f"Invalid padding value (>1) on dimension {dim}, set to 1")
             pad_ratio[i] = 1
-    bbox_padding = [pad_ratio[i] * min(bbox[i][0], mask_shape[i] - bbox[i][1])
-                    for i in range(dim)]
+    bbox_padding = [
+        pad_ratio[i] * min(bbox[i][0], mask_shape[i] - bbox[i][1]) for i in range(dim)
+    ]
     # "padding" by modifying the bounding box indices
-    bbox = [(bbox[i][0] - int(bbox_padding[i]/2), bbox[i][1] + int(bbox_padding[i]/2))
-                    for i in range(dim)]
+    bbox = [
+        (bbox[i][0] - int(bbox_padding[i] / 2), bbox[i][1] + int(bbox_padding[i] / 2))
+        for i in range(dim)
+    ]
 
     # bbox mask
     bbox_mask = np.zeros(mask.shape, dtype=np.float32)
@@ -231,7 +249,7 @@ def bbox_from_mask(mask, pad_ratio=0.2):
 
 
 def roi_crop(x, mask, dim):
-    """ Crop input Tensor by the bounding box of roi mask """
+    """Crop input Tensor by the bounding box of roi mask"""
 
     if type(x) == torch.Tensor:
         # TODO: Tensor version of bbox_from_mask
@@ -246,9 +264,9 @@ def roi_crop(x, mask, dim):
 
 
 def avg_filtering(x, filter_size=7):
-    """ Applies average filtering to Tensor of size (N, 1, *sizes)"""
+    """Applies average filtering to Tensor of size (N, 1, *sizes)"""
     dim = x.ndim - 2
-    avg_filter = torch.ones(1, 1, *(filter_size,)*dim).type_as(x)
+    avg_filter = torch.ones(1, 1, *(filter_size,) * dim).type_as(x)
     pad = filter_size // 2
-    conv_fn = getattr(F, f'conv{dim}d')
+    conv_fn = getattr(F, f"conv{dim}d")
     return conv_fn(x, avg_filter, padding=pad)

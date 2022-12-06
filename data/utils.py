@@ -10,7 +10,7 @@ from utils.image_io import load_nifti
 def _to_tensor(data_dict):
     # cast to Pytorch Tensor
     for name, data in data_dict.items():
-        data_dict[name] = torch.from_numpy(data).float()
+        data_dict[name] = torch.from_numpy(data)
     return data_dict
 
 
@@ -21,10 +21,10 @@ def _crop_and_pad(data_dict, crop_size):
     return data_dict
 
 
-def _normalise_intensity(data_dict, keys=None, vmin=0., vmax=1.):
-    """ Normalise intensity of data in `data_dict` with `keys` """
+def _normalise_intensity(data_dict, keys=None, vmin=0.0, vmax=1.0):
+    """Normalise intensity of data in `data_dict` with `keys`"""
     if keys is None:
-        keys = {'target', 'source', 'target_original'}
+        keys = {"target", "source", "target_original"}
 
     # images in one pairing should be normalised using the same scaling
     vmin_in = np.amin(np.array([data_dict[k] for k in keys]))
@@ -32,10 +32,15 @@ def _normalise_intensity(data_dict, keys=None, vmin=0., vmax=1.):
 
     for k, x in data_dict.items():
         if k in keys:
-            data_dict[k] = normalise_intensity(x,
-                                               min_in=vmin_in, max_in=vmax_in,
-                                               min_out=vmin, max_out=vmax,
-                                               mode="minmax", clip=True)
+            data_dict[k] = normalise_intensity(
+                x,
+                min_in=vmin_in,
+                max_in=vmax_in,
+                min_out=vmin,
+                max_out=vmax,
+                mode="minmax",
+                clip=True,
+            )
     return data_dict
 
 
@@ -48,7 +53,9 @@ def _shape_checker(data_dict):
         common_shape = shapes[0]
         return common_shape
     else:
-        raise AssertionError(f'Not all data points have the same shape, {data_shapes_dict}')
+        raise AssertionError(
+            f"Not all data points have the same shape, {data_shapes_dict}"
+        )
 
 
 def _magic_slicer(data_dict, slice_range=None, slicing=None):
@@ -75,18 +82,22 @@ def _magic_slicer(data_dict, slice_range=None, slicing=None):
         # all slices within slice_range
         slicer = slice(slice_range[0], slice_range[1])
 
-    elif slicing == 'random':
+    elif slicing == "random":
         # randomly choose one slice within range
-        z = random.randint(slice_range[0], slice_range[1]-1)
+        z = random.randint(slice_range[0], slice_range[1] - 1)
         slicer = slice(z, z + 1)  # use slicer to keep dim
 
     elif isinstance(slicing, (list, tuple, ListConfig)):
         # slice several slices specified by slicing
-        assert all(0 <= i <= 1 for i in slicing), f'Relative slice positions {slicing} need to be within [0, 1]'
-        slicer = tuple(int(i * (slice_range[1] - slice_range[0])) + slice_range[0] for i in slicing)
+        assert all(
+            0 <= i <= 1 for i in slicing
+        ), f"Relative slice positions {slicing} need to be within [0, 1]"
+        slicer = tuple(
+            int(i * (slice_range[1] - slice_range[0])) + slice_range[0] for i in slicing
+        )
 
     else:
-        raise ValueError(f'Slicing mode {slicing} not recognised.')
+        raise ValueError(f"Slicing mode {slicing} not recognised.")
 
     # slicing
     for name, data in data_dict.items():

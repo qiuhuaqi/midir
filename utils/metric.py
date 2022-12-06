@@ -64,7 +64,7 @@ def measure_disp_metrics(metric_data):
         metric_results: (dict)
     """
     # new object to avoid changing data in metric_data
-    disp_pred = metric_data["disp_pred"]
+    disp_pred = metric_data["disp_pred"].astype(np.float)
     if "disp_gt" in metric_data.keys():
         disp_gt = metric_data["disp_gt"]
 
@@ -96,8 +96,8 @@ def measure_disp_metrics(metric_data):
         }
     )
 
-    # DVF accuracy metrics if ground truth is available
     if "disp_gt" in metric_data.keys():
+        # measure accuracy vs. ground truth disp
         disp_metric_results.update(
             {
                 "aee": calculate_aee(disp_pred, disp_gt),
