@@ -4,18 +4,25 @@ import torch
 import cv2
 from scipy.spatial.distance import directed_hausdorff
 import SimpleITK as sitk
+from functools import partial
 from deepali.losses.functional import bending_energy
 
 from utils.image import bbox_from_mask, bbox_crop
 from utils.misc import save_dict_to_csv
 
 
-def measure_metrics(metric_data, metric_groups, return_tensor=False):
+def measure_metrics(
+    metric_data,
+    metric_groups,
+    disp_metrics=("folding_ratio", "mag_det_jac_det", "bending_energy"),
+    return_tensor=False,
+):
     """
     Wrapper function for calculating all metrics
     Args:
         metric_data: (dict) data used for calculation of metrics, could be Tensor or Numpy Array
-        metric_groups: (list of strings) name of metric groups
+        metric_groups: (list of strings) names of metric groups
+        disp_metrics: (tuple of strings) names of displacement metrics to evaluate
         return_tensor: (bool) return Torch Tensor if True
 
     Returns:
@@ -30,7 +37,7 @@ def measure_metrics(metric_data, metric_groups, return_tensor=False):
     # keys must match metric_groups and params.metric_groups
     # (using groups to share pre-scripts)
     metric_group_fns = {
-        "disp_metrics": measure_disp_metrics,
+        "disp_metrics": partial(measure_disp_metrics, metrics=disp_metrics),
         "image_metrics": measure_image_metrics,
         "seg_metrics": measure_seg_metrics,
     }
@@ -52,13 +59,14 @@ Functions calculating groups of metrics
 """
 
 
-def measure_disp_metrics(metric_data):
+def measure_disp_metrics(metric_data, metrics=None):
     """
     Calculate DVF-related metrics.
     If roi_mask is given, the disp is masked and only evaluate in the bounding box of the mask.
 
     Args:
         metric_data: (dict)
+        metrics: names of metrics to evaluate
 
     Returns:
         metric_results: (dict)
@@ -83,18 +91,20 @@ def measure_disp_metrics(metric_data):
             disp_gt = disp_gt * roi_mask
             disp_gt = bbox_crop(disp_gt, mask_bbox)
 
-    # Regularity (Jacobian) metrics
-    folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(disp_pred)
-    be = bending_energy(torch.from_numpy(disp_pred)).numpy() * 100
-
     disp_metric_results = dict()
-    disp_metric_results.update(
-        {
-            "folding_ratio": folding_ratio,
-            "mag_det_jac_det": mag_det_jac_det,
-            "bending_energy": be,
-        }
-    )
+
+    if "folding_ratio" in metrics and "mag_det_jac_det" in metrics:
+        folding_ratio, mag_det_jac_det = calculate_jacobian_metrics(disp_pred)
+        disp_metric_results.update(
+            {
+                "folding_ratio": folding_ratio,
+                "mag_det_jac_det": mag_det_jac_det,
+            }
+        )
+
+    if "bending_energy" in metrics:
+        be = bending_energy(torch.from_numpy(disp_pred)).numpy() * 100
+        disp_metric_results["bending_energy"] = be
 
     if "disp_gt" in metric_data.keys():
         # measure accuracy vs. ground truth disp

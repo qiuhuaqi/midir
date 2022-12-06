@@ -116,7 +116,13 @@ class LightningDLReg(LightningModule):
 
         # calculate validation metrics
         val_metrics = {k: float(loss.cpu()) for k, loss in val_losses.items()}
-        val_metrics.update(measure_metrics(val_data, self.hparams.metric_groups))
+        val_metrics.update(
+            measure_metrics(
+                val_data,
+                self.hparams.metric_groups,
+                disp_metrics=("folding_ratio", "mag_det_jac_det"),
+            )
+        )
 
         # log visualisation figure to Tensorboard
         if batch_idx == 0:
@@ -133,8 +139,9 @@ class LightningDLReg(LightningModule):
             {f"val_metrics/{k}": metric for k, metric in val_metrics_epoch.items()}
         )
 
-        # update hparams metrics
+        # update and log hparams metrics
         self.hparam_metrics = {
             f"hparam_metrics/{k}": val_metrics_epoch[k]
             for k in self.hparams.hparam_metrics
         }
+        self.logger.log_hyperparams(self.hparams, metrics=self.hparam_metrics)
