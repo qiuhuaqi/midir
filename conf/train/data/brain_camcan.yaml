@@ -2,8 +2,8 @@
 name: brain_camcan
 ndim: 3
 
-batch_size: 1
-num_workers: 8
+batch_size: 4
+num_workers: 12
 shuffle: True
 
 modality: t1t1

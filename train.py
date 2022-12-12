@@ -31,7 +31,7 @@ def main(cfg: DictConfig) -> None:
     # model checkpoint callback with ckpt metric logging
     ckpt_callback = ModelCheckpoint(
         dirpath=f"{model_dir}/checkpoints/",
-        filename="epoch_{epoch}-val_mean_dice_{val_metrics/mean_dice:.3f}",
+        filename="epoch_{epoch}-dice_{val_metrics/mean_dice:.3f}_folding_{val_metrics/folding_ratio:.3f}",
         save_last=True,
         monitor="val_metrics/mean_dice",
         mode="max",

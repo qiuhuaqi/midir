@@ -24,6 +24,8 @@ hydra:
     config:
       override_dirname:
         exclude_keys:
-          - data
           - run_dir
+          - data
+          - loss
+          - network
           - gpu

@@ -1,12 +1,12 @@
 # @package _group_
 lr: 1e-4
-lr_decay_step: 50
+lr_decay_step: 200
 
 trainer:
-    max_epochs: 75
+    max_epochs: 200
     log_every_n_steps: 10
-    check_val_every_n_epoch: 1
+    check_val_every_n_epoch: 10
     fast_dev_run: False
-    limit_train_batches: 0.03
-    limit_val_batches: 0.1
-    precision: 32
+    limit_train_batches: 1.0
+    limit_val_batches: 1.0
+    precision: 16

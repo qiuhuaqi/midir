@@ -102,7 +102,7 @@ def measure_disp_metrics(metric_data, metrics=None):
             }
         )
 
-    if "bending_energy" in metrics:
+    if "bending_energy" in metrics:  # warning: slow on CPU
         be = bending_energy(torch.from_numpy(disp_pred)).numpy() * 100
         disp_metric_results["bending_energy"] = be
 
