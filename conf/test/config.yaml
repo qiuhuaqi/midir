@@ -4,12 +4,13 @@ defaults:
   - model: dl
 
 metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
-evaluate: True
+run_inference: True
+run_evaluate: True
 gpu:
 
-base_dir:
 model_base_dir:
-model_dir: ${version_resolver:${base_dir}/${model_base_dir}}
+model_dir: ${version_resolver:${model_base_dir}}
+# resolver handles version selection under model dir
 
 hydra:
   run:

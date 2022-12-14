@@ -4,8 +4,8 @@ dataset:
   data_dir_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/test
   modality: t1t1
   crop_size: [176, 192, 176]
-  evaluate: True
+  evaluate: ${run_evaluate}
 
 dataloader:
   batch_size: 1
-  num_workers: 2
+  num_workers: 8

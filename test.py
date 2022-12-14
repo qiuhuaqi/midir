@@ -21,34 +21,34 @@ from utils.misc import setup_dir
 from evaluate import evaluate_output
 
 import random
+
 random.seed(7)
 
 
 def get_inference_dataloader(cfg, pin_memory=False):
-    if cfg.data.type == 'brain_camcan':
+    if cfg.data.type == "brain_camcan":
         dataset = BrainMRInterSubj3D(**cfg.data.dataset)
-    elif cfg.data.type == 'cardiac_ukbb':
+    elif cfg.data.type == "cardiac_ukbb":
         dataset = CardiacMR2D(**cfg.data.dataset)
     else:
-        raise ValueError(f'Dataset config ({cfg.data.dataset}) not recognised.')
-    return DataLoader(dataset,
-                      shuffle=False,
-                      pin_memory=pin_memory,
-                      **cfg.data.dataloader)
+        raise ValueError(f"Dataset config ({cfg.data.dataset}) not recognised.")
+    return DataLoader(
+        dataset, shuffle=False, pin_memory=pin_memory, **cfg.data.dataloader
+    )
 
 
-def get_inference_model(cfg, device=torch.device('cpu')):
-    if cfg.model.type == 'id':
+def get_inference_model(cfg, device=torch.device("cpu")):
+    if cfg.model.type == "id":
         model = Identity()
 
-    elif cfg.model.type == 'mirtk':
+    elif cfg.model.type == "mirtk":
         model = MIRTK(**cfg.model.mirtk_params)
 
-    elif cfg.model.type == 'dl':
-        if not os.path.exists(cfg.model.ckpt_path):
-            model_ckpt_path = f'{cfg.model_dir}/checkpoints/{cfg.model.ckpt_path}'
+    elif cfg.model.type == "dl":
+        if not os.path.exists(cfg.model.ckpt_name):
+            model_ckpt_path = f"{cfg.model_dir}/checkpoints/{cfg.model.ckpt_name}"
         else:
-            model_ckpt_path = cfg.model.ckpt_path
+            model_ckpt_path = cfg.model.ckpt_name
         assert os.path.exists(model_ckpt_path)
         model = LightningDLReg.load_from_checkpoint(model_ckpt_path)
         model = model.to(device=device)
@@ -59,7 +59,7 @@ def get_inference_model(cfg, device=torch.device('cpu')):
     return model
 
 
-def inference(model, dataloader, output_dir, device=torch.device('cpu')):
+def inference(model, dataloader, output_dir, device=torch.device("cpu")):
     for idx, batch in enumerate(tqdm(dataloader)):
         for k, x in batch.items():
             # reshape data for inference
@@ -68,20 +68,21 @@ def inference(model, dataloader, output_dir, device=torch.device('cpu')):
             batch[k] = x.transpose(0, 1).to(device=device)
 
         # model inference
-        out = model(batch['target'], batch['source'])
-        batch['disp_pred'] = out[1] if len(out) == 2 else out  # (flow, disp) or disp
+        out = model(batch["target"], batch["source"])
+        batch["disp_pred"] = out[1] if len(out) == 2 else out  # (flow, disp) or disp
 
         # warp images and segmentation using predicted disp
-        batch['warped_source'] = warp(batch['source'], batch['disp_pred'])
-        if 'source_seg' in batch.keys():
-            batch['warped_source_seg'] = warp(batch['source_seg'], batch['disp_pred'],
-                                              interp_mode='nearest')
-        if 'target_original' in batch.keys():
-            batch['target_pred'] = warp(batch['target_original'], batch['disp_pred'])
+        batch["warped_source"] = warp(batch["source"], batch["disp_pred"])
+        if "source_seg" in batch.keys():
+            batch["warped_source_seg"] = warp(
+                batch["source_seg"], batch["disp_pred"], interp_mode="nearest"
+            )
+        if "target_original" in batch.keys():
+            batch["target_pred"] = warp(batch["target_original"], batch["disp_pred"])
 
         # save the outputs
         subj_id = dataloader.dataset.subject_list[idx]
-        output_id_dir = setup_dir(output_dir + f'/{subj_id}')
+        output_id_dir = setup_dir(output_dir + f"/{subj_id}")
         for k, x in batch.items():
             x = x.detach().cpu().numpy()
             # reshape for saving:
@@ -90,11 +91,12 @@ def inference(model, dataloader, output_dir, device=torch.device('cpu')):
             # 3D: img (N=1, 1, H, W, D) -> (H, W, D);
             #     disp (N=1, 3, H, W, D) -> (H, W, D, 3)
             x = np.moveaxis(x, [0, 1], [-2, -1]).squeeze()
-            save_nifti(x, path=output_id_dir + f'/{k}.nii.gz')
+            save_nifti(x, path=output_id_dir + f"/{k}.nii.gz")
 
 
 def hydra_version_resolver(model_dir):
-    model_dirs = sorted(glob(f'{model_dir}/*'))
+    """Resolver handles version selection under the model directory"""
+    model_dirs = sorted(glob(f"{model_dir}/*"))
     if len(model_dirs) > 0:
         # newest version
         run_dir = model_dirs[-1]
@@ -104,34 +106,41 @@ def hydra_version_resolver(model_dir):
     return run_dir
 
 
-OmegaConf.register_new_resolver('version_resolver', hydra_version_resolver)
+OmegaConf.register_new_resolver("version_resolver", hydra_version_resolver)
 
 
 @hydra.main(config_path="conf/test", config_name="config")
 def main(cfg: DictConfig) -> None:
     test_dir = HydraConfig.get().run.dir
+    output_dir = f"{test_dir}/outputs"
 
-    # configure GPU
-    gpu = cfg.gpu
-    if gpu is not None and isinstance(gpu, int):
-        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
+    if cfg.run_inference:
+        output_dir = setup_dir(output_dir)
+        # configure GPU
+        gpu = cfg.gpu
+        if gpu is not None and isinstance(gpu, int):
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
-    # configure dataset & model
-    dataloader = get_inference_dataloader(cfg, pin_memory=(device is torch.device('cuda')))
-    model = get_inference_model(cfg, device=device)
+        # configure data and run model inference
+        dataloader = get_inference_dataloader(
+            cfg, pin_memory=(device is torch.device("cuda"))
+        )
+        model = get_inference_model(cfg, device=device)
+        inference(model, dataloader, output_dir, device=device)
 
-    # run inference
-    output_dir = setup_dir(f'{test_dir}/outputs')
-    inference(model, dataloader, output_dir, device=device)
-
-    # (optional) run analysis on the current inference outputs
-    if cfg.evaluate:
-        eval_dir = setup_dir(f'{test_dir}/analysis')
+    # run evaluation/analysis on inference outputs
+    if cfg.run_evaluate:
+        assert os.path.exists(output_dir) and len(os.listdir(output_dir)) > 0, (
+            f"Output dir does not exist at {output_dir} or empty, "
+            f"have you run inference for this model? "
+            f"(set cfg.run_inference=True to run inference)"
+        )
+        eval_dir = setup_dir(f"{test_dir}/analysis")
         evaluate_output(output_dir, eval_dir, cfg.metric_groups)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
