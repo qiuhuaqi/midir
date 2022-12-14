@@ -375,12 +375,20 @@ class MetricReporter(object):
                 "list": self.report_data_dict[name],
             }
 
-    def save_mean_std(self):
+    def save_mean_std(self, pretty_mean_std=True):
         report_mean_std = {}
         for metric_name in self.report:
-            report_mean_std[
-                metric_name
-            ] = f"{self.report[metric_name]['mean']:.3f}({self.report[metric_name]['std']:.3f})"
+            if pretty_mean_std:
+                report_mean_std[
+                    metric_name
+                ] = f"{self.report[metric_name]['mean']:.3f}({self.report[metric_name]['std']:.3f})"
+            else:
+                report_mean_std[
+                    metric_name + "_mean"
+                ] = f"{self.report[metric_name]['mean']:.3f}"
+                report_mean_std[
+                    metric_name + "_std"
+                ] = f"{self.report[metric_name]['std']:.3f}"
         # save to CSV
         csv_path = self.save_dir + f"/{self.save_name}.csv"
         save_dict_to_csv(report_mean_std, csv_path)

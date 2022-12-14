@@ -8,7 +8,9 @@ from utils.image_io import load_nifti
 from utils.metric import measure_metrics, MetricReporter
 
 
-def evaluate_output(inference_output_dir, save_dir, metric_groups):
+def evaluate_output(
+    inference_output_dir, save_dir, metric_groups, pretty_mean_std=True
+):
     print("Running output analysis:")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -53,7 +55,7 @@ def evaluate_output(inference_output_dir, save_dir, metric_groups):
 
     # save the metric results
     metric_reporter.summarise()
-    metric_reporter.save_mean_std()
+    metric_reporter.save_mean_std(pretty_mean_std=pretty_mean_std)
     metric_reporter.save_df()
 
 
@@ -74,6 +76,7 @@ if __name__ == "__main__":
         type=str,
         default=["disp_metrics", "image_metrics", "seg_metrics"],
     )
+    parser.add_argument("--no_pretty_mean_std", action="store_true")
     args = parser.parse_args()
 
     # default inference output directory
@@ -90,4 +93,5 @@ if __name__ == "__main__":
 
     # run analysis
     delattr(args, "test_dir")
+    args.pretty_mean_std = not args.not_pretty_mean_std
     evaluate_output(**args.__dict__)

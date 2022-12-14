@@ -4,6 +4,7 @@ defaults:
   - model: dl
 
 metric_groups: ["disp_metrics", "image_metrics", "seg_metrics"]
+pretty_mean_std: True
 run_inference: True
 run_evaluate: True
 gpu:

@@ -139,7 +139,9 @@ def main(cfg: DictConfig) -> None:
             f"(set cfg.run_inference=True to run inference)"
         )
         eval_dir = setup_dir(f"{test_dir}/analysis")
-        evaluate_output(output_dir, eval_dir, cfg.metric_groups)
+        evaluate_output(
+            output_dir, eval_dir, cfg.metric_groups, pretty_mean_std=cfg.pretty_mean_std
+        )
 
 
 if __name__ == "__main__":

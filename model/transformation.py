@@ -239,9 +239,7 @@ def warp(x, disp, interp_mode="bilinear"):
         [torch.linspace(-1, 1, size[i]).type_as(disp) for i in range(ndim)],
         indexing="ij",
     )
-    grid = [
-        grid[i].requires_grad_(False) for i in range(ndim)
-    ]  # todo: do we need to do this?
+    grid = [grid[i].requires_grad_(False) for i in range(ndim)]
 
     # apply displacements to each direction (N, *size)
     warped_grid = [grid[i] + disp[:, i, ...] for i in range(ndim)]
