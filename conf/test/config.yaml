@@ -8,6 +8,7 @@ pretty_mean_std: True
 run_inference: True
 run_evaluate: True
 gpu:
+eval_use_gpu: False
 
 model_base_dir:
 model_dir: ${version_resolver:${model_base_dir}}

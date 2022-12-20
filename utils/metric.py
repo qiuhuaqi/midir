@@ -16,6 +16,7 @@ def measure_metrics(
     metric_groups,
     disp_metrics=("folding_ratio", "mag_det_jac_det", "bending_energy"),
     return_tensor=False,
+    device=torch.device("cpu"),
 ):
     """
     Wrapper function for calculating all metrics
@@ -24,6 +25,7 @@ def measure_metrics(
         metric_groups: (list of strings) names of metric groups
         disp_metrics: (tuple of strings) names of displacement metrics to evaluate
         return_tensor: (bool) return Torch Tensor if True
+        device: (torch.device) the device to compute the metrics for optional GPU computation
 
     Returns:
         metrics_results: (dict) {metric_name: metric_value}
@@ -37,7 +39,9 @@ def measure_metrics(
     # keys must match metric_groups and params.metric_groups
     # (using groups to share pre-scripts)
     metric_group_fns = {
-        "disp_metrics": partial(measure_disp_metrics, metrics=disp_metrics),
+        "disp_metrics": partial(
+            measure_disp_metrics, metrics=disp_metrics, device=device
+        ),
         "image_metrics": measure_image_metrics,
         "seg_metrics": measure_seg_metrics,
     }
@@ -59,7 +63,7 @@ Functions calculating groups of metrics
 """
 
 
-def measure_disp_metrics(metric_data, metrics=None):
+def measure_disp_metrics(metric_data, metrics=None, device=torch.device("cpu")):
     """
     Calculate DVF-related metrics.
     If roi_mask is given, the disp is masked and only evaluate in the bounding box of the mask.
@@ -67,6 +71,7 @@ def measure_disp_metrics(metric_data, metrics=None):
     Args:
         metric_data: (dict)
         metrics: names of metrics to evaluate
+        device: (torch.device) the device to compute the metrics for optional GPU computation
 
     Returns:
         metric_results: (dict)
@@ -102,9 +107,10 @@ def measure_disp_metrics(metric_data, metrics=None):
             }
         )
 
-    if "bending_energy" in metrics:  # warning: slow on CPU
-        be = bending_energy(torch.from_numpy(disp_pred)).numpy() * 100
-        disp_metric_results["bending_energy"] = be
+    if "bending_energy" in metrics:
+        disp_metric_results["bending_energy"] = calculate_bending_energy(
+            disp_pred, device=device
+        )
 
     if "disp_gt" in metric_data.keys():
         # measure accuracy vs. ground truth disp
@@ -216,6 +222,13 @@ def calculate_jacobian_det(disp):
     jac_det_img = sitk.DisplacementFieldJacobianDeterminant(disp_img)
     jac_det = sitk.GetArrayFromImage(jac_det_img)
     return jac_det
+
+
+def calculate_bending_energy(disp, device=torch.device("cpu")):
+    # warning: slow on CPU
+    disp = torch.from_numpy(disp).to(device)
+    be = bending_energy(disp)
+    return be.cpu().numpy() * 100
 
 
 def calculate_dice(mask1, mask2, label_class=0):

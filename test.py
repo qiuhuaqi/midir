@@ -111,19 +111,19 @@ OmegaConf.register_new_resolver("version_resolver", hydra_version_resolver)
 
 @hydra.main(config_path="conf/test", config_name="config")
 def main(cfg: DictConfig) -> None:
+    # configure device
+    gpu = cfg.gpu
+    if gpu is not None and isinstance(gpu, int):
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+
     test_dir = HydraConfig.get().run.dir
     output_dir = f"{test_dir}/outputs"
 
     if cfg.run_inference:
         output_dir = setup_dir(output_dir)
-        # configure GPU
-        gpu = cfg.gpu
-        if gpu is not None and isinstance(gpu, int):
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
-            device = torch.device("cuda")
-        else:
-            device = torch.device("cpu")
-
         # configure data and run model inference
         dataloader = get_inference_dataloader(
             cfg, pin_memory=(device is torch.device("cuda"))
@@ -139,8 +139,13 @@ def main(cfg: DictConfig) -> None:
             f"(set cfg.run_inference=True to run inference)"
         )
         eval_dir = setup_dir(f"{test_dir}/analysis")
+        eval_device = device if cfg.eval_use_gpu else torch.device("cpu")
         evaluate_output(
-            output_dir, eval_dir, cfg.metric_groups, pretty_mean_std=cfg.pretty_mean_std
+            output_dir,
+            eval_dir,
+            cfg.metric_groups,
+            pretty_mean_std=cfg.pretty_mean_std,
+            device=eval_device,
         )
 
 

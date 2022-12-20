@@ -3,13 +3,17 @@ import os
 import argparse
 from tqdm import tqdm
 import numpy as np
-
+import torch
 from utils.image_io import load_nifti
 from utils.metric import measure_metrics, MetricReporter
 
 
 def evaluate_output(
-    inference_output_dir, save_dir, metric_groups, pretty_mean_std=True
+    inference_output_dir,
+    save_dir,
+    metric_groups,
+    pretty_mean_std=True,
+    device=torch.device("cpu"),
 ):
     print("Running output analysis:")
     if not os.path.exists(save_dir):
@@ -50,7 +54,7 @@ def evaluate_output(
                     data_dict[k] = x[np.newaxis, np.newaxis, ...]
 
         # calculate metric for one validation batch
-        metric_result_step = measure_metrics(data_dict, metric_groups)
+        metric_result_step = measure_metrics(data_dict, metric_groups, device=device)
         metric_reporter.collect(metric_result_step)
 
     # save the metric results
@@ -77,7 +81,16 @@ if __name__ == "__main__":
         default=["disp_metrics", "image_metrics", "seg_metrics"],
     )
     parser.add_argument("--no_pretty_mean_std", action="store_true")
+    parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
+
+    # set up device
+    if args.device != "cpu":
+        gpu = int(args.device)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
+        args.device = torch.device("cuda")
+    else:
+        args.device = torch.device("cpu")
 
     # default inference output directory
     if args.inference_output_dir is None:
