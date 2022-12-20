@@ -2,10 +2,10 @@
 type: 'cardiac_ukbb'
 dataset:
   data_dir_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/cardiac_ukbb_stacom19/test
-  evaluate: True
   crop_size: [160, 160]
   slice_range:
   slicing: [0.25, 0.5, 0.75]
+  evaluate: True
 
 dataloader:
   batch_size: 1
