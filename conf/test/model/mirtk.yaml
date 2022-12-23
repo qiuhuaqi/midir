@@ -1,4 +1,3 @@
-# @package _group_
 type: mirtk
 mirtk_params:
   work_dir:

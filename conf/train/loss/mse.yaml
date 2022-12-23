@@ -1,4 +1,3 @@
-# @package _group_
 sim_loss: mse
 sim_weight: 1.0
 

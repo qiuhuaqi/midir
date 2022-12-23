@@ -1,4 +1,3 @@
-# @package _group_
 sim_loss: lncc
 sim_weight: 1.0
 window_size: 7

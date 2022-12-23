@@ -1,4 +1,3 @@
-# @package _group_
 type: bspline
 config:
   cps: 4

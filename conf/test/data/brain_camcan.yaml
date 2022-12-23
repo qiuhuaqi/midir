@@ -1,4 +1,3 @@
-# @package _group_
 type: 'brain_camcan'
 dataset:
   data_dir_path: /vol/biomedic2/hq615/PROJECTS/3_mutual_info/data/camcan_malpem/test
