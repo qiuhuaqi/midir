@@ -2,4 +2,3 @@
 __pycache__/
 scripts/
 mirtk_torch*
-conf/*/experiments

@@ -1,0 +1,4 @@
+# @package _global_
+defaults:
+  - override /network: unet
+  - override /transformation: dense

@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+  - override /model: mirtk
+
+model:
+  mirtk_params:
+    mirtk_path: /vol/biomedic2/hq615/softwares/mirtk_2.1-pre1/mirtk
+
+
+hydra:
+  run:
+    dir: ${model_base_dir}/ds_${model.mirtk_params.ds}_be_${model.mirtk_params.be}/test

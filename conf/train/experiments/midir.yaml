@@ -1,0 +1,4 @@
+# @package _global_
+defaults:
+  - override /network: bspline_net
+  - override /transformation: bspline
