@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - override /data: cardiac_ukbb
+  - override /training: cardiac_training
+  - override /network: bspline_net
+  - override /transformation: bspline

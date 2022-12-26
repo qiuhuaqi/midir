@@ -1,4 +1,6 @@
 # @package _global_
 defaults:
+  - override /data: brain_camcan
+  - override /training: brain_training
   - override /network: unet
   - override /transformation: dense
