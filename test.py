@@ -98,7 +98,12 @@ def hydra_version_resolver(model_dir):
     """Resolver handles version selection under the model directory"""
     model_dirs = sorted(glob(f"{model_dir}/*"))
     if len(model_dirs) > 0:
-        # newest version
+        if len(model_dirs) > 1:
+            print(
+                "Warning: multiple versions found, continue with the lastest version? "
+            )
+            input()
+        # use the newest version
         run_dir = model_dirs[-1]
     else:
         # no version
