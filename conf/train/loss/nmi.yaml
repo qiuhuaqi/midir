@@ -4,8 +4,8 @@ mi_config:
   vmin: 0.0
   vmax: 1.0
   num_bins: 64
-  sample_ratio: 0.6
-  normalised: True
+  sample_ratio: 0.7
+  normalized: True
 
 sim_weight: 1.0
 loss_roi: False

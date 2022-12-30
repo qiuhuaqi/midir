@@ -48,10 +48,7 @@ def main(cfg: DictConfig) -> None:
         devices=1,
         **cfg.training.trainer,
     )
-
     trainer.fit(model)
-    # run validation after the last epoch which should reflect the last checkpoint
-    trainer.validate(model)
 
 
 if __name__ == "__main__":

@@ -6,8 +6,7 @@ from model.network import UNet, CubicBSplineNet
 from model.transformation import DenseTransform, CubicBSplineFFDTransform
 from model import loss
 from model.loss import LossFn
-
-from deepali.losses import LNCC
+from deepali.losses import LNCC, MI
 
 
 def get_network(hparams):
@@ -55,7 +54,7 @@ def get_loss_fn(hparams):
         sim_loss_fn = LNCC(kernel_size=hparams.loss.window_size)
 
     elif hparams.loss.sim_loss == "nmi":
-        sim_loss_fn = loss.MILossGaussian(**hparams.loss.mi_config)
+        sim_loss_fn = MI(**hparams.loss.mi_config)
 
     else:
         raise ValueError(
