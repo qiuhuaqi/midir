@@ -1,7 +1,7 @@
 name: brain_camcan
 ndim: 3
 
-batch_size: 4
+batch_size: 2
 num_workers: 12
 shuffle: True
 
