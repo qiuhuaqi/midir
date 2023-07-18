@@ -7,4 +7,4 @@ mirtk_params:
   ds: 8
   be: 1e-4
   bins: 64
-  verbose: 1
+  verbose: 0

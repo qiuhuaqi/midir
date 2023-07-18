@@ -64,11 +64,6 @@ def evaluate_output(
 
 
 if __name__ == "__main__":
-    # main single run to analyse outputs of one model
-    import sys
-
-    sys.path.append("../")
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--test_dir")
     parser.add_argument("-o", "--inference_output_dir")
@@ -81,7 +76,7 @@ if __name__ == "__main__":
         default=["disp_metrics", "image_metrics", "seg_metrics"],
     )
     parser.add_argument("--no_pretty_mean_std", action="store_true")
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", type=str, default="cpu")
     args = parser.parse_args()
 
     # set up device
@@ -106,5 +101,6 @@ if __name__ == "__main__":
 
     # run analysis
     delattr(args, "test_dir")
-    args.pretty_mean_std = not args.not_pretty_mean_std
+    args.pretty_mean_std = not args.no_pretty_mean_std
+    delattr(args, "no_pretty_mean_std")
     evaluate_output(**args.__dict__)

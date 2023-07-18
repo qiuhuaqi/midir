@@ -20,8 +20,6 @@ class Identity(object):
 
 
 class MIRTK(object):
-    """MIRTK registration by calling $mirtk applications"""
-
     def __init__(
         self,
         mirtk_path=None,
@@ -64,7 +62,7 @@ class MIRTK(object):
             f"-bins {self.bins} "
             f"-window 7 "
             f"-dofout {dof_path} "
-            f"-verbose {self.verbose}"
+            f"-verbose {self.verbose} "
             f"-levels {self.levels} "
             f"-padding -1 "
         )

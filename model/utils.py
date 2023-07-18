@@ -5,8 +5,7 @@ from data.datasets import BrainMRInterSubj3D, CardiacMR2D
 from model.network import UNet, CubicBSplineNet
 from model.transformation import DenseTransform, CubicBSplineFFDTransform
 from model import loss
-from model.loss import LossFn
-from deepali.losses import LNCC, MI
+from model.loss import LossFn, LNCC, MI
 
 
 def get_network(hparams):

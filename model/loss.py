@@ -2,6 +2,10 @@ import math
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+from deepali.losses import LNCC, MI
+
+LNCC = LNCC
+MI = MI
 
 
 class LossFn(nn.Module):
