@@ -50,17 +50,17 @@ pip install torch==1.5.1+cu101 torchvision==0.6.1+cu101 -f https://download.pyto
 
 ## Configurations
 We use [Hydra](https://hydra.cc/docs/intro) for structured configurations. 
-Each directory in `conf/` is a *config group* which contains alternative configurations for that group. 
+Each directory in `conf/` is a *config group* which contains different configurations for that group. 
 The final configuration is the *composition* of all *config groups*.
 The default options for the groups are set in `conf/config.yaml`. 
-To use a different configuration for a group, for example the loss function:
+To use a configuration group different from the default, simply specify this in the CLI at runtime. For example, to specify the loss function configuration for training:
 ```
-python loss=<lncc/mse/nmi> ...
+python train.py loss=<lncc/mse/nmi> ...
 ```
 
-Any configuration in this structure can be conveniently over-written in CLI at runtime. For example, to change the regularisation weight at runtime:
+Any specific configuration in this structure can be conveniently over-written in CLI at runtime. For example, to change the regularisation weight at runtime for training:
 ```
-python loss.reg_weight=<your_reg_weight> ...
+python train.py loss.reg_weight=<your_reg_weight> ...
 ```
 
 See [Hydra documentation](https://hydra.cc/docs/intro) for more details.
